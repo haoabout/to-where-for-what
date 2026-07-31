@@ -34,6 +34,10 @@
   }
 }
 *{box-sizing:border-box}
+/* 任何显式 display 规则都会压过 [hidden] 的浏览器默认样式。
+   .tabs{display:flex} 就让 standalone 模式下的 hidden 完全失效，
+   页面仍显示着指向已删除视图的 tab。这一条必须放在所有布局规则之前。 */
+[hidden]{display:none!important}
 html,body{margin:0;padding:0}
 body{
   background:var(--paper); color:var(--ink);
@@ -341,6 +345,86 @@ pre.code{
   .map-main{height:440px}
 }
 
+/* ═══════════════════════════════════════════════ 攻略视图 */
+.guide{max-width:800px;margin:0 auto}
+.guide h1,.guide h2{font-family:var(--serif);font-weight:400;letter-spacing:.2px}
+.guide h1{font-size:29px;margin:34px 0 14px}
+.guide h2{
+  font-size:23px;margin:38px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line);
+}
+.guide h3{font:600 16px/1.4 var(--sans);margin:26px 0 9px}
+.guide h4{font:600 13.5px/1.4 var(--sans);margin:19px 0 7px;color:var(--ink-2)}
+.guide p{margin:0 0 13px;color:var(--ink-2);font-size:15px;line-height:1.78}
+.guide ul,.guide ol{margin:0 0 15px;padding-left:23px;color:var(--ink-2)}
+.guide li{margin-bottom:6px;line-height:1.72}
+.guide blockquote{
+  margin:15px 0;padding:11px 16px;border-left:3px solid var(--accent);
+  background:var(--accent-soft);border-radius:0 7px 7px 0;color:var(--ink-2);font-size:14px;
+}
+.guide blockquote p{margin:0}
+.guide hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.guide code{
+  background:var(--paper-2);padding:1.5px 5px;border-radius:4px;
+  font:.88em var(--mono);border:1px solid var(--line);
+}
+.guide pre{
+  background:var(--paper-2);border:1px solid var(--line);border-radius:8px;
+  padding:13px 15px;overflow-x:auto;font:12.5px/1.7 var(--mono);
+}
+.table-wrap{overflow-x:auto;margin:0 0 17px;border:1px solid var(--line);border-radius:8px}
+.guide table,.card-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.guide td,.card-table td,.card-table th{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left}
+.guide tr:last-child td,.card-table tr:last-child td{border-bottom:0}
+.guide tr:first-child td{background:var(--paper-2);font-weight:600;color:var(--ink)}
+
+/* 时间轴：对 route.md 里以时间开头的条目做渐进增强 */
+.guide li.tl{list-style:none;position:relative;padding-left:16px;margin-bottom:11px}
+.guide li.tl::before{
+  content:"";position:absolute;left:-9px;top:9px;width:7px;height:7px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);
+}
+.guide li.tl .t{
+  font:600 12px/1 var(--mono);color:var(--accent);background:var(--accent-soft);
+  padding:3px 7px;border-radius:4px;margin-right:8px;white-space:nowrap;
+}
+.guide ul:has(li.tl){border-left:1px solid var(--line);padding-left:20px;margin-left:5px}
+
+/* 天气条 */
+.wx{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 8px}
+.wx-d{
+  flex:1;min-width:132px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card);padding:11px 13px;
+}
+.wx-d .d{font:600 12px/1 var(--sans);color:var(--ink-3);margin-bottom:7px}
+.wx-d .ic{font-size:23px;line-height:1.15}
+.wx-d .t{font:400 19px/1.25 var(--serif);margin-top:3px}
+.wx-d .t s{font-size:14px;color:var(--ink-3);text-decoration:none}
+.wx-d .r{font-size:11.5px;color:var(--ink-3);margin-top:5px}
+.wx-d .r b{color:var(--accent);font-weight:600}
+.wx-src{font-size:11.5px;color:var(--ink-3);margin:0 0 26px}
+.wx-src.est{color:var(--warn)}
+
+/* 费用 / 对照表 */
+.sum{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:17px}
+.sum-h{
+  background:var(--paper-2);padding:9px 13px;font:600 12.5px/1 var(--sans);
+  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;
+}
+.sum-h span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
+.ck{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
+.ck:last-child{border-bottom:0}
+.ck .m{width:17px;flex:none;text-align:center}
+.ck .n{flex:1;min-width:0}
+.ck .n s{color:var(--ink-3);text-decoration:none;font-size:11.5px;margin-left:7px}
+.ck .why{font-size:11.5px;color:var(--ink-3);font-style:italic}
+.ck.out{opacity:.55}
+.cost-total{
+  display:flex;align-items:baseline;gap:10px;padding:11px 13px;
+  background:var(--paper-2);border-top:1px solid var(--line);font-size:13.5px;
+}
+.cost-total b{font:400 21px var(--serif);color:var(--ink)}
+.caveat{font-size:11.5px;color:var(--ink-3);padding:9px 13px;border-top:1px dashed var(--line);line-height:1.6}
+
 /* ═══════════════════════════════════════════════ 空态 / 提示 */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
 .empty-state .big{font:400 21px var(--serif);color:var(--ink-2);margin-bottom:9px}
@@ -435,7 +519,11 @@ pre.code{
 
   <!-- ══════════════ 视图③ 攻略 ══════════════ -->
   <section class="view" id="view-guide" hidden>
-    <div id="guide-body"></div>
+    <div class="guide">
+      <div id="wx-box"></div>
+      <div id="guide-body"></div>
+      <div id="guide-auto"></div>
+    </div>
   </section>
 </main>
 
@@ -1347,6 +1435,239 @@ window.initMap = MAP.init;
 $("#exp-csv").onclick = () => MAP.exportCSV();
 $("#exp-kml").onclick = () => MAP.exportKML();
 
+/* ═══════════════════════════════════════════════════════════════════
+   攻略视图
+
+   route.md 由 AI 撰写（正文、路线设计逻辑、逐日节点）；
+   下面三块由页面自动生成，保证永远和数据一致：
+     · 天气   —— 浏览器端实时拉 Open-Meteo，每次打开都是最新的
+     · 费用   —— 从选中景点的 ticket 字段解析
+     · 对照表 —— 从 choice 字段生成，不可能和清单对不上
+   ═══════════════════════════════════════════════════════════════════ */
+const GUIDE = (() => {
+
+  /* ---------- 天气 ----------
+     Open-Meteo 免费、无需 key、支持跨域。
+     ≤16 天用预报；超出预报范围则退回历史同期均值，并明确标注这不是预报。 */
+  const WMO = {
+    0:["☀️","晴"],1:["🌤","多云转晴"],2:["⛅","多云"],3:["☁️","阴"],
+    45:["🌫","雾"],48:["🌫","雾凇"],
+    51:["🌦","毛毛雨"],53:["🌦","小雨"],55:["🌧","中雨"],
+    56:["🌧","冻雨"],57:["🌧","冻雨"],
+    61:["🌦","小雨"],63:["🌧","中雨"],65:["🌧","大雨"],
+    66:["🌧","冻雨"],67:["🌧","冻雨"],
+    71:["🌨","小雪"],73:["🌨","中雪"],75:["❄️","大雪"],77:["🌨","雪粒"],
+    80:["🌦","阵雨"],81:["🌧","强阵雨"],82:["⛈","暴雨"],
+    85:["🌨","阵雪"],86:["❄️","强阵雪"],
+    95:["⛈","雷雨"],96:["⛈","雷雨伴冰雹"],99:["⛈","强雷雨伴冰雹"],
+  };
+  const wmo = c => WMO[c] || ["·","—"];
+
+  function anchor(){
+    const b = (TRIP.bases || [])[0];
+    if(b && b.coord && typeof b.coord.lon === "number") return b.coord;
+    const l = pts0();
+    if(l.length) return { lon:l.reduce((s,p)=>s+p.coord.lon,0)/l.length,
+                          lat:l.reduce((s,p)=>s+p.coord.lat,0)/l.length };
+    const bb = TRIP.bbox;
+    return bb ? { lon:(bb[0]+bb[2])/2, lat:(bb[1]+bb[3])/2 } : null;
+  }
+  const pts0 = () => PLACES.filter(p => p.coord && typeof p.coord.lon === "number");
+
+  async function fetchForecast(c, start, end){
+    const u = new URL("https://api.open-meteo.com/v1/forecast");
+    u.search = new URLSearchParams({
+      latitude:c.lat, longitude:c.lon, timezone:TRIP.timezone || "auto",
+      start_date:start, end_date:end,
+      daily:"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum",
+    });
+    const r = await fetch(u);
+    if(!r.ok) throw new Error("预报接口返回 " + r.status);
+    return r.json();
+  }
+
+  /* 超出预报范围：取过去 8 年同期的历史观测求平均。
+     这是气候平均值，不是预报——必须在界面上说清楚，否则会误导用户。 */
+  async function fetchNormals(c, days){
+    const yr = new Date().getFullYear();
+    const years = [];
+    for(let y = yr - 8; y < yr; y++) years.push(y);
+    const md = days.map(d => d.iso.slice(5));
+    const out = md.map(() => ({ tmax:[], tmin:[], rain:[], wet:0, n:0 }));
+    await Promise.all(years.map(async y => {
+      const u = new URL("https://archive-api.open-meteo.com/v1/archive");
+      u.search = new URLSearchParams({
+        latitude:c.lat, longitude:c.lon, timezone:TRIP.timezone || "auto",
+        start_date:`${y}-${md[0]}`, end_date:`${y}-${md[md.length-1]}`,
+        daily:"temperature_2m_max,temperature_2m_min,precipitation_sum",
+      });
+      try{
+        const r = await fetch(u);
+        if(!r.ok) return;
+        const j = await r.json();
+        (j.daily?.time || []).forEach((t, i) => {
+          const k = md.indexOf(t.slice(5));
+          if(k < 0) return;
+          const o = out[k];
+          if(j.daily.temperature_2m_max[i] != null) o.tmax.push(j.daily.temperature_2m_max[i]);
+          if(j.daily.temperature_2m_min[i] != null) o.tmin.push(j.daily.temperature_2m_min[i]);
+          const p = j.daily.precipitation_sum[i];
+          if(p != null){ o.rain.push(p); if(p >= 1) o.wet++; o.n++; }
+        });
+      }catch(e){ /* 单年失败不影响整体平均 */ }
+    }));
+    const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+    return out.map(o => ({
+      tmax:avg(o.tmax), tmin:avg(o.tmin),
+      wetRate:o.n ? Math.round(o.wet / o.n * 100) : null, samples:o.tmax.length,
+    }));
+  }
+
+  function card(label, icon, desc, tmax, tmin, rainLine){
+    const t = v => v == null ? "—" : Math.round(v);
+    return `<div class="wx-d">
+      <div class="d">${esc(label)}</div>
+      <div class="ic" title="${esc(desc)}">${icon}</div>
+      <div class="t">${t(tmax)}°<s> / ${t(tmin)}°</s></div>
+      <div class="r">${rainLine}</div>
+    </div>`;
+  }
+
+  async function renderWeather(){
+    const box = $("#wx-box");
+    if(!DAYS.length){ box.innerHTML = ""; return; }
+    const c = anchor();
+    if(!c){ box.innerHTML = ""; return; }
+
+    box.innerHTML = `<div class="wx-src">正在获取天气…</div>`;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const lead = Math.round((DAYS[DAYS.length-1].date - today) / 864e5);
+
+    try{
+      if(lead <= 16 && DAYS[0].date >= new Date(today.getTime() - 864e5)){
+        const j = await fetchForecast(c, DAYS[0].iso, DAYS[DAYS.length-1].iso);
+        const d = j.daily || {};
+        box.innerHTML = `<div class="wx">` + (d.time || []).map((t, i) => {
+          const [ic, desc] = wmo(d.weather_code[i]);
+          const pp = d.precipitation_probability_max?.[i];
+          const ps = d.precipitation_sum?.[i];
+          const rain = pp != null && pp >= 30
+            ? `降水概率 <b>${pp}%</b>${ps ? ` · ${ps}mm` : ""}`
+            : `降水概率 ${pp ?? "—"}%`;
+          const wd = ((new Date(t + "T00:00:00").getDay() + 6) % 7) + 1;
+          return card(`${t.slice(5)} 周${WD[wd-1]} · ${desc}`, ic, desc, d.temperature_2m_max[i], d.temperature_2m_min[i], rain);
+        }).join("") + `</div>
+        <div class="wx-src">实时预报 · Open-Meteo · 每次打开本页都会重新获取</div>`;
+      }else{
+        const n = await fetchNormals(c, DAYS);
+        box.innerHTML = `<div class="wx">` + DAYS.map((d, i) => {
+          const o = n[i] || {};
+          const rain = o.wetRate == null ? "—"
+            : `历史降雨日占比 <b>${o.wetRate}%</b>`;
+          return card(`${d.iso.slice(5)} 周${WD[d.wd-1]} · 常年`, "📅", "历史同期均值",
+                      o.tmax, o.tmin, rain);
+        }).join("") + `</div>
+        <div class="wx-src est">⚠ 出行日在 ${lead} 天后，超出 16 天预报范围。
+          以上是<b>过去 8 年同期的历史平均</b>，只能说明大致气候，<b>不是预报</b>。
+          临近出行请重新打开本页查看真实预报。</div>`;
+      }
+    }catch(e){
+      box.innerHTML = `<div class="wx-src est">天气获取失败（${esc(e.message)}）。
+        联网后重新打开本页即可重试。</div>`;
+    }
+  }
+
+  /* ---------- 费用汇总 ----------
+     ticket 是自由文本（"¥600"、"常设展 ¥1200 前后，特别展另计"、"免费"），
+     无法可靠求和。因此：能解析的求和，解析不了的原样列出并明确标注，
+     绝不假装算出了一个精确总额。 */
+  /* 必须先找金额，再判断「免费」。
+     反例：「天守阁 ¥600（中学生以下免费）」——先匹配「免费」会把 600 算成 0，
+     合计直接少算一张票。金额出现过就以金额为准。 */
+  function parseMoney(s){
+    if(!s) return null;
+    const m = String(s).match(/[¥￥$€£]\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(?:日元|円|元|yen|JPY)/i);
+    if(m){
+      const v = parseFloat((m[1] || m[2]).replace(/,/g, ""));
+      if(!isNaN(v)) return v;
+    }
+    if(/^[^0-9]*(免费|免費|free|無料|无料)[^0-9]*$/i.test(s.trim())) return 0;
+    return null;
+  }
+
+  function renderCost(){
+    const going = PLACES.filter(p => p.choice === "yes");
+    if(!going.length) return "";
+    let sum = 0, parsed = 0;
+    const unparsed = [];
+    const rows = going.map(p => {
+      const v = parseMoney(p.ticket);
+      if(v == null) unparsed.push(p.name);
+      else { sum += v; parsed++; }
+      return `<div class="ck">
+        <span class="m">${v === 0 ? "○" : v == null ? "?" : "●"}</span>
+        <span class="n">${esc(p.name)}<s>${esc(p.ticket)}</s></span>
+      </div>`;
+    }).join("");
+    const cur = /[¥￥]|日元|円/.test(going.map(p=>p.ticket).join("")) ? "¥" : "";
+    return `<h2>费用汇总</h2>
+      <div class="sum">
+        <div class="sum-h">门票与入场费<span>${going.length} 个「想去」的地点</span></div>
+        ${rows}
+        <div class="cost-total">已解析 ${parsed} 项，合计约 <b>${cur}${sum.toLocaleString()}</b></div>
+        ${unparsed.length ? `<div class="caveat">以下 ${unparsed.length} 项的票价是文字描述，未计入合计：${esc(unparsed.join("、"))}。
+          特别展、体验项目、夜间加价通常另计，实际花费会高于此数。</div>`
+          : `<div class="caveat">仅含门票，不含交通、餐饮与特别展加价。</div>`}
+      </div>`;
+  }
+
+  /* ---------- 全景点对照表 ----------
+     直接由 choice 生成，因此不可能与清单视图不一致。
+     放弃的景点也全部列出——方便快速判断要不要捡回来。 */
+  function renderChecklist(){
+    const MARK = { yes:["✅","要去"], maybe:["🔸","待定"], no:["❌","放弃"], none:["⬜","未表态"] };
+    const order = ["yes","maybe","none","no"];
+    const by = {};
+    PLACES.forEach(p => (by[p.choice || "none"] = by[p.choice || "none"] || []).push(p));
+    const total = PLACES.length;
+    return `<h2>全部景点对照表</h2>
+      <p>包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。</p>
+      <div class="sum">
+        <div class="sum-h">共 ${total} 个候选<span>${order.map(k => `${MARK[k][1]} ${(by[k]||[]).length}`).join(" · ")}</span></div>
+        ${order.flatMap(k => (by[k] || []).map(p => `<div class="ck${k === "no" ? " out" : ""}">
+          <span class="m">${MARK[k][0]}</span>
+          <span class="n">${esc(p.name)}<s>${esc(p.area)} · ${esc(SCALE_TXT[p.scale] || p.scale)}</s></span>
+          ${p.choice_reason ? `<span class="why">${esc(p.choice_reason)}</span>` : ""}
+        </div>`)).join("")}
+      </div>`;
+  }
+
+  /* ---------- 时间轴渐进增强 ----------
+     route.md 里以「09:30 」或「09:30–11:00 」开头的列表项，
+     自动变成带时间胶囊的时间轴。AI 不用记特殊语法，写自然的时间就行。 */
+  function enhanceTimeline(root){
+    root.querySelectorAll("li").forEach(li => {
+      const m = li.textContent.match(/^\s*(\d{1,2}:\d{2}(?:\s*[–—~-]\s*\d{1,2}:\d{2})?)\s*(?:[·|｜]|\s)\s*/);
+      if(!m) return;
+      const html = li.innerHTML.replace(/^\s*\d{1,2}:\d{2}(?:\s*[–—~-]\s*\d{1,2}:\d{2})?\s*(?:[·|｜]|\s)\s*/, "");
+      li.className = "tl";
+      li.innerHTML = `<span class="t">${esc(m[1].replace(/\s+/g, ""))}</span>${html}`;
+    });
+  }
+
+  function render(){
+    const auto = $("#guide-auto");
+    auto.innerHTML = renderCost() + renderChecklist();
+    enhanceTimeline($("#guide-body"));
+  }
+
+  return { render, renderWeather, parseMoney };
+})();
+
+// 顶层 const 在普通 script 里不会挂到 window 上，而 switchView 判断的是 window.GUIDE。
+// 必须显式赋值，否则攻略视图永远不会渲染。
+window.GUIDE = GUIDE;
+
 /* ─────────────────────────────────────────────── 视图切换 */
 function switchView(v){
   $$(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === v));
@@ -1355,6 +1676,10 @@ function switchView(v){
   if(v === "map" && window.MAP){
     MAP.init();      // 懒加载：MapLibre 275KB，不该拖慢首屏
     MAP.onShow();    // 每次切回都 resize + 首次 refit
+  }
+  if(v === "guide" && window.GUIDE){
+    GUIDE.render();                                  // 对照表要反映最新选择
+    if(!switchView._wx){ switchView._wx = true; GUIDE.renderWeather(); }
   }
 }
 
@@ -1392,8 +1717,13 @@ function boot(){
   render();
 
   if(STANDALONE){
-    $$(".tab").forEach(t => { if(t.dataset.view !== "guide") t.hidden = true; });
+    // 独立攻略页：只保留攻略，去掉筛选相关的一切，方便分享/部署
+    document.querySelector(".tabs").hidden = true;
+    document.querySelector(".prog-wrap").hidden = true;
     document.querySelector(".actionbar").hidden = true;
+    document.querySelector("#view-list").remove();
+    document.querySelector("#view-map").remove();
+    document.querySelector("main").style.paddingBottom = "60px";
     switchView("guide");
   }else{
     let v = "list";

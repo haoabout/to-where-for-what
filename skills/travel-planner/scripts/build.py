@@ -54,9 +54,26 @@ def md_to_html(md: str) -> str:
     in_ul = in_ol = False
     in_code = False
     in_table = False
+    para: list[str] = []      # 累积当前段落
+    quote: list[str] = []     # 累积当前引用块
+
+    # Markdown 的段落由空行分隔，而不是由换行分隔。
+    # 不做累积的话，写在同一自然段里的连续几行会被拆成好几个 <p>，正文看起来支离破碎。
+    def flush_para() -> None:
+        nonlocal para
+        if para:
+            out.append("<p>" + "".join(inline(x) for x in para) + "</p>")
+            para = []
+
+    def flush_quote() -> None:
+        nonlocal quote
+        if quote:
+            out.append("<blockquote><p>" + "".join(inline(x) for x in quote) + "</p></blockquote>")
+            quote = []
 
     def close_lists() -> None:
         nonlocal in_ul, in_ol, in_table
+        flush_para(); flush_quote()
         if in_ul:
             out.append("</ul>"); in_ul = False
         if in_ol:
@@ -125,15 +142,18 @@ def md_to_html(md: str) -> str:
             continue
 
         if re.match(r"^\s*>\s?", line):
-            close_lists()
-            out.append(f"<blockquote>{inline(re.sub(r'^\s*>\s?', '', line))}</blockquote>")
+            flush_para()
+            quote.append(re.sub(r"^\s*>\s?", "", line))
             continue
+        flush_quote()
 
         if re.fullmatch(r"\s*([-*_])\s*(\1\s*){2,}", line):
             close_lists(); out.append("<hr>"); continue
 
-        close_lists()
-        out.append(f"<p>{inline(line)}</p>")
+        # 普通正文：累积进当前段落，等空行或块级元素再吐出
+        if in_ul or in_ol or in_table:
+            close_lists()
+        para.append(line)
 
     if in_code:
         out.append("</pre>")

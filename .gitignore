@@ -10,3 +10,5 @@ trips/*/guide.html
 
 # 开发期临时文件
 .tmp/
+trips/*/.server.pid
+trips/*/guide.html
