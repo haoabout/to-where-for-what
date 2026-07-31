@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+
+# 构建产物：可由 places.json + route.md + 模板重新生成
+trips/*/trip.html
+trips/*/guide.html
+
+# 开发期临时文件
+.tmp/
