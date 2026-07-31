@@ -31,6 +31,22 @@ STATUSES = {"open", "renovating", "seasonal_closed", "permanently_closed"}
 BOOKINGS = {"required", "recommended", "none"}
 CHOICES = {None, "yes", "maybe", "no"}
 
+# 契约允许的全部字段。多出来的字段说明 AI 自己发明了 schema，
+# 而模板不会渲染它们——静默丢失比报错更糟，所以要提示。
+KNOWN_PLACE_FIELDS = {
+    "id", "name", "name_local", "name_en", "category", "tier", "scale",
+    "parent_id", "area", "coord", "hours", "last_entry", "closed_days",
+    "closed", "ticket", "booking", "booking_url", "status", "status_note",
+    "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
+    "photo_note", "tags", "media", "museum", "images", "sources",
+    "choice", "choice_reason",
+}
+KNOWN_TRIP_FIELDS = {
+    "destination", "destination_local", "destination_en", "country", "bbox",
+    "timezone", "output_language", "local_language", "dates", "days", "party",
+    "pace", "bases", "generated_at", "verified_at", "note",
+}
+
 # 必填且不可为空字符串
 REQUIRED_STR = ["id", "name", "category", "area", "hours", "closed",
                 "ticket", "pitch", "detail"]
@@ -38,9 +54,16 @@ REQUIRED_ANY = ["tier", "scale", "status", "booking", "coord",
                 "closed_days", "duration_min", "photo_index",
                 "indoor", "night", "sources"]
 
-UA = "travel-planner-validate/1.0 (+https://github.com/; skill data validator)"
+# 用浏览器形状的 UA：实测通天阁官网对纯工具 UA 直接拒连，
+# 用工具 UA 会把大量正常官网误判成死链。
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/140.0 Safari/537.36 travel-planner-validate/1.0")
 STALE_DAYS = 30
 DUPE_METERS = 25
+
+# 这些状态码说明「站点活着但拒绝自动访问」，不等于死链。
+# 实测：黑门市场官网对任何 UA 都回 403（反爬），但网页本身完全正常。
+BOT_BLOCKED = {401, 403, 405, 429, 503}
 
 
 class Report:
@@ -115,6 +138,10 @@ def check_top_level(doc, rep: Report) -> None:
         rep.add("P0", "trip", "bbox 必须是 [minLon,minLat,maxLon,maxLat] 四个数字")
     elif not (bbox[0] < bbox[2] and bbox[1] < bbox[3]):
         rep.add("P0", "trip", f"bbox 的 min/max 顺序反了: {bbox}")
+
+    unknown_trip = set(trip) - KNOWN_TRIP_FIELDS
+    if unknown_trip:
+        rep.add("P2", "trip", f"出现契约外的字段 {sorted(unknown_trip)}")
 
     verified = _parse_date(trip.get("verified_at"))
     if verified:
@@ -220,6 +247,12 @@ def check_place(p, idx, doc, rep: Report) -> None:
             and _blank(p.get("name_local"))):
         rep.add("P1", where, "当地语言与输出语言不同，应提供 name_local（且需能在地图搜到）")
 
+    unknown = set(p) - KNOWN_PLACE_FIELDS
+    if unknown:
+        rep.add("P2", where,
+                f"出现契约外的字段 {sorted(unknown)}——模板不会渲染它们，内容会静默丢失。"
+                f"确需新字段请先改 data-schema.md 与 validate.py")
+
     # ---- P2
     if _blank(p.get("photo_note")):
         rep.add("P2", where, "缺少 photo_note（画面描述与拍摄建议）")
@@ -284,19 +317,26 @@ def check_cross(doc, rep: Report) -> None:
 
 # ---------------------------------------------------------------- links
 
-def _head(url: str) -> tuple[str, int | str]:
-    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": UA})
+def _fetch(url: str) -> tuple[str, int | str]:
+    """先 HEAD，被拒则退回 GET 首字节。返回状态码或异常名。"""
+    def _try(method: str) -> int:
+        headers = {"User-Agent": UA}
+        if method == "GET":
+            headers["Range"] = "bytes=0-64"
+        req = urllib.request.Request(url, method=method, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status
+
     try:
-        with urllib.request.urlopen(req, timeout=12) as r:
-            return url, r.status
+        return url, _try("HEAD")
     except urllib.error.HTTPError as e:
-        if e.code in (403, 405, 501):  # 不少站点禁 HEAD，退回 GET 首字节
+        if e.code in (403, 405, 501):  # 不少站点禁 HEAD
             try:
-                req2 = urllib.request.Request(url, headers={"User-Agent": UA, "Range": "bytes=0-64"})
-                with urllib.request.urlopen(req2, timeout=12) as r2:
-                    return url, r2.status
+                return url, _try("GET")
+            except urllib.error.HTTPError as e2:
+                return url, e2.code
             except Exception as e2:  # noqa: BLE001
-                return url, f"{type(e2).__name__}"
+                return url, type(e2).__name__
         return url, e.code
     except Exception as e:  # noqa: BLE001
         return url, type(e).__name__
@@ -319,9 +359,14 @@ def check_links(doc, rep: Report) -> None:
         return
     print(f"  检查 {len(targets)} 个链接…", file=sys.stderr)
     with ThreadPoolExecutor(max_workers=12) as ex:
-        for url, status in ex.map(_head, targets):
-            ok = isinstance(status, int) and status < 400
-            if not ok:
+        for url, status in ex.map(_fetch, targets):
+            if isinstance(status, int) and status < 400:
+                continue
+            if status in BOT_BLOCKED:
+                # 站点活着，只是拒绝自动访问——不能算死链，但值得人工点一下确认
+                for where in targets[url]:
+                    rep.add("P2", where, f"无法自动验证（疑似反爬，HTTP {status}），请人工确认：{url}")
+            else:
                 for where in targets[url]:
                     rep.add("P1", where, f"链接不可达 [{status}] {url}")
 
