@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>行程</title>
+<style>
+/* ═══════════════════════════════════════════════ 设计令牌 */
+:root{
+  --paper:#faf8f4; --paper-2:#f2eee7; --card:#fffefc;
+  --ink:#1f1b16; --ink-2:#5c544a; --ink-3:#918879;
+  --line:#e3ddd2; --line-2:#d0c8ba;
+  --accent:#b5442a; --accent-soft:#f6e7e2;
+  --ok:#2f6b4f; --ok-soft:#e6f0ea;
+  --warn:#9a6414; --warn-soft:#fbf0dc;
+  --danger:#a8322b; --danger-soft:#fae9e7;
+  --mute:#8d8577;
+  --serif:Georgia,"Songti SC","Hiragino Mincho ProN","Noto Serif CJK SC",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:10px; --shadow:0 1px 2px rgba(31,27,22,.05),0 4px 14px rgba(31,27,22,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#16130f; --paper-2:#1d1915; --card:#211c17;
+    --ink:#ece6dc; --ink-2:#b3a999; --ink-3:#877d6d;
+    --line:#332c24; --line-2:#443b31;
+    --accent:#e0765a; --accent-soft:#3a221c;
+    --ok:#7fbd9c; --ok-soft:#1c2b23;
+    --warn:#d9a95c; --warn-soft:#2e2617;
+    --danger:#e08079; --danger-soft:#33201e;
+    --mute:#7d7466;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font:15px/1.65 var(--sans);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+a{color:var(--accent)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* ═══════════════════════════════════════════════ 头部 */
+.top{
+  position:sticky;top:0;z-index:50;
+  background:color-mix(in srgb,var(--paper) 88%,transparent);
+  backdrop-filter:saturate(1.6) blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.top-in{max-width:1180px;margin:0 auto;padding:12px 20px 0}
+.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.brand h1{
+  font:400 25px/1.2 var(--serif);margin:0;letter-spacing:.2px;
+}
+.brand .sub{color:var(--ink-3);font-size:13px}
+.brand .sub b{color:var(--ink-2);font-weight:600}
+.stale{
+  background:var(--warn-soft);color:var(--warn);
+  border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);
+  padding:1px 8px;border-radius:20px;font-size:11.5px;
+}
+
+.tabs{display:flex;gap:2px;margin-top:12px}
+.tab{
+  background:none;border:0;border-bottom:2px solid transparent;
+  padding:9px 15px 11px;color:var(--ink-3);font-size:14px;font-weight:500;
+  display:flex;align-items:center;gap:7px;transition:color .15s;
+}
+.tab:hover:not(:disabled){color:var(--ink-2)}
+.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tab:disabled{color:var(--line-2);cursor:not-allowed}
+.tab .n{
+  font:600 10.5px/1 var(--mono);background:var(--paper-2);color:var(--ink-3);
+  padding:3px 6px;border-radius:20px;border:1px solid var(--line);
+}
+.tab[aria-selected=true] .n{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+
+/* ═══════════════════════════════════════════════ 进度 */
+.prog-wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+.prog{display:flex;align-items:center;gap:14px;padding:11px 0 13px;flex-wrap:wrap}
+.bar{flex:1;min-width:170px;height:5px;background:var(--paper-2);border-radius:9px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%;transition:width .35s cubic-bezier(.4,0,.2,1)}
+.bar .b-yes{background:var(--ok)} .bar .b-maybe{background:var(--warn)} .bar .b-no{background:var(--line-2)}
+.legend{display:flex;gap:13px;font-size:12.5px;color:var(--ink-3);flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.d-yes{background:var(--ok)} .d-maybe{background:var(--warn)} .d-no{background:var(--line-2)} .d-none{background:var(--line-2);opacity:.45}
+
+/* ═══════════════════════════════════════════════ 主体 */
+main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
+.view[hidden]{display:none}
+
+/* 工具栏 */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+.search{
+  flex:1;min-width:190px;padding:8px 13px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--card);color:var(--ink);font-size:14px;
+}
+.search::placeholder{color:var(--ink-3)}
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--card)}
+.seg button{background:none;border:0;padding:8px 13px;font-size:13px;color:var(--ink-3)}
+.seg button[aria-pressed=true]{background:var(--paper-2);color:var(--ink);font-weight:600}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}
+.chip{
+  border:1px solid var(--line);background:var(--card);color:var(--ink-2);
+  padding:5px 12px;border-radius:20px;font-size:12.5px;transition:.15s;
+}
+.chip:hover{border-color:var(--line-2)}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chip .c{opacity:.55;font-size:11px;margin-left:3px}
+
+/* 分组 */
+.group{margin-bottom:34px}
+.group-h{
+  display:flex;align-items:baseline;gap:10px;
+  padding-bottom:9px;margin-bottom:15px;border-bottom:1px solid var(--line);
+}
+.group-h h2{font:600 15px/1 var(--sans);margin:0;letter-spacing:.3px}
+.group-h .meta{font-size:12px;color:var(--ink-3);margin-left:auto;font-family:var(--mono)}
+
+/* ═══════════════════════════════════════════════ 卡片 */
+.cards{display:grid;gap:13px}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s,opacity .2s;
+}
+.card:hover{border-color:var(--line-2)}
+.card[data-choice=no]{opacity:.5}
+.card[data-choice=no]:hover{opacity:.82}
+.card[data-choice=yes]{border-left:3px solid var(--ok)}
+.card[data-choice=maybe]{border-left:3px solid var(--warn)}
+
+.card-in{display:flex;gap:15px;padding:14px}
+.thumb{
+  width:112px;height:88px;flex:none;border-radius:7px;overflow:hidden;
+  background:var(--paper-2);position:relative;
+}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.empty::after{
+  content:attr(data-ch);position:absolute;inset:0;display:grid;place-items:center;
+  font:400 25px var(--serif);color:var(--line-2);
+}
+.body{flex:1;min-width:0}
+.hd{display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap}
+.nm{font:500 17px/1.35 var(--serif);cursor:pointer;letter-spacing:.2px}
+.nm:hover{color:var(--accent)}
+.loc{font-size:12.5px;color:var(--ink-3);align-self:center}
+.tier{
+  font:700 10.5px/1 var(--mono);padding:3.5px 6px;border-radius:4px;align-self:center;
+  border:1px solid transparent;letter-spacing:.5px;
+}
+.t-S{background:var(--accent);color:#fff} .t-A{background:var(--accent-soft);color:var(--accent)}
+.t-B{background:var(--paper-2);color:var(--ink-2);border-color:var(--line)}
+.t-C{background:transparent;color:var(--ink-3);border-color:var(--line)}
+.stars{color:var(--accent);font-size:12px;letter-spacing:1px;align-self:center}
+.stars i{color:var(--line-2);font-style:normal}
+
+.pitch{color:var(--ink-2);font-size:13.5px;margin:6px 0 0}
+.facts{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--ink-3)}
+.facts span{display:flex;align-items:center;gap:4px;white-space:nowrap}
+
+.flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.flag{
+  font-size:11.5px;padding:3px 9px;border-radius:5px;display:flex;align-items:center;gap:4px;
+  border:1px solid transparent;
+}
+.f-danger{background:var(--danger-soft);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 22%,transparent)}
+.f-warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 22%,transparent)}
+.f-info{background:var(--paper-2);color:var(--ink-3);border-color:var(--line)}
+
+/* 三态 */
+.pick{display:flex;gap:0;margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content}
+.pick button{
+  background:var(--card);border:0;border-right:1px solid var(--line);
+  padding:6px 15px;font-size:12.5px;color:var(--ink-3);transition:.12s;
+}
+.pick button:last-child{border-right:0}
+.pick button:hover{background:var(--paper-2);color:var(--ink-2)}
+.pick button[aria-pressed=true]{font-weight:600}
+.pick button.y[aria-pressed=true]{background:var(--ok);color:#fff}
+.pick button.m[aria-pressed=true]{background:var(--warn);color:#fff}
+.pick button.n[aria-pressed=true]{background:var(--ink-3);color:var(--paper)}
+.why{font-size:12px;color:var(--ink-3);margin-top:7px;font-style:italic}
+
+/* 折叠的打卡点 */
+.spots{margin:11px 0 0;padding:9px 0 0;border-top:1px dashed var(--line);}
+.spots-h{font-size:11.5px;color:var(--ink-3);margin-bottom:7px;display:flex;align-items:center;gap:5px}
+.spot{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;flex-wrap:wrap}
+.spot .sn{cursor:pointer;font-weight:500}
+.spot .sn:hover{color:var(--accent)}
+.spot .sd{color:var(--ink-3);font-size:11.5px}
+.spot .pick{margin:0 0 0 auto;transform:scale(.88);transform-origin:right center}
+
+/* ═══════════════════════════════════════════════ 底部操作条 */
+.actionbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:60;
+  background:color-mix(in srgb,var(--paper) 92%,transparent);
+  backdrop-filter:saturate(1.6) blur(12px);
+  border-top:1px solid var(--line);
+}
+.actionbar-in{
+  max-width:1180px;margin:0 auto;padding:11px 20px;
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+}
+.btn{
+  border:1px solid var(--line);background:var(--card);color:var(--ink);
+  padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;transition:.15s;
+}
+.btn:hover{border-color:var(--line-2);background:var(--paper-2)}
+.btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.primary:hover{opacity:.87;background:var(--ink)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.hint{font-size:12px;color:var(--ink-3);margin-left:auto;text-align:right;max-width:52ch}
+
+/* ═══════════════════════════════════════════════ 弹窗 */
+dialog{
+  border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);
+  padding:0;max-width:660px;width:calc(100vw - 34px);max-height:86vh;box-shadow:0 24px 70px rgba(0,0,0,.28);
+}
+dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
+.dlg-h{
+  position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);
+  padding:17px 20px 13px;display:flex;align-items:flex-start;gap:12px;z-index:2;
+}
+.dlg-h h3{font:500 21px/1.3 var(--serif);margin:0;flex:1}
+.dlg-h .x{background:none;border:0;font-size:22px;color:var(--ink-3);line-height:1;padding:2px 6px;border-radius:6px}
+.dlg-h .x:hover{background:var(--paper-2);color:var(--ink)}
+.dlg-b{padding:17px 20px 22px;overflow-y:auto}
+.dlg-b h4{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.9px;color:var(--ink-3);margin:20px 0 8px}
+.dlg-b h4:first-child{margin-top:0}
+.dlg-b p{margin:0 0 10px;font-size:14px;color:var(--ink-2)}
+.dlg-img{width:100%;border-radius:9px;margin-bottom:14px;display:block}
+.credit{font-size:11px;color:var(--ink-3);margin:-9px 0 15px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 15px;font-size:13.5px}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0;color:var(--ink-2)}
+.srcs{list-style:none;padding:0;margin:0;font-size:13.5px}
+.srcs li{margin-bottom:5px}
+.srcs a{word-break:break-all}
+
+.reasons{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px}
+.reasons button{
+  border:1px solid var(--line);background:var(--card);padding:6px 13px;
+  border-radius:20px;font-size:13px;color:var(--ink-2);
+}
+.reasons button:hover,.reasons button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+textarea{
+  width:100%;border:1px solid var(--line);border-radius:8px;background:var(--paper);
+  color:var(--ink);padding:9px 11px;font:14px var(--sans);resize:vertical;min-height:66px;
+}
+.dlg-f{display:flex;gap:9px;justify-content:flex-end;margin-top:15px}
+pre.code{
+  background:var(--paper-2);border:1px solid var(--line);border-radius:8px;
+  padding:12px;font:12.5px/1.7 var(--mono);white-space:pre-wrap;word-break:break-all;margin:0 0 12px;
+}
+
+/* ═══════════════════════════════════════════════ 空态 / 提示 */
+.empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
+.empty-state .big{font:400 21px var(--serif);color:var(--ink-2);margin-bottom:9px}
+.toast{
+  position:fixed;left:50%;bottom:78px;transform:translate(-50%,14px);
+  background:var(--ink);color:var(--paper);padding:10px 19px;border-radius:9px;
+  font-size:13.5px;z-index:99;opacity:0;pointer-events:none;transition:.22s;box-shadow:0 8px 26px rgba(0,0,0,.25);
+}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:640px){
+  .brand h1{font-size:21px}
+  .card-in{flex-direction:column;gap:11px}
+  .thumb{width:100%;height:150px}
+  .hint{margin-left:0;text-align:left;max-width:none}
+  main{padding-bottom:150px}
+}
+@media print{
+  .top,.actionbar,.toolbar,.chips,.pick{display:none!important}
+  .card{break-inside:avoid;box-shadow:none}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <h1 id="title">行程</h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-list"  aria-selected="true"  data-view="list">景点清单 <span class="n" id="n-list">0</span></button>
+      <button class="tab" role="tab" id="tab-map"   aria-selected="false" data-view="map">地图</button>
+      <button class="tab" role="tab" id="tab-guide" aria-selected="false" data-view="guide" disabled>攻略</button>
+    </nav>
+  </div>
+  <div class="prog-wrap">
+    <div class="prog">
+      <div class="bar" id="bar">
+        <i class="b-yes"  style="width:0"></i><i class="b-maybe" style="width:0"></i><i class="b-no" style="width:0"></i>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ══════════════ 视图① 景点清单 ══════════════ -->
+  <section class="view" id="view-list">
+    <div class="toolbar">
+      <input class="search" id="q" type="search" placeholder="搜索名称、亮点、标签…" autocomplete="off">
+      <div class="seg" role="group" aria-label="分组方式">
+        <button id="by-area" aria-pressed="true">按区域</button>
+        <button id="by-tier" aria-pressed="false">按推荐度</button>
+      </div>
+      <div class="seg" role="group" aria-label="显示范围">
+        <button id="f-all"  aria-pressed="true">全部</button>
+        <button id="f-todo" aria-pressed="false">未表态</button>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div id="groups"></div>
+  </section>
+
+  <!-- ══════════════ 视图② 地图 ══════════════ -->
+  <section class="view" id="view-map" hidden>
+    <div class="empty-state"><div class="big">地图视图</div><div>下一步实现</div></div>
+  </section>
+
+  <!-- ══════════════ 视图③ 攻略 ══════════════ -->
+  <section class="view" id="view-guide" hidden>
+    <div id="guide-body"></div>
+  </section>
+</main>
+
+<div class="actionbar">
+  <div class="actionbar-in">
+    <button class="btn primary" id="save">保存筛选结果</button>
+    <button class="btn" id="download">下载 JSON</button>
+    <button class="btn" id="copy">复制短码</button>
+    <div class="hint" id="hint"></div>
+  </div>
+</div>
+
+<dialog id="dlg"><div id="dlg-inner"></div></dialog>
+<dialog id="rdlg"><div id="rdlg-inner"></div></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════
+   数据由 build.py 注入。内联而非 fetch()，因为 file:// 下 fetch 会被 CORS 拦死。
+   ═══════════════════════════════════════════════════════════════════ */
+const DATA       = /*__TRIP_DATA__*/null;
+const ROUTE_HTML = /*__ROUTE_HTML__*/null;
+const BUILT_AT   = /*__BUILT_AT__*/null;
+const STANDALONE = __STANDALONE__;
+
+const TRIP   = DATA.trip || {};
+const PLACES = DATA.places || [];
+const CATS   = DATA.categories || [];
+const CATMAP = Object.fromEntries(CATS.map(c => [c.id, c.label || c.id]));
+
+/* 能力检测：保存能力取决于浏览器引擎，与 file:// / http:// 无关。
+   实测 file:// 下 showSaveFilePicker 同样可用；真正不支持的是 Firefox / Safari。 */
+const CAN_WRITE = typeof window.showSaveFilePicker === "function";
+const LS_KEY = `tp:${TRIP.destination || "trip"}:${TRIP.generated_at || ""}`;
+
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+let fileHandle = null;
+const ui = { group:"area", scope:"all", q:"", cats:new Set(), tags:new Set() };
+
+/* ─────────────────────────────────────────────── 行程日期 */
+const WD = ["一","二","三","四","五","六","日"];
+
+/* 本地日期格式化。绝不能用 toISOString()——它转 UTC，
+   在东八区会把 09-13 输出成 09-12，用户会以为错误的那天闭馆。 */
+const isoLocal = d =>
+  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+function tripDays(){
+  const d = TRIP.dates || {};
+  if(!d.start || !d.end) return [];
+  const out = [], s = new Date(d.start + "T00:00:00"), e = new Date(d.end + "T00:00:00");
+  if(isNaN(s) || isNaN(e) || e < s) return [];
+  for(let c = new Date(s); c <= e; c.setDate(c.getDate()+1)){
+    out.push({ date:new Date(c), iso:isoLocal(c), wd:((c.getDay()+6)%7)+1 });
+  }
+  return out;
+}
+const DAYS = tripDays();
+
+/* ─────────────────────────────────────────────── 警示计算
+   这是清单视图的核心价值：让用户在点「想去」之前就看到问题，
+   而不是筛完一轮才发现那天根本不开门。 */
+function flags(p){
+  const out = [];
+  if(p.status && p.status !== "open"){
+    const label = { renovating:"修缮中", seasonal_closed:"季节性关闭", permanently_closed:"已永久关闭" }[p.status] || p.status;
+    out.push({ cls:"f-danger", txt:label + (p.status_note ? "：" + p.status_note : "") });
+  }
+  const cd = p.closed_days || [];
+  if(cd.length && DAYS.length){
+    const hit = DAYS.filter(d => cd.includes(d.wd));
+    if(hit.length === DAYS.length){
+      out.push({ cls:"f-danger", txt:"行程期间全程闭馆" });
+    }else if(hit.length){
+      out.push({ cls:"f-warn", txt:hit.map(d => `${d.iso.slice(5)}(周${WD[d.wd-1]})闭馆`).join("、") });
+    }
+  }else if(cd.length){
+    out.push({ cls:"f-info", txt:"周" + cd.map(d => WD[d-1]).join("、") + "闭馆" });
+  }
+  if(p.booking === "required") out.push({ cls:"f-warn", txt:"必须预约才能进" });
+  else if(p.booking === "recommended") out.push({ cls:"f-info", txt:"建议预约" });
+  return out;
+}
+
+/* ─────────────────────────────────────────────── 渲染辅助 */
+const SCALE_TXT = { spot:"打卡点 5-15 分钟", "30min":"约 30 分钟", "1-2h":"1-2 小时",
+                    "2-3h":"2-3 小时", "half-day":"半天", "full-day":"一整天" };
+const stars = n => "★".repeat(n||0) + `<i>${"★".repeat(Math.max(0,5-(n||0)))}</i>`;
+
+function thumb(p){
+  const im = (p.images || [])[0];
+  if(!im || !im.url) return `<div class="thumb empty" data-ch="${esc((p.name||"?")[0])}"></div>`;
+  return `<div class="thumb"><img src="${esc(im.url)}" alt="${esc(p.name)}" loading="lazy"
+    onerror="this.parentNode.className='thumb empty';this.parentNode.dataset.ch='${esc((p.name||'?')[0])}';this.remove()"></div>`;
+}
+
+function pickHTML(p){
+  const c = p.choice;
+  return `<div class="pick" data-id="${esc(p.id)}">
+    <button class="y" data-v="yes"   aria-pressed="${c==="yes"}">想去</button>
+    <button class="m" data-v="maybe" aria-pressed="${c==="maybe"}">待定</button>
+    <button class="n" data-v="no"    aria-pressed="${c==="no"}">不想去</button>
+  </div>`;
+}
+
+function cardHTML(p, children){
+  const fl = flags(p);
+  const loc = p.name_local && p.name_local !== p.name ? `<span class="loc">${esc(p.name_local)}</span>` : "";
+  return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}">
+    <div class="card-in">
+      ${thumb(p)}
+      <div class="body">
+        <div class="hd">
+          <span class="nm" data-detail="${esc(p.id)}">${esc(p.name)}</span>${loc}
+          <span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
+          <span class="stars" title="出片指数 ${p.photo_index||0}/5">${stars(p.photo_index)}</span>
+        </div>
+        <p class="pitch">${esc(p.pitch)}</p>
+        <div class="facts">
+          <span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
+          <span>◎ ${esc(p.ticket)}</span>
+          <span>${p.indoor ? "▢ 室内" : "△ 户外"}</span>
+          ${p.night ? "<span>☾ 适合夜间</span>" : ""}
+          <span>${esc(CATMAP[p.category] || p.category)}</span>
+        </div>
+        ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
+        ${pickHTML(p)}
+        ${p.choice === "no" && p.choice_reason ? `<div class="why">不去的理由：${esc(p.choice_reason)}</div>` : ""}
+        ${children.length ? spotsHTML(children) : ""}
+      </div>
+    </div>
+  </article>`;
+}
+
+/* 打卡点折叠在主景点下面：既不淹没主景点，也不会漏掉顺路的小机位 */
+function spotsHTML(kids){
+  return `<div class="spots">
+    <div class="spots-h">顺路打卡点 · ${kids.length} 个</div>
+    ${kids.map(k => `<div class="spot" data-id="${esc(k.id)}">
+      <span class="sn" data-detail="${esc(k.id)}">${esc(k.name)}</span>
+      <span class="sd">${esc(k.pitch)}</span>
+      ${pickHTML(k)}
+    </div>`).join("")}
+  </div>`;
+}
+
+/* ─────────────────────────────────────────────── 过滤与分组 */
+function visible(){
+  const q = ui.q.trim().toLowerCase();
+  return PLACES.filter(p => {
+    if(ui.scope === "todo" && p.choice) return false;
+    if(ui.cats.size && !ui.cats.has(p.category)) return false;
+    if(ui.tags.size && !(p.tags||[]).some(t => ui.tags.has(t))) return false;
+    if(q){
+      const hay = [p.name,p.name_local,p.name_en,p.pitch,p.detail,p.area,(p.tags||[]).join(" ")]
+        .filter(Boolean).join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+const TIER_ORDER = { S:0, A:1, B:2, C:3 };
+
+function render(){
+  const vis = visible();
+  const visIds = new Set(vis.map(p => p.id));
+  const kidsOf = {};
+  const tops = [];
+
+  for(const p of vis){
+    if(p.scale === "spot" && p.parent_id && visIds.has(p.parent_id)){
+      (kidsOf[p.parent_id] = kidsOf[p.parent_id] || []).push(p);
+    }else{
+      tops.push(p);
+    }
+  }
+
+  const groups = new Map();
+  for(const p of tops){
+    const key = ui.group === "area" ? (p.area || "其他") : `${p.tier} 级`;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+
+  const keys = [...groups.keys()].sort((a,b) => {
+    // 推荐度必须按 S→A→B→C 排，不能用字母序（那会把 S 排到最后）
+    if(ui.group === "tier") return (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9);
+    return groups.get(b).length - groups.get(a).length || a.localeCompare(b);
+  });
+
+  const box = $("#groups");
+  if(!vis.length){
+    box.innerHTML = `<div class="empty-state"><div class="big">没有符合条件的景点</div>
+      <div>调整一下搜索或筛选条件</div></div>`;
+  }else{
+    box.innerHTML = keys.map(k => {
+      const list = groups.get(k).sort((a,b) =>
+        (TIER_ORDER[a.tier]??9) - (TIER_ORDER[b.tier]??9) ||
+        (b.photo_index||0) - (a.photo_index||0));
+      const kidCount = list.reduce((n,p) => n + (kidsOf[p.id]||[]).length, 0);
+      return `<section class="group">
+        <div class="group-h">
+          <h2>${esc(k)}</h2>
+          <span class="meta">${list.length} 个${kidCount ? ` + ${kidCount} 打卡点` : ""}</span>
+        </div>
+        <div class="cards">${list.map(p => cardHTML(p, kidsOf[p.id]||[])).join("")}</div>
+      </section>`;
+    }).join("");
+  }
+  updateProgress();
+}
+
+function renderChips(){
+  const counts = {};
+  for(const p of PLACES) counts[p.category] = (counts[p.category]||0) + 1;
+  const tagCount = {};
+  for(const p of PLACES) for(const t of p.tags||[]) tagCount[t] = (tagCount[t]||0)+1;
+  const topTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  $("#chips").innerHTML =
+    CATS.filter(c => counts[c.id]).map(c =>
+      `<button class="chip" data-cat="${esc(c.id)}" aria-pressed="false">${esc(c.label)}<span class="c">${counts[c.id]}</span></button>`).join("")
+    + topTags.map(([t,n]) =>
+      `<button class="chip" data-tag="${esc(t)}" aria-pressed="false">#${esc(t)}<span class="c">${n}</span></button>`).join("");
+}
+
+function updateProgress(){
+  const n = { yes:0, maybe:0, no:0, none:0 };
+  for(const p of PLACES) n[p.choice || "none"]++;
+  const total = PLACES.length || 1;
+  const bar = $("#bar").children;
+  bar[0].style.width = n.yes/total*100 + "%";
+  bar[1].style.width = n.maybe/total*100 + "%";
+  bar[2].style.width = n.no/total*100 + "%";
+  $("#legend").innerHTML =
+    `<span><i class="dot d-yes"></i>想去 ${n.yes}</span>
+     <span><i class="dot d-maybe"></i>待定 ${n.maybe}</span>
+     <span><i class="dot d-no"></i>不想去 ${n.no}</span>
+     <span><i class="dot d-none"></i>未表态 ${n.none}</span>`;
+  $("#n-list").textContent = PLACES.length;
+}
+
+/* ─────────────────────────────────────────────── 选择与暂存 */
+function setChoice(id, v, reason){
+  const p = PLACES.find(x => x.id === id);
+  if(!p) return;
+  p.choice = (p.choice === v) ? null : v;
+  p.choice_reason = (p.choice === "no") ? (reason || p.choice_reason || "") : "";
+  saveLocal();
+  render();
+}
+
+function saveLocal(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(
+      PLACES.filter(p => p.choice).map(p => [p.id, p.choice, p.choice_reason || ""])));
+  }catch(e){ /* 隐私模式下 localStorage 不可用，忽略 */ }
+}
+
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return 0;
+    const map = new Map(JSON.parse(raw).map(([id,c,r]) => [id,[c,r]]));
+    let n = 0;
+    for(const p of PLACES){
+      const hit = map.get(p.id);
+      // 文件里已有选择时以文件为准：AI 刚写回的结果比浏览器缓存新
+      if(hit && !p.choice){ p.choice = hit[0]; p.choice_reason = hit[1]; n++; }
+    }
+    return n;
+  }catch(e){ return 0; }
+}
+
+/* ─────────────────────────────────────────────── 详情弹窗 */
+function openDetail(id){
+  const p = PLACES.find(x => x.id === id);
+  if(!p) return;
+  const im = (p.images||[])[0];
+  const fl = flags(p);
+  const kv = [
+    ["开放时间", p.hours],
+    ["最后入场", p.last_entry],
+    ["闭馆", p.closed],
+    ["门票", p.ticket],
+    ["预约", { required:"必须预约才能进入", recommended:"可现场前往，但建议预约", none:"无需预约" }[p.booking]],
+    ["建议时长", p.duration_min ? `约 ${p.duration_min} 分钟` : ""],
+    ["所属区域", p.area],
+    ["出片指数", p.photo_index ? `${p.photo_index}/5` : ""],
+  ].filter(([,v]) => v);
+
+  $("#dlg-inner").innerHTML = `
+    <div class="dlg-h">
+      <h3>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc">${esc(p.name_local)}</span>` : ""}</h3>
+      <button class="x" data-close aria-label="关闭">&times;</button>
+    </div>
+    <div class="dlg-b">
+      ${im && im.url ? `<img class="dlg-img" src="${esc(im.url)}" alt="${esc(p.name)}" onerror="this.remove()">
+        ${im.credit ? `<div class="credit">${esc(im.credit)}</div>` : ""}` : ""}
+      ${fl.length ? `<div class="flags" style="margin-bottom:14px">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
+      <p>${esc(p.detail || p.pitch)}</p>
+      ${p.photo_note ? `<h4>拍摄建议</h4><p>${esc(p.photo_note)}</p>` : ""}
+      <h4>实用信息</h4>
+      <dl class="kv">${kv.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+      ${p.booking_url ? `<h4>预约</h4><ul class="srcs"><li><a href="${esc(p.booking_url)}" target="_blank" rel="noopener">${esc(p.booking_url)}</a></li></ul>` : ""}
+      <h4>信息来源</h4>
+      <ul class="srcs">${(p.sources||[]).map(s =>
+        `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("") || "<li>—</li>"}</ul>
+      <div class="dlg-f">${pickHTML(p)}</div>
+    </div>`;
+  $("#dlg").showModal();
+}
+
+/* ─────────────────────────────────────────────── 不去的理由 */
+const QUICK = ["太远了","人太多","不感兴趣","时间不够","门票太贵","去过了","那天不开门","和别处重复"];
+function askReason(id){
+  const p = PLACES.find(x => x.id === id);
+  if(!p) return;
+  let picked = "";
+  $("#rdlg-inner").innerHTML = `
+    <div class="dlg-h"><h3>为什么不去${esc(p.name)}？</h3>
+      <button class="x" data-rclose aria-label="关闭">&times;</button></div>
+    <div class="dlg-b">
+      <p style="font-size:13px">记下理由，之后回看清单时能快速判断要不要把它捡回来。可以跳过。</p>
+      <div class="reasons">${QUICK.map(r => `<button data-r="${esc(r)}">${esc(r)}</button>`).join("")}</div>
+      <textarea id="rtext" placeholder="或者自己写…"></textarea>
+      <div class="dlg-f">
+        <button class="btn" data-rskip>跳过</button>
+        <button class="btn primary" data-rok>确定</button>
+      </div>
+    </div>`;
+  const dlg = $("#rdlg");
+  dlg.showModal();
+  $("#rdlg-inner").onclick = e => {
+    const b = e.target.closest("button");
+    if(!b) return;
+    if(b.dataset.r !== undefined){
+      picked = b.dataset.r;
+      $$("#rdlg-inner .reasons button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      $("#rtext").value = picked;
+    }
+    if(b.hasAttribute("data-rok"))   { setChoice(id,"no",$("#rtext").value.trim()); dlg.close(); }
+    if(b.hasAttribute("data-rskip")) { setChoice(id,"no",""); dlg.close(); }
+    if(b.hasAttribute("data-rclose")) dlg.close();
+  };
+}
+
+/* ─────────────────────────────────────────────── 导出 */
+function payload(){
+  const out = JSON.parse(JSON.stringify(DATA));
+  const cm = new Map(PLACES.map(p => [p.id, p]));
+  for(const p of out.places){
+    const cur = cm.get(p.id);
+    p.choice = cur ? cur.choice ?? null : null;
+    p.choice_reason = cur ? cur.choice_reason || "" : "";
+  }
+  return JSON.stringify(out, null, 2);
+}
+
+function shortCode(){
+  const g = v => PLACES.filter(p => p.choice === v);
+  const L = [`#travel-planner v1 · ${TRIP.destination || ""} · ${isoLocal(new Date())}`];
+  const yes = g("yes"), maybe = g("maybe"), no = g("no");
+  if(yes.length)   L.push("+ " + yes.map(p => p.id).join(" "));
+  if(maybe.length) L.push("? " + maybe.map(p => p.id).join(" "));
+  if(no.length)    L.push("- " + no.map(p => p.id + (p.choice_reason ? `(${p.choice_reason})` : "")).join(" "));
+  L.push(`# 想去 ${yes.length} · 待定 ${maybe.length} · 不想去 ${no.length} · 未表态 ${PLACES.length-yes.length-maybe.length-no.length}`);
+  return L.join("\n");
+}
+
+async function doSave(){
+  if(!CAN_WRITE){ showCode(); return; }
+  try{
+    if(!fileHandle){
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName:"places.json",
+        types:[{ description:"行程数据", accept:{ "application/json":[".json"] } }],
+      });
+    }
+    const w = await fileHandle.createWritable();
+    await w.write(payload());
+    await w.close();
+    toast("已保存到 " + fileHandle.name + "，可以让 AI 继续设计路线了");
+  }catch(e){
+    if(e.name === "AbortError") return;
+    toast("保存失败：" + e.message);
+  }
+}
+
+function download(){
+  const b = new Blob([payload()], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = "places.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("已下载 places.json，把它放回行程目录覆盖原文件");
+}
+
+function showCode(){
+  const code = shortCode();
+  $("#dlg-inner").innerHTML = `
+    <div class="dlg-h"><h3>把这段贴回对话</h3><button class="x" data-close aria-label="关闭">&times;</button></div>
+    <div class="dlg-b">
+      <p style="font-size:13px">你的浏览器不支持直接写文件（Firefox / Safari 都不支持）。
+      复制下面这段发给 AI，效果一样。</p>
+      <pre class="code" id="code">${esc(code)}</pre>
+      <div class="dlg-f">
+        <button class="btn" data-close>关闭</button>
+        <button class="btn primary" id="cp">复制</button>
+      </div>
+    </div>`;
+  $("#dlg").showModal();
+  $("#cp").onclick = async () => {
+    try{ await navigator.clipboard.writeText(code); toast("已复制"); }
+    catch(e){
+      const r = document.createRange(); r.selectNode($("#code"));
+      getSelection().removeAllRanges(); getSelection().addRange(r);
+      toast("已选中，按 ⌘C / Ctrl+C 复制");
+    }
+  };
+}
+
+let toastTimer;
+function toast(msg){
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("on"), 3200);
+}
+
+/* ─────────────────────────────────────────────── 视图切换 */
+function switchView(v){
+  $$(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === v));
+  $$(".view").forEach(s => s.hidden = (s.id !== "view-" + v));
+  try{ localStorage.setItem(LS_KEY + ":view", v); }catch(e){}
+  if(v === "map" && window.initMap) window.initMap();   // 懒加载，避免拖慢首屏
+}
+
+/* ─────────────────────────────────────────────── 启动 */
+function boot(){
+  document.title = `${TRIP.destination || "行程"} · 行程规划`;
+  $("#title").textContent = `${TRIP.destination || "行程"}${TRIP.destination_local && TRIP.destination_local !== TRIP.destination ? `（${TRIP.destination_local}）` : ""}`;
+
+  const bits = [];
+  if(TRIP.dates && TRIP.dates.start) bits.push(`<b>${TRIP.dates.start} → ${TRIP.dates.end}</b>`);
+  if(TRIP.days)  bits.push(`${TRIP.days} 天`);
+  if(TRIP.party) bits.push(esc(TRIP.party));
+  if(TRIP.pace)  bits.push(esc(TRIP.pace));
+  let sub = bits.join(" · ");
+  const vd = TRIP.verified_at ? Math.round((Date.now() - new Date(TRIP.verified_at+"T00:00:00")) / 864e5) : null;
+  if(vd !== null && vd > 30) sub += ` <span class="stale">数据核验于 ${vd} 天前，开放时间可能已变</span>`;
+  $("#subtitle").innerHTML = sub;
+
+  const restored = loadLocal();
+
+  if(ROUTE_HTML){
+    $("#guide-body").innerHTML = ROUTE_HTML;
+    $("#tab-guide").disabled = false;
+  }else{
+    $("#guide-body").innerHTML = `<div class="empty-state">
+      <div class="big">攻略还没生成</div>
+      <div>先在清单里筛完景点，保存后告诉 AI，它会读回你的选择并设计路线。</div></div>`;
+  }
+
+  $("#hint").innerHTML = CAN_WRITE
+    ? "「保存」会直接写回 places.json，第一次需要你选一下文件位置。"
+    : "当前浏览器不支持直接写文件，请用「下载 JSON」或「复制短码」。";
+
+  renderChips();
+  render();
+
+  if(STANDALONE){
+    $$(".tab").forEach(t => { if(t.dataset.view !== "guide") t.hidden = true; });
+    document.querySelector(".actionbar").hidden = true;
+    switchView("guide");
+  }else{
+    let v = "list";
+    try{ v = localStorage.getItem(LS_KEY + ":view") || "list"; }catch(e){}
+    if(v === "guide" && !ROUTE_HTML) v = "list";
+    switchView(v);
+  }
+
+  if(restored) toast(`从浏览器缓存恢复了 ${restored} 个之前的选择`);
+}
+
+/* ─────────────────────────────────────────────── 事件 */
+document.addEventListener("click", e => {
+  const detail = e.target.closest("[data-detail]");
+  if(detail){ openDetail(detail.dataset.detail); return; }
+
+  const pick = e.target.closest(".pick button");
+  if(pick){
+    const id = pick.closest(".pick").dataset.id;
+    const v  = pick.dataset.v;
+    const p  = PLACES.find(x => x.id === id);
+    if(v === "no" && p && p.choice !== "no"){ $("#dlg").close(); askReason(id); }
+    else setChoice(id, v);
+    return;
+  }
+
+  if(e.target.closest("[data-close]")) $("#dlg").close();
+
+  const chip = e.target.closest(".chip");
+  if(chip){
+    const on = chip.getAttribute("aria-pressed") === "true";
+    chip.setAttribute("aria-pressed", !on);
+    const set = chip.dataset.cat ? ui.cats : ui.tags;
+    const key = chip.dataset.cat || chip.dataset.tag;
+    on ? set.delete(key) : set.add(key);
+    render();
+    return;
+  }
+
+  const tab = e.target.closest(".tab");
+  if(tab && !tab.disabled){ switchView(tab.dataset.view); return; }
+});
+
+$("#q").addEventListener("input", e => { ui.q = e.target.value; render(); });
+$("#by-area").onclick = () => { ui.group="area"; $("#by-area").setAttribute("aria-pressed",true); $("#by-tier").setAttribute("aria-pressed",false); render(); };
+$("#by-tier").onclick = () => { ui.group="tier"; $("#by-tier").setAttribute("aria-pressed",true); $("#by-area").setAttribute("aria-pressed",false); render(); };
+$("#f-all").onclick   = () => { ui.scope="all";  $("#f-all").setAttribute("aria-pressed",true);  $("#f-todo").setAttribute("aria-pressed",false); render(); };
+$("#f-todo").onclick  = () => { ui.scope="todo"; $("#f-todo").setAttribute("aria-pressed",true); $("#f-all").setAttribute("aria-pressed",false); render(); };
+$("#save").onclick     = doSave;
+$("#download").onclick = download;
+$("#copy").onclick     = showCode;
+
+document.addEventListener("keydown", e => {
+  if(e.key === "/" && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)){ e.preventDefault(); $("#q").focus(); }
+});
+
+boot();
+</script>
+</body>
+</html>
