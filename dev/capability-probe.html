@@ -1,0 +1,44 @@
+<meta charset="utf-8">
+<title>FSA 能力探测</title>
+<style>
+ body{margin:0;font:13px/1.7 ui-monospace,SFMono-Regular,monospace;background:#111;color:#ddd;padding:16px}
+ .ok{color:#7f7} .no{color:#f77} .warn{color:#fd7}
+ button{font:inherit;padding:6px 14px;margin:8px 8px 0 0;cursor:pointer}
+ h2{font:600 13px system-ui;color:#8cf;margin:16px 0 4px}
+</style>
+<h2>静态能力探测（无需交互）</h2>
+<div id="static">…</div>
+<h2>真实调用探测（需点击，因为 API 要求 user activation）</h2>
+<button id="save">调用 showSaveFilePicker()</button>
+<button id="open">调用 showOpenFilePicker()</button>
+<div id="live"></div>
+<script>
+const S = document.getElementById('static'), L = document.getElementById('live');
+const row = (k, v, cls='') => `<div><span style="display:inline-block;width:290px">${k}</span><span class="${cls}">${v}</span></div>`;
+const has = n => typeof window[n] === 'function';
+
+S.innerHTML = [
+  row('location.protocol', location.protocol, 'warn'),
+  row('location.origin', location.origin || '(none)', 'warn'),
+  row('window.isSecureContext', isSecureContext, isSecureContext ? 'ok' : 'no'),
+  row('typeof showSaveFilePicker', typeof window.showSaveFilePicker, has('showSaveFilePicker') ? 'ok' : 'no'),
+  row('typeof showOpenFilePicker', typeof window.showOpenFilePicker, has('showOpenFilePicker') ? 'ok' : 'no'),
+  row('typeof showDirectoryPicker', typeof window.showDirectoryPicker, has('showDirectoryPicker') ? 'ok' : 'no'),
+  row('FileSystemFileHandle 存在', typeof FileSystemFileHandle, typeof FileSystemFileHandle !== 'undefined' ? 'ok' : 'no'),
+  row('navigator.storage.getDirectory (OPFS)', typeof navigator?.storage?.getDirectory, 'warn'),
+  row('→ 结论', has('showSaveFilePicker') ? '可直写文件' : '必须降级为下载', has('showSaveFilePicker') ? 'ok' : 'no'),
+].join('');
+
+async function probe(fn, name) {
+  L.innerHTML += row(name + ' 点击结果', '调用中…');
+  try {
+    if (typeof window[fn] !== 'function') throw new Error('API 不存在（undefined）');
+    const h = await window[fn](fn === 'showSaveFilePicker' ? {suggestedName: 'places.json'} : {});
+    L.innerHTML += row(name, '✅ 成功，拿到 handle: ' + (h.name || h[0]?.name), 'ok');
+  } catch (e) {
+    L.innerHTML += row(name, `${e.name}: ${e.message}`, e.name === 'AbortError' ? 'warn' : 'no');
+  }
+}
+document.getElementById('save').onclick = () => probe('showSaveFilePicker', 'showSaveFilePicker');
+document.getElementById('open').onclick = () => probe('showOpenFilePicker', 'showOpenFilePicker');
+</script>
