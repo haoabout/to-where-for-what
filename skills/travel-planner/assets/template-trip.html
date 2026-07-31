@@ -258,6 +258,89 @@ pre.code{
   padding:12px;font:12.5px/1.7 var(--mono);white-space:pre-wrap;word-break:break-all;margin:0 0 12px;
 }
 
+/* ═══════════════════════════════════════════════ 地图视图 */
+.map-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;height:calc(100vh - 250px);min-height:460px}
+.map-side{
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  overflow-y:auto;overscroll-behavior:contain;
+}
+.map-side .mi{
+  display:flex;gap:9px;align-items:flex-start;padding:9px 12px;
+  border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s;
+}
+.map-side .mi:hover{background:var(--paper-2)}
+.map-side .mi.on{background:var(--accent-soft)}
+.map-side .mi .pin{
+  width:19px;height:19px;border-radius:50%;flex:none;margin-top:2px;
+  display:grid;place-items:center;font:700 9.5px/1 var(--mono);color:#fff;
+}
+.map-side .mi .t{flex:1;min-width:0}
+.map-side .mi .t b{display:block;font:500 13.5px/1.35 var(--sans);font-weight:500}
+.map-side .mi .t s{display:block;font-size:11.5px;color:var(--ink-3);text-decoration:none}
+.map-side .grp{
+  position:sticky;top:0;background:var(--paper-2);padding:6px 12px;
+  font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
+  border-bottom:1px solid var(--line);z-index:1;
+}
+.map-main{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper-2)}
+#map-canvas{position:absolute;inset:0}
+.map-bar{
+  position:absolute;top:10px;left:10px;right:10px;z-index:5;
+  display:flex;gap:7px;flex-wrap:wrap;pointer-events:none;
+}
+.map-bar>*{pointer-events:auto}
+.mgroup{
+  display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);box-shadow:var(--shadow);
+}
+.mgroup button{
+  background:none;border:0;border-right:1px solid var(--line);
+  padding:6px 11px;font-size:12px;color:var(--ink-3);white-space:nowrap;
+}
+.mgroup button:last-child{border-right:0}
+.mgroup button[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600}
+.mgroup button:disabled{opacity:.38;cursor:not-allowed}
+.map-note{
+  position:absolute;left:10px;bottom:10px;right:10px;z-index:5;
+  background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:11.5px;
+  color:var(--ink-2);box-shadow:var(--shadow);display:none;
+}
+.map-note.on{display:block}
+.map-note b{color:var(--danger)}
+.attrib{
+  position:absolute;right:8px;bottom:8px;z-index:4;font-size:10px;color:var(--ink-3);
+  background:color-mix(in srgb,var(--paper) 78%,transparent);padding:2px 7px;border-radius:4px;
+}
+.attrib a{color:inherit}
+
+/* 地图 marker（HTML 元素，可承载中文名与序号） */
+.mk{cursor:pointer;transform:translate(-50%,-50%);position:relative}
+.mk i{
+  display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
+  font:700 10px/1 var(--mono);color:#fff;font-style:normal;
+  box-shadow:0 0 0 2px var(--card),0 1px 5px rgba(0,0,0,.34);transition:transform .14s;
+}
+.mk:hover i,.mk.on i{transform:scale(1.28)}
+.mk.no i{width:13px;height:13px;font-size:0;box-shadow:0 0 0 1.5px var(--card)}
+.mk.on::after{
+  content:attr(data-nm);position:absolute;left:15px;top:-7px;white-space:nowrap;
+  background:var(--ink);color:var(--paper);font-size:11px;padding:3px 8px;border-radius:5px;
+}
+
+/* 静态兜底：所有瓦片源都挂了时，至少还能看清相对位置 */
+.static-map{position:absolute;inset:0;background:var(--paper-2)}
+.static-map .sm-grid{position:absolute;inset:0;opacity:.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:52px 52px}
+.static-map .mk{position:absolute}
+
+@media (max-width:860px){
+  .map-wrap{grid-template-columns:1fr;height:auto}
+  .map-side{max-height:230px}
+  .map-main{height:440px}
+}
+
 /* ═══════════════════════════════════════════════ 空态 / 提示 */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
 .empty-state .big{font:400 21px var(--serif);color:var(--ink-2);margin-bottom:9px}
@@ -325,7 +408,29 @@ pre.code{
 
   <!-- ══════════════ 视图② 地图 ══════════════ -->
   <section class="view" id="view-map" hidden>
-    <div class="empty-state"><div class="big">地图视图</div><div>下一步实现</div></div>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="显示哪些选择">
+        <button class="mfil" data-c="yes"   aria-pressed="true">想去</button>
+        <button class="mfil" data-c="maybe" aria-pressed="true">待定</button>
+        <button class="mfil" data-c="none"  aria-pressed="true">未表态</button>
+        <button class="mfil" data-c="no"    aria-pressed="true">不想去</button>
+      </div>
+      <button class="btn" id="exp-csv">导出 CSV</button>
+      <button class="btn" id="exp-kml">导出 KML</button>
+      <div class="hint" style="margin-left:auto">CSV 可直接导入 Google My Maps</div>
+    </div>
+    <div class="map-wrap">
+      <div class="map-side" id="map-list"></div>
+      <div class="map-main">
+        <div id="map-canvas"></div>
+        <div class="map-bar">
+          <div class="mgroup" id="basemaps"></div>
+          <div class="mgroup"><button id="subway" aria-pressed="false" title="叠加公交/地铁线路图">地铁</button></div>
+        </div>
+        <div class="map-note" id="map-note"></div>
+        <div class="attrib" id="attrib"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ══════════════ 视图③ 攻略 ══════════════ -->
@@ -547,6 +652,9 @@ function render(){
     }).join("");
   }
   updateProgress();
+  // 清单里改了选择，地图上的 marker 颜色要立刻跟着变——
+  // 这正是三视图合一的意义：中间不需要 AI 重新生成页面。
+  if(window.MAP) MAP.refresh();
 }
 
 function renderChips(){
@@ -766,12 +874,488 @@ function toast(msg){
   toastTimer = setTimeout(() => t.classList.remove("on"), 3200);
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   地图视图
+
+   底图分层与降级链（每一级都实测过）：
+     ① OpenFreeMap 矢量   默认。含地铁几何与双语站名，缩放不产生流量
+     ② CARTO 光栅          备用。干净但完全没有轨道数据
+     ③ OSM 官方光栅        仅 http 下解锁 —— file:// 不发 Referer，
+                           OSM 会返回一张写着「Access blocked」的图片，
+                           且 HTTP 状态码是 200，onerror 抓不到
+     ④ 无 WebGL → Leaflet 光栅
+     ⑤ 全挂 → 静态散点图，至少还能看清相对位置
+   ═══════════════════════════════════════════════════════════════════ */
+const MAP = (() => {
+  const MAPLIBRE_JS  = "https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js";
+  const MAPLIBRE_CSS = "https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css";
+  const LEAFLET_JS   = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+  const LEAFLET_CSS  = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  const SUBWAY_TILES = "https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png";
+  const SUBWAY_ATTR  = "© OpenStreetMap contributors, Style: ÖPNVKarte";
+
+  const BASEMAPS = [
+    { id:"ofm", label:"矢量", kind:"vector",
+      style:"https://tiles.openfreemap.org/styles/positron",
+      attrib:'OpenFreeMap © OpenMapTiles Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' },
+    { id:"carto", label:"光栅", kind:"raster",
+      tiles:["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+             "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
+      attrib:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © CARTO' },
+    { id:"osm", label:"OSM", kind:"raster", httpOnly:true,
+      tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      attrib:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' },
+  ];
+
+  const st = { ready:false, engine:null, map:null, markers:new Map(),
+               base:"ofm", subway:false, focus:null, show:new Set(["yes","maybe","none","no"]) };
+
+  const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
+  const pts = () => PLACES.filter(geo);
+  const kind = p => p.choice || "none";
+  const COLOR = { yes:"var(--ok)", maybe:"var(--warn)", no:"var(--ink-3)", none:"var(--accent)" };
+
+  function center(){
+    const l = pts();
+    if(!l.length) return { lon:0, lat:0 };
+    return { lon:l.reduce((s,p)=>s+p.coord.lon,0)/l.length,
+             lat:l.reduce((s,p)=>s+p.coord.lat,0)/l.length };
+  }
+
+  /* ---------- 资源加载 ---------- */
+  const loaded = new Set();
+  function inject(tag, attrs){
+    const key = attrs.src || attrs.href;
+    if(loaded.has(key)) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const el = document.createElement(tag);
+      Object.assign(el, attrs);
+      el.onload  = () => { loaded.add(key); res(); };
+      el.onerror = () => rej(new Error("加载失败：" + key));
+      document.head.appendChild(el);
+    });
+  }
+  const loadJS  = src  => inject("script", { src });
+  const loadCSS = href => inject("link", { rel:"stylesheet", href });
+
+  function hasWebGL(){
+    try{
+      const c = document.createElement("canvas");
+      return !!(c.getContext("webgl2") || c.getContext("webgl"));
+    }catch(e){ return false; }
+  }
+
+  /* ---------- OSM 封禁瓦片探测 ----------
+     封禁响应是一张 256×256 的 PNG，内容是「Access blocked 403」，
+     大小约 6987 字节，HTTP 状态码却是 200。
+     只看状态码或 onerror 永远发现不了，必须看字节数。 */
+  async function osmUsable(){
+    if(location.protocol !== "http:" && location.protocol !== "https:") return false;
+    const c = center();
+    const z = 12;
+    const x = Math.floor((c.lon + 180) / 360 * 2 ** z);
+    const rad = c.lat * Math.PI / 180;
+    const y = Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * 2 ** z);
+    try{
+      const r = await fetch(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`, { cache:"no-store" });
+      if(!r.ok) return false;
+      const b = await r.blob();
+      return b.size > 12000;   // 真实城市瓦片通常 20-50KB，封禁瓦片约 7KB
+    }catch(e){ return false; }
+  }
+
+  function note(html){
+    const n = $("#map-note");
+    n.innerHTML = html || "";
+    n.classList.toggle("on", !!html);
+  }
+
+  /* ---------- 底图切换按钮 ----------
+     OSM 探测是异步的。必须在探测回来后重新检查 st.degraded，
+     否则会把降级模式下刚禁用的按钮又启用回去（实测踩过）。 */
+  function paintBaseButtons(){
+    $("#basemaps").innerHTML = BASEMAPS.map(b =>
+      `<button data-base="${b.id}" aria-pressed="${b.id === st.base}">${b.label}</button>`).join("");
+  }
+
+  function lockBaseButtons(reason){
+    $$("#basemaps button").forEach(b => {
+      b.disabled = true;
+      b.title = reason;
+      b.setAttribute("aria-pressed", b.dataset.base === st.base);
+    });
+  }
+
+  async function probeOSM(){
+    const btn = document.querySelector('#basemaps [data-base="osm"]');
+    if(!btn) return;
+    if(location.protocol === "file:"){
+      btn.disabled = true;
+      btn.title = "本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。";
+      return;
+    }
+    btn.disabled = true;
+    btn.title = "正在探测 OSM 是否可用…";
+    const ok = await osmUsable();
+    if(st.degraded) return;                       // 降级后不要复活按钮
+    const b2 = document.querySelector('#basemaps [data-base="osm"]');
+    if(!b2) return;
+    b2.disabled = !ok;
+    b2.title = ok ? "OpenStreetMap 官方底图"
+                  : "探测到 OSM 返回封禁瓦片（约 7KB 的「Access blocked」图），已停用";
+  }
+
+  /* ---------- 样式构造 ---------- */
+  function styleFor(id){
+    const b = BASEMAPS.find(x => x.id === id) || BASEMAPS[0];
+    if(b.kind === "vector") return b.style;
+    return {
+      version:8,
+      sources:{ base:{ type:"raster", tiles:b.tiles, tileSize:256, attribution:"" } },
+      layers:[{ id:"base", type:"raster", source:"base" }],
+    };
+  }
+
+  function setAttrib(){
+    const b = BASEMAPS.find(x => x.id === st.base);
+    $("#attrib").innerHTML = (b ? b.attrib : "") + (st.subway ? " · " + SUBWAY_ATTR : "");
+  }
+
+  /* ---------- marker ---------- */
+  function markerEl(p, idx){
+    const el = document.createElement("div");
+    el.className = "mk " + kind(p);
+    el.dataset.id = p.id;
+    el.dataset.nm = p.name;
+    el.innerHTML = `<i style="background:${COLOR[kind(p)]}">${idx}</i>`;
+    el.onclick = e => { e.stopPropagation(); focus(p.id, true); };
+    return el;
+  }
+
+  function addMarkers(){
+    st.markers.forEach(m => m.remove && m.remove());
+    st.markers.clear();
+    pts().forEach((p, i) => {
+      const el = markerEl(p, i + 1);
+      if(st.engine === "maplibre"){
+        const m = new maplibregl.Marker({ element:el }).setLngLat([p.coord.lon, p.coord.lat]).addTo(st.map);
+        st.markers.set(p.id, m);
+      }else if(st.engine === "leaflet"){
+        const m = L.marker([p.coord.lat, p.coord.lon],
+          { icon: L.divIcon({ className:"", html:el.outerHTML, iconSize:[22,22] }) }).addTo(st.map);
+        m.on("click", () => focus(p.id, true));
+        st.markers.set(p.id, m);
+      }
+      applyVis(p, el);
+    });
+    if(st.engine === "static") renderStatic();
+  }
+
+  function applyVis(p, el){
+    const on = st.show.has(kind(p));
+    const node = st.engine === "maplibre" ? (st.markers.get(p.id)?.getElement?.() || el) : el;
+    if(node) node.style.display = on ? "" : "none";
+  }
+
+  function refresh(){
+    if(!st.ready) return;
+    pts().forEach(p => {
+      const m = st.markers.get(p.id);
+      const el = st.engine === "maplibre" ? m?.getElement?.() : null;
+      if(el){
+        el.className = "mk " + kind(p) + (st.focus === p.id ? " on" : "");
+        const dot = el.querySelector("i");
+        if(dot) dot.style.background = COLOR[kind(p)];
+        el.style.display = st.show.has(kind(p)) ? "" : "none";
+      }
+    });
+    if(st.engine === "static") renderStatic();
+    if(st.engine === "leaflet"){ addMarkers(); }
+    renderSide();
+  }
+
+  /* ---------- 侧栏 ---------- */
+  function renderSide(){
+    const box = $("#map-list");
+    const list = pts().filter(p => st.show.has(kind(p)));
+    const byArea = new Map();
+    list.forEach(p => {
+      const k = p.area || "其他";
+      if(!byArea.has(k)) byArea.set(k, []);
+      byArea.get(k).push(p);
+    });
+    const order = new Map(pts().map((p, i) => [p.id, i + 1]));
+    box.innerHTML = [...byArea.entries()].map(([area, ps]) =>
+      `<div class="grp">${esc(area)} · ${ps.length}</div>` + ps.map(p =>
+        `<div class="mi${st.focus === p.id ? " on" : ""}" data-goto="${esc(p.id)}">
+           <span class="pin" style="background:${COLOR[kind(p)]}">${order.get(p.id)}</span>
+           <span class="t"><b>${esc(p.name)}</b><s>${esc(SCALE_TXT[p.scale] || p.scale)} · ${esc(p.ticket)}</s></span>
+         </div>`).join("")).join("") ||
+      `<div class="empty-state" style="padding:34px 16px"><div>当前筛选下没有可显示的地点</div></div>`;
+  }
+
+  function focus(id, fromMap){
+    st.focus = id;
+    const p = PLACES.find(x => x.id === id);
+    if(!p || !geo(p)) return;
+    if(!fromMap && st.map){
+      if(st.engine === "maplibre") st.map.flyTo({ center:[p.coord.lon, p.coord.lat], zoom:Math.max(st.map.getZoom(), 14), duration:620 });
+      if(st.engine === "leaflet")  st.map.setView([p.coord.lat, p.coord.lon], Math.max(st.map.getZoom(), 15));
+    }
+    refresh();
+    const item = document.querySelector(`.mi[data-goto="${CSS.escape(id)}"]`);
+    if(item && fromMap) item.scrollIntoView({ block:"nearest", behavior:"smooth" });
+  }
+
+  /* ---------- 静态兜底 ---------- */
+  function renderStatic(){
+    const box = $("#map-canvas");
+    const list = pts();
+    if(!list.length){ box.innerHTML = ""; return; }
+    const lons = list.map(p => p.coord.lon), lats = list.map(p => p.coord.lat);
+    const x0 = Math.min(...lons), x1 = Math.max(...lons);
+    const y0 = Math.min(...lats), y1 = Math.max(...lats);
+    const sx = v => 8 + (x1 === x0 ? 50 : (v - x0) / (x1 - x0) * 84);
+    const sy = v => 92 - (y1 === y0 ? 50 : (v - y0) / (y1 - y0) * 84);
+    box.innerHTML = `<div class="static-map"><div class="sm-grid"></div>` +
+      list.map((p, i) => st.show.has(kind(p))
+        ? `<div class="mk ${kind(p)}" style="left:${sx(p.coord.lon)}%;top:${sy(p.coord.lat)}%"
+             data-nm="${esc(p.name)}" data-goto="${esc(p.id)}"><i style="background:${COLOR[kind(p)]}">${i+1}</i></div>`
+        : "").join("") + `</div>`;
+  }
+
+  /* ---------- 地铁叠加 ---------- */
+  function setSubway(on){
+    st.subway = on;
+    $("#subway").setAttribute("aria-pressed", on);
+    setAttrib();
+    if(st.engine !== "maplibre" || !st.map) return;
+    const has = st.map.getLayer("subway");
+    if(on && !has){
+      if(!st.map.getSource("subway-src"))
+        st.map.addSource("subway-src", { type:"raster", tiles:[SUBWAY_TILES], tileSize:256 });
+      st.map.addLayer({ id:"subway", type:"raster", source:"subway-src", paint:{ "raster-opacity":0.85 } });
+    }else if(!on && has){
+      st.map.removeLayer("subway");
+    }
+  }
+
+  /* ---------- 引擎启动 ---------- */
+  async function startMapLibre(){
+    await Promise.all([loadCSS(MAPLIBRE_CSS), loadJS(MAPLIBRE_JS)]);
+    if(!window.maplibregl) throw new Error("MapLibre 未就绪");
+    const c = center();
+    st.map = new maplibregl.Map({
+      container:"map-canvas", style:styleFor(st.base),
+      center:[c.lon, c.lat], zoom:11.5, attributionControl:false,
+    });
+    st.engine = "maplibre";
+    await new Promise((res, rej) => {
+      // OpenFreeMap 是单人维护的捐赠项目，无 SLA，慢的时候真的很慢。
+      // 20 秒是实测取的折中：够宽容，又不至于让用户干等。
+      const t = setTimeout(() => rej(new Error("矢量底图 20 秒未加载完成")), 20000);
+      st.map.once("load", () => { clearTimeout(t); res(); });
+      st.map.once("error", e => { clearTimeout(t); rej(e.error || new Error("底图出错")); });
+    });
+    st.map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "bottom-right");
+    st.map.resize();          // 容器可能刚从 hidden 变可见，尺寸要重新量
+    fitAll();
+    st.fitted = true;
+  }
+
+  async function startLeaflet(){
+    await Promise.all([loadCSS(LEAFLET_CSS), loadJS(LEAFLET_JS)]);
+    if(!window.L) throw new Error("Leaflet 未就绪");
+    const c = center();
+    st.map = L.map("map-canvas", { attributionControl:false }).setView([c.lat, c.lon], 12);
+    const b = BASEMAPS.find(x => x.id === "carto");
+    L.tileLayer(b.tiles[0], { maxZoom:19, referrerPolicy:"strict-origin-when-cross-origin" }).addTo(st.map);
+    st.engine = "leaflet";
+    st.base = "carto";
+  }
+
+  function fitAll(){
+    const l = pts();
+    if(!l.length || !st.map) return;
+    const lons = l.map(p => p.coord.lon), lats = l.map(p => p.coord.lat);
+    const b = [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
+    if(st.engine === "maplibre"){
+      st.map.fitBounds(b, { padding:{ top:66, bottom:46, left:46, right:46 }, duration:0, maxZoom:15 });
+    }else if(st.engine === "leaflet"){
+      st.map.fitBounds([[b[0][1], b[0][0]], [b[1][1], b[1][0]]], { padding:[40,40], maxZoom:15 });
+    }
+  }
+
+  /* 每次切回地图视图都要 resize + refit。
+     MapLibre 按构造时的容器尺寸计算相机，容器后来变了它不会自己纠正——
+     实测：先在 1200 宽初始化、再拉到 1280，视野就偏了 0.7 个 zoom 级。
+     隐藏状态下初始化（容器高度为 0）则更离谱。 */
+  function onShow(){
+    if(!st.map) return;
+    st.map.resize();
+    if(!st.fitted){ fitAll(); st.fitted = true; }
+  }
+
+  /* ResizeObserver 必须只在尺寸真的变了时才 resize。
+     踩过的坑：重建侧栏 HTML 会让滚动条出现/消失，容器宽度变几像素就触发
+     resize()，而 resize 会打断正在进行的相机动画——表现为「点侧栏地图不飞过去」，
+     而且时有时无，极难定位。 */
+  function watchResize(){
+    const el = document.querySelector(".map-main");
+    if(!el || !window.ResizeObserver) return;
+    let last = `${el.clientWidth}x${el.clientHeight}`, t;
+    new ResizeObserver(() => {
+      const now = `${el.clientWidth}x${el.clientHeight}`;
+      if(now === last) return;
+      last = now;
+      clearTimeout(t);
+      t = setTimeout(() => { if(st.map && st.map.resize) st.map.resize(); }, 180);
+    }).observe(el);
+  }
+
+  async function switchBase(id){
+    if(st.engine !== "maplibre" || id === st.base) return;
+    st.base = id;
+    $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === id));
+    const wasSubway = st.subway;
+    st.map.setStyle(styleFor(id));
+    st.map.once("styledata", () => {
+      addMarkers();
+      if(wasSubway) setSubway(true);
+      setAttrib();
+    });
+  }
+
+  /* ---------- 入口 ---------- */
+  async function init(){
+    if(st.ready) return;
+    st.ready = true;
+
+    if(!pts().length){
+      $("#map-canvas").innerHTML = `<div class="empty-state"><div class="big">没有可定位的地点</div>
+        <div>景点缺少 coord 字段</div></div>`;
+      return;
+    }
+
+    paintBaseButtons();
+
+    const problems = [];
+    const webgl = hasWebGL();
+    if(!webgl) problems.push("浏览器未启用 WebGL");
+
+    try{
+      if(!webgl) throw new Error("需要 WebGL");
+      await startMapLibre();
+      probeOSM();                       // 不 await：探测慢不该挡住地图显示
+    }catch(e1){
+      problems.push("矢量底图不可用（" + (e1.message || e1) + "）");
+      try{
+        if(st.map && st.map.remove) { try{ st.map.remove(); }catch(_){} }
+        st.map = null;
+        $("#map-canvas").innerHTML = "";
+        await startLeaflet();
+        st.degraded = true;
+        fitAll(); st.fitted = true;
+        note(`<b>已降级</b>：${problems.join("；")}。当前使用 Leaflet + CARTO 光栅底图，点位、联动、导出都不受影响，只是不能切底图和叠加地铁层。`);
+        lockBaseButtons("降级模式下不可切换底图");
+        $("#subway").disabled = true;
+        $("#subway").title = "地铁叠加层需要矢量引擎";
+      }catch(e2){
+        problems.push("光栅底图也不可用（" + (e2.message || e2) + "）");
+        st.degraded = true;
+        st.engine = "static";
+        st.map = null;
+        note(`<b>底图全部不可用</b>：${problems.join("；")}。下面是按经纬度换算的相对位置示意图——比例不准，但方位和聚集关系是对的，导出功能照常可用。`);
+        lockBaseButtons("无可用底图");
+        $("#subway").disabled = true;
+      }
+    }
+
+    setAttrib();
+    addMarkers();
+    renderSide();
+    watchResize();
+  }
+
+  /* ---------- 导出 ---------- */
+  function selected(){
+    return pts().filter(p => st.show.has(kind(p)));
+  }
+  function csvCell(v){
+    const s = String(v ?? "").replace(/"/g, '""');
+    return /[",\n]/.test(s) ? `"${s}"` : s;
+  }
+  function toCSV(){
+    const rows = [["Name","Latitude","Longitude","Description","Category","Choice","URL"]];
+    for(const p of selected()){
+      rows.push([
+        p.name_en || p.name, p.coord.lat, p.coord.lon,
+        [p.name, p.name_local, p.pitch, p.hours && "开放 " + p.hours, p.ticket].filter(Boolean).join(" | "),
+        CATMAP[p.category] || p.category,
+        { yes:"想去", maybe:"待定", no:"不想去" }[p.choice] || "未表态",
+        (p.sources || [])[0]?.url || "",
+      ]);
+    }
+    return "﻿" + rows.map(r => r.map(csvCell).join(",")).join("\n");
+  }
+  function toKML(){
+    const esc2 = s => String(s ?? "").replace(/[<>&]/g, c => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c]));
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+<name>${esc2(TRIP.destination || "行程")}</name>
+${selected().map(p => `<Placemark>
+  <name>${esc2(p.name)}${p.name_local && p.name_local !== p.name ? "（" + esc2(p.name_local) + "）" : ""}</name>
+  <description>${esc2([p.pitch, p.hours && "开放时间：" + p.hours, p.ticket && "门票：" + p.ticket,
+                       p.closed && "闭馆：" + p.closed].filter(Boolean).join("\n"))}</description>
+  <Point><coordinates>${p.coord.lon},${p.coord.lat},0</coordinates></Point>
+</Placemark>`).join("\n")}
+</Document></kml>`;
+  }
+  function save(text, name, mime){
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type:mime }));
+    a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast(`已导出 ${name}（${selected().length} 个地点）`);
+  }
+
+  /* ---------- 事件 ---------- */
+  document.addEventListener("click", e => {
+    const go = e.target.closest("[data-goto]");
+    if(go){ focus(go.dataset.goto, false); return; }
+    const bm = e.target.closest("#basemaps button");
+    if(bm && !bm.disabled){ switchBase(bm.dataset.base); return; }
+    const sw = e.target.closest("#subway");
+    if(sw && !sw.disabled){ setSubway(sw.getAttribute("aria-pressed") !== "true"); return; }
+    const mf = e.target.closest(".mfil");
+    if(mf){
+      const on = mf.getAttribute("aria-pressed") === "true";
+      mf.setAttribute("aria-pressed", !on);
+      on ? st.show.delete(mf.dataset.c) : st.show.add(mf.dataset.c);
+      refresh();
+    }
+  });
+
+  return { init, refresh, onShow, fitAll,
+           exportCSV:() => save(toCSV(), "places.csv", "text/csv;charset=utf-8"),
+           exportKML:() => save(toKML(), "places.kml", "application/vnd.google-earth.kml+xml"),
+           _st:st };
+})();
+
+window.MAP = MAP;
+window.initMap = MAP.init;
+$("#exp-csv").onclick = () => MAP.exportCSV();
+$("#exp-kml").onclick = () => MAP.exportKML();
+
 /* ─────────────────────────────────────────────── 视图切换 */
 function switchView(v){
   $$(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === v));
   $$(".view").forEach(s => s.hidden = (s.id !== "view-" + v));
   try{ localStorage.setItem(LS_KEY + ":view", v); }catch(e){}
-  if(v === "map" && window.initMap) window.initMap();   // 懒加载，避免拖慢首屏
+  if(v === "map" && window.MAP){
+    MAP.init();      // 懒加载：MapLibre 275KB，不该拖慢首屏
+    MAP.onShow();    // 每次切回都 resize + 首次 refit
+  }
 }
 
 /* ─────────────────────────────────────────────── 启动 */
