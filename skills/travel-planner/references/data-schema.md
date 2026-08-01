@@ -66,7 +66,7 @@
 | `category` | string | ✅ | 必须是 `categories[].id` 之一 |
 | `tier` | `S`\|`A`\|`B`\|`C` | ✅ | 推荐分级。S=必去，C=顺路才去 |
 | `scale` | enum | ✅ | 游玩尺度，见下 |
-| `parent_id` | string | 条件 | `scale:"spot"` 时**必填**，指向同区域的主景点。清单里折叠在它下面 |
+| `parent_id` | string | | 微景点可指向同区域主景点，清单里会折叠在它下面。**同片区没有合适主景点时留空即可**——强行指定会造出假的从属关系（实测：渡船口、街边小神社都属这类） |
 | `area` | string | ✅ | 所属片区，如「中之岛」。**D 阶段按此聚类排路线**，务必前后一致 |
 
 `scale` 取值：`spot`（5–15 分钟打卡点）、`30min`、`1-2h`、`2-3h`、`half-day`、`full-day`
@@ -204,7 +204,7 @@
 - `sources` 为空，或含非 `http(s)` 的 URL
 - `status ≠ open` 却没有 `status_note`
 - **闭馆日覆盖整个行程**——`closed_days` 与行程每一天都撞上，即这个景点你去不了
-- `scale:"spot"` 却没有 `parent_id`，或 `parent_id` 指向不存在的 id
+- `parent_id` 指向不存在的 id
 
 ### P1 · 警告
 

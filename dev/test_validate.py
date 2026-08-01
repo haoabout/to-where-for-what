@@ -130,8 +130,6 @@ def main() -> int:
          lambda d: d["places"][1].update(id="os-001"), "P0", "重复")
     case("tier 枚举非法",
          lambda d: d["places"][1].update(tier="SS"), "P0", "tier='SS' 非法")
-    case("spot 没有 parent_id",
-         lambda d: d["places"][1].update(scale="spot"), "P0", "必须有 parent_id")
     case("parent_id 指向不存在的景点",
          lambda d: d["places"][1].update(scale="spot", parent_id="os-999"),
          "P0", "指向不存在")
@@ -162,6 +160,10 @@ def main() -> int:
          lambda d: d["places"][1].pop("booking_url"), "P2", "booking_url")
     case("detail 太短",
          lambda d: d["places"][1].update(detail="很好看"), "P2", "偏薄")
+    # 端到端实测改的规则：微景点在片区里本来就没有主景点是常态（渡船口、街边小神社），
+    # 强制 parent_id 会造出假的从属关系，故降级为提示。
+    case("spot 没有 parent_id（应只提示，不拒绝）",
+         lambda d: d["places"][1].update(scale="spot"), "P2", "将作为独立卡片显示")
 
     ok, total = sum(results), len(results)
     print(f"\n{'\033[92m' if ok == total else '\033[91m'}{ok}/{total} 通过\033[0m")

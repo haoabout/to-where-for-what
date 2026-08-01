@@ -220,11 +220,14 @@ def check_place(p, idx, doc, rep: Report) -> None:
                         f"闭馆日覆盖整个行程（行程含周{names}，该点这几天都不开）——"
                         f"不该让用户在清单里看到它可选")
 
-    # spot 归属
+    # spot 归属。parent_id 是可选的——实测发现有些微景点（渡船口、街边小神社）
+    # 在它所在片区里本来就没有主景点，强行指定 parent 会造出假的从属关系。
+    # 没有 parent 的 spot 在清单里作为独立小卡片渲染，这是可接受的。
     if p.get("scale") == "spot":
         parent = p.get("parent_id")
         if _blank(parent):
-            rep.add("P0", where, 'scale="spot" 必须有 parent_id 指向同区域主景点')
+            rep.add("P2", where, 'scale="spot" 未指定 parent_id，将作为独立卡片显示。'
+                                 '若同片区有主景点，挂上去可以让清单更紧凑')
         else:
             all_ids = {q.get("id") for q in doc.get("places") or []}
             if parent not in all_ids:

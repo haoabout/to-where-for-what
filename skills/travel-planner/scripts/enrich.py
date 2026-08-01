@@ -58,6 +58,31 @@ def in_bbox(lon: float, lat: float, bbox) -> bool:
     return bool(bbox) and bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]
 
 
+def name_matches(query_name: str, display_name: str) -> bool:
+    """返回的地点名里必须能看到我们搜的名字。
+
+    bbox 只能拦「搜错了城市」，拦不住「搜错了同城的另一个地点」——
+    实测 Nominatim 把「適塾」返回成了大阪市立美術館的坐标，
+    经纬度完全在大阪 bbox 内，静默通过，marker 会插到错误的地方。
+
+    做法：把查询名里的核心词与 display_name 比对。CJK 用子串匹配，
+    拉丁字母用词级匹配（大小写不敏感）。
+    """
+    q = re.sub(r"[\s·・（）()【】\[\]、,，]", "", query_name)
+    d = re.sub(r"[\s·・（）()【】\[\]、,，]", "", display_name)
+    if not q:
+        return False
+    if re.search(r"[぀-ヿ一-鿿]", q):
+        # CJK：整名命中，或去掉常见后缀后命中
+        if q in d:
+            return True
+        core = re.sub(r"(美術館|博物館|記念館|神社|大社|寺|城|公園|商店街|ビルヂング|ビル|会館|図書館|跡|場)$", "", q)
+        return len(core) >= 2 and core in d
+    ql = q.lower()
+    dl = d.lower()
+    return ql in dl or any(w for w in ql.split() if len(w) > 3 and w in dl)
+
+
 def fill_coords(doc: dict, dry: bool) -> int:
     trip = doc.get("trip", {})
     bbox = trip.get("bbox")
@@ -83,9 +108,14 @@ def fill_coords(doc: dict, dry: bool) -> int:
                     continue
                 for cand in res:
                     lon, lat = float(cand["lon"]), float(cand["lat"])
-                    if in_bbox(lon, lat, bbox):
-                        hit = (lon, lat, cand.get("display_name", "")[:64], q)
-                        break
+                    disp = cand.get("display_name", "")
+                    if not in_bbox(lon, lat, bbox):
+                        continue
+                    if not name_matches(nm, disp):
+                        print(f"      ↷ 跳过：搜「{nm}」返回的是「{disp.split(',')[0]}」，名称对不上")
+                        continue
+                    hit = (lon, lat, disp[:64], q)
+                    break
                 if hit:
                     break
             if hit:
