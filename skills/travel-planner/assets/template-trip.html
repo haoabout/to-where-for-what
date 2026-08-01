@@ -945,8 +945,26 @@ function shortCode(){
   return L.join("\n");
 }
 
-async function doSave(){
-  if(!CAN_WRITE){ showCode(); return; }
+/* 保存有三条路，按可靠性排序，任何一条失败都自动往下走——
+   绝不能让用户点了保存却卡在一个报错提示上，筛了半天的结果没法带走。
+
+   实测（Claude 内置浏览器）：
+     · showSaveFilePicker 函数存在，但 createWritable 抛 NotAllowedError
+     · navigator.clipboard.writeText 抛 NotAllowedError
+   也就是说「函数存在」完全不能证明「能用」，必须真的试一次才知道。 */
+async function saveViaServer(){
+  if(location.protocol !== "http:" && location.protocol !== "https:") return null;
+  try{
+    const r = await fetch("/__save__", {
+      method:"POST", headers:{ "Content-Type":"application/json" }, body:payload(),
+    });
+    const j = await r.json().catch(() => ({}));
+    return j && j.ok ? j : null;
+  }catch(e){ return null; }
+}
+
+async function saveViaPicker(){
+  if(typeof window.showSaveFilePicker !== "function") return null;
   try{
     if(!fileHandle){
       fileHandle = await window.showSaveFilePicker({
@@ -954,22 +972,54 @@ async function doSave(){
         types:[{ description:"行程数据", accept:{ "application/json":[".json"] } }],
       });
     }
+    if(fileHandle.queryPermission){
+      let st = await fileHandle.queryPermission({ mode:"readwrite" });
+      if(st === "prompt" && fileHandle.requestPermission)
+        st = await fileHandle.requestPermission({ mode:"readwrite" });
+      if(st !== "granted") return null;
+    }
     const w = await fileHandle.createWritable();
     await w.write(payload());
     await w.close();
-    toast("已保存到 " + fileHandle.name + "，可以让 AI 继续设计路线了");
+    return { name: fileHandle.name };
   }catch(e){
-    if(e.name === "AbortError") return;
-    toast("保存失败：" + e.message);
+    if(e.name === "AbortError") return "abort";   // 用户主动取消，不要再降级
+    fileHandle = null;
+    return null;
   }
 }
 
-function download(){
+async function doSave(){
+  const btn = $("#save");
+  btn.disabled = true; btn.textContent = "保存中…";
+  try{
+    const srv = await saveViaServer();
+    if(srv){
+      toast(`已写回 places.json（${srv.chosen} 个已表态），可以让 AI 继续设计路线了`);
+      return;
+    }
+    const pick = await saveViaPicker();
+    if(pick === "abort") return;
+    if(pick){
+      toast("已保存到 " + pick.name + "，可以让 AI 继续设计路线了");
+      return;
+    }
+    // 两条直写路都不通——直接下载，并说清楚为什么
+    download(true);
+  }finally{
+    btn.disabled = false; btn.textContent = "保存筛选结果";
+  }
+}
+
+function download(isFallback){
   const b = new Blob([payload()], { type:"application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(b); a.download = "places.json"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast("已下载 places.json，把它放回行程目录覆盖原文件");
+  toast(isFallback
+    ? "这个浏览器不允许直接写文件，已改为下载。把 places.json 放回行程目录覆盖原文件即可"
+    : "已下载 places.json，把它放回行程目录覆盖原文件");
+  if(isFallback) setTimeout(showCode, 900);   // 下载也可能被拦，再给一条兜底
 }
 
 function showCode(){
@@ -987,11 +1037,12 @@ function showCode(){
     </div>`;
   $("#dlg").showModal();
   $("#cp").onclick = async () => {
+    // 实测内置浏览器 navigator.clipboard 抛 NotAllowedError，必须有选中兜底
     try{ await navigator.clipboard.writeText(code); toast("已复制"); }
     catch(e){
       const r = document.createRange(); r.selectNode($("#code"));
       getSelection().removeAllRanges(); getSelection().addRange(r);
-      toast("已选中，按 ⌘C / Ctrl+C 复制");
+      toast("这个浏览器不允许自动复制，已帮你选中，按 ⌘C / Ctrl+C");
     }
   };
 }
@@ -1751,9 +1802,11 @@ function boot(){
       <div>先在清单里筛完景点，保存后告诉 AI，它会读回你的选择并设计路线。</div></div>`;
   }
 
-  $("#hint").innerHTML = CAN_WRITE
-    ? "「保存」会直接写回 places.json，第一次需要你选一下文件位置。"
-    : "当前浏览器不支持直接写文件，请用「下载 JSON」或「复制短码」。";
+  // 不再靠「函数是否存在」下结论——实测函数存在也可能写不了。
+  // 只说会怎么尝试，真实结果等点击时告诉用户。
+  $("#hint").innerHTML = location.protocol.startsWith("http")
+    ? "「保存」优先写回本地服务；服务不可用时自动降级为文件选择或下载。"
+    : "当前是本地文件方式打开，「保存」会尝试文件选择，不行则自动降级为下载。";
 
   renderChips();
   render();
@@ -1816,7 +1869,7 @@ $("#by-tier").onclick = () => { ui.group="tier"; $("#by-tier").setAttribute("ari
 $("#f-all").onclick   = () => { ui.scope="all";  $("#f-all").setAttribute("aria-pressed",true);  $("#f-todo").setAttribute("aria-pressed",false); render(); };
 $("#f-todo").onclick  = () => { ui.scope="todo"; $("#f-todo").setAttribute("aria-pressed",true); $("#f-all").setAttribute("aria-pressed",false); render(); };
 $("#save").onclick     = doSave;
-$("#download").onclick = download;
+$("#download").onclick = () => download(false);
 $("#copy").onclick     = showCode;
 
 document.addEventListener("keydown", e => {

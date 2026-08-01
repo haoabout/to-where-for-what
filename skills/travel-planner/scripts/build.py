@@ -211,10 +211,63 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 
 # ------------------------------------------------------------------ serve
 
+SERVER_SRC = r'''
+import json, sys
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+ROOT = Path(sys.argv[2]).resolve()
+
+class H(SimpleHTTPRequestHandler):
+    """静态服务 + 一个 /__save__ 写回端点。
+
+    为什么需要这个端点：File System Access API 在多数内置浏览器里
+    「函数存在但写入被拒」（createWritable 抛 NotAllowedError），
+    剪贴板也常被禁。POST 回本地服务是唯一在所有浏览器里都可靠的回传方式。
+    """
+    def __init__(self, *a, **k):
+        super().__init__(*a, directory=str(ROOT), **k)
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        if self.path.rstrip("/") != "/__save__":
+            self.send_error(404)
+            return
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            if n <= 0 or n > 20 * 1024 * 1024:
+                raise ValueError("请求体大小异常")
+            doc = json.loads(self.rfile.read(n).decode("utf-8"))
+            if not isinstance(doc, dict) or "places" not in doc:
+                raise ValueError("不是合法的 places.json 结构")
+            # 只允许写这一个文件名，且必须落在 ROOT 内——不接受来自页面的任意路径
+            target = (ROOT / "places.json").resolve()
+            if ROOT not in target.parents and target.parent != ROOT:
+                raise ValueError("路径越界")
+            target.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+            n_choice = sum(1 for p in doc["places"] if p.get("choice"))
+            body = json.dumps({"ok": True, "path": str(target), "chosen": n_choice},
+                              ensure_ascii=False).encode()
+            self.send_response(200)
+        except Exception as e:
+            body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode()
+            self.send_response(400)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+# 只绑 127.0.0.1，不对局域网暴露写接口
+ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+'''
+
+
 def serve(trip_dir: Path, page: Path, port: int) -> None:
     stop(trip_dir, quiet=True)
     proc = subprocess.Popen(
-        [sys.executable, "-m", "http.server", str(port), "--directory", str(trip_dir)],
+        [sys.executable, "-c", SERVER_SRC, str(port), str(trip_dir)],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     (trip_dir / PID_FILE).write_text(f"{proc.pid} {port}")
     time.sleep(0.8)
@@ -224,7 +277,8 @@ def serve(trip_dir: Path, page: Path, port: int) -> None:
     url = f"http://localhost:{port}/{page.name}"
     print(f"✓ 本地服务已启动: {url}")
     print(f"  停止: python3 build.py {trip_dir} --stop")
-    print("  （走 http 而非 file:// 可让 OSM 官方底图合规可用）")
+    print("  页面「保存筛选结果」会 POST 到 /__save__ 由本服务写回 places.json")
+    print("  （走 http 还能让 OSM 官方底图合规可用）")
     try:
         webbrowser.open(url)
     except Exception:  # noqa: BLE001
