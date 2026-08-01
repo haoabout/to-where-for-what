@@ -51,8 +51,12 @@ KNOWN_TRIP_FIELDS = {
 REQUIRED_STR = ["id", "name", "category", "area", "hours", "closed",
                 "ticket", "pitch", "detail"]
 REQUIRED_ANY = ["tier", "scale", "status", "booking", "coord",
-                "closed_days", "duration_min", "photo_index",
+                "duration_min", "photo_index",
                 "indoor", "night", "sources"]
+# closed_days 允许为 null，表示「查不到或来源互相矛盾」。
+# 实测：某老喫茶店的周日营业情况，食べログ说休、大楼官方商户页说不休，且无独立官网可仲裁。
+# 这种情况下逼着填一个值，比留空危险得多——用户会按错误的信息安排行程。
+# 代价是无法做闭馆日冲突校验，因此降级为 P1 提醒用户自行确认。
 
 # 用浏览器形状的 UA：实测通天阁官网对纯工具 UA 直接拒连，
 # 用工具 UA 会把大量正常官网误判成死链。
@@ -209,7 +213,11 @@ def check_place(p, idx, doc, rep: Report) -> None:
 
     # closed_days
     cd = p.get("closed_days")
-    if cd is not None:
+    if cd is None:
+        rep.add("P1", where,
+                "closed_days 为 null（查不到或来源矛盾）——无法校验闭馆日与行程是否冲突，"
+                "请在 detail 里提醒用户出发前自行确认")
+    else:
         if not isinstance(cd, list) or any(not isinstance(d, int) or not 1 <= d <= 7 for d in cd):
             rep.add("P0", where, "closed_days 必须是 1–7 的整数数组（1=周一），全年无休填 []")
         else:

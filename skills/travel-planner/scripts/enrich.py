@@ -58,29 +58,61 @@ def in_bbox(lon: float, lat: float, bbox) -> bool:
     return bool(bbox) and bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]
 
 
-def name_matches(query_name: str, display_name: str) -> bool:
-    """返回的地点名里必须能看到我们搜的名字。
+# 常见通名后缀。去掉后再比对，好让「大阪城天守閣」能匹配上「大阪城」。
+_SUFFIX = (r"(天守閣|展望台|記念館|美術館|博物館|資料館|図書館|会館|神社|大社|"
+           r"寺院|寺|城|公園|商店街|市場|渡船場|ビルヂング|ビル|タワー|横丁|"
+           r"駅|通|筋|跡|場|館|店)+$")
+_PUNCT = r"[\s·・（）()【】\[\]、,，。'\"’”—\-–~〜]"
+
+
+def name_matches(names: list[str], display_name: str) -> bool:
+    """景点的任一名称变体与返回结果对得上，就算匹配。
 
     bbox 只能拦「搜错了城市」，拦不住「搜错了同城的另一个地点」——
-    实测 Nominatim 把「適塾」返回成了大阪市立美術館的坐标，
-    经纬度完全在大阪 bbox 内，静默通过，marker 会插到错误的地方。
+    实测 Nominatim 把「適塾」返回成大阪市立美術館的坐标，经纬度完全在
+    大阪 bbox 内、静默通过，marker 会插到错误的地方。
 
-    做法：把查询名里的核心词与 display_name 比对。CJK 用子串匹配，
-    拉丁字母用词级匹配（大小写不敏感）。
+    但校验太严也会误杀，实测踩过三种：
+      · 「大阪城天守閣」← 返回「大阪城」        通名后缀不同
+      · 「萩ノ茶屋駅」  ← 返回「萩ノ茶屋」      同上
+      · 「Dotonbori (Glico Sign)」← 返回「道頓堀グリコサイン」  跨语言
+    所以：拿全部名称变体逐个比、双向包含都算、并剥掉通名后缀。
     """
-    q = re.sub(r"[\s·・（）()【】\[\]、,，]", "", query_name)
-    d = re.sub(r"[\s·・（）()【】\[\]、,，]", "", display_name)
-    if not q:
-        return False
-    if re.search(r"[぀-ヿ一-鿿]", q):
-        # CJK：整名命中，或去掉常见后缀后命中
-        if q in d:
-            return True
-        core = re.sub(r"(美術館|博物館|記念館|神社|大社|寺|城|公園|商店街|ビルヂング|ビル|会館|図書館|跡|場)$", "", q)
-        return len(core) >= 2 and core in d
-    ql = q.lower()
-    dl = d.lower()
-    return ql in dl or any(w for w in ql.split() if len(w) > 3 and w in dl)
+    # 必须先按逗号切出「地点主名」，再去标点——反过来会把逗号一起删掉，
+    # 于是整串地址被当成地点名，双向包含判断彻底失效。
+    head = re.sub(_PUNCT, "", display_name.split(",")[0])
+    d = re.sub(_PUNCT, "", display_name)
+    dl, headl = d.lower(), head.lower()
+    for nm in names:
+        if not nm:
+            continue
+        q = re.sub(_PUNCT, "", nm)
+        if not q:
+            continue
+        if re.search(r"[぀-ヿ一-鿿]", q):
+            if q in d:
+                return True
+            core = re.sub(_SUFFIX, "", q)
+            hcore = re.sub(_SUFFIX, "", head)
+            # 核心词只能比对「地点主名」，不能比对整个地址——
+            # 地址里必然含片区名，否则「中之島公園」会匹配上「大阪市立東洋陶磁美術館,
+            # 中之島一丁目」这种同片区的完全无关地点。
+            if len(core) >= 2 and core in head:
+                return True
+            if len(hcore) >= 3 and (hcore in q or hcore in core):
+                return True
+            # 异体字容差：靱/靭、旧字体/新字体这类在日文地名里很常见。
+            # 只在长度 ≥3 且恰好差 1 个字时放行，避免误配。
+            if len(q) >= 3 and len(q) == len(head) and sum(a != b for a, b in zip(q, head)) == 1:
+                return True
+        else:
+            ql = q.lower()
+            if ql in dl:
+                return True
+            words = [w for w in re.split(r"[^a-z0-9]+", ql) if len(w) > 3]
+            if words and sum(w in dl for w in words) >= max(1, len(words) // 2):
+                return True
+    return False
 
 
 def fill_coords(doc: dict, dry: bool) -> int:
@@ -111,7 +143,7 @@ def fill_coords(doc: dict, dry: bool) -> int:
                     disp = cand.get("display_name", "")
                     if not in_bbox(lon, lat, bbox):
                         continue
-                    if not name_matches(nm, disp):
+                    if not name_matches(names, disp):
                         print(f"      ↷ 跳过：搜「{nm}」返回的是「{disp.split(',')[0]}」，名称对不上")
                         continue
                     hit = (lon, lat, disp[:64], q)
