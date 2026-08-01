@@ -175,6 +175,20 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
 .f-danger{background:var(--danger-soft);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 22%,transparent)}
 .f-warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 22%,transparent)}
 .f-info{background:var(--paper-2);color:var(--ink-3);border-color:var(--line)}
+.f-unverified{
+  background:repeating-linear-gradient(-45deg,var(--warn-soft),var(--warn-soft) 5px,transparent 5px,transparent 10px);
+  color:var(--warn);border-color:color-mix(in srgb,var(--warn) 34%,transparent);font-weight:600;
+}
+/* 核实被拦截的景点：卡片给一条斜纹左边，一眼能从清单里认出来 */
+.card[data-verify]{border-left:3px solid transparent;
+  border-image:repeating-linear-gradient(45deg,var(--warn) 0 4px,transparent 4px 8px) 1}
+.verify-box{
+  margin-top:10px;padding:9px 12px;border-radius:7px;font-size:12.5px;line-height:1.6;
+  background:var(--warn-soft);border:1px dashed color-mix(in srgb,var(--warn) 40%,transparent);color:var(--ink-2);
+}
+.verify-box b{color:var(--warn)}
+.verify-box ul{margin:6px 0 0;padding-left:18px}
+.verify-box li{margin:2px 0}
 
 /* 三态 */
 .pick{display:flex;gap:0;margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content}
@@ -565,8 +579,13 @@ const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
+/* pitch / detail 里 AI 常自然地写 **重点**。先完整转义再还原这一种标记，
+   既不丢强调也不引入 XSS——顺序反过来就危险了。 */
+const rich = s => esc(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+const richP = s => rich(s).split(/\n{2,}/).map(x => `<p>${x.replace(/\n/g, "<br>")}</p>`).join("");
+
 let fileHandle = null;
-const ui = { group:"area", scope:"all", q:"", cats:new Set(), tags:new Set() };
+const ui = { group:"area", scope:"all", q:"", cats:new Set(), tags:new Set(), unv:false };
 
 /* ─────────────────────────────────────────────── 行程日期 */
 const WD = ["一","二","三","四","五","六","日"];
@@ -610,7 +629,24 @@ function flags(p){
   }
   if(p.booking === "required") out.push({ cls:"f-warn", txt:"必须预约才能进" });
   else if(p.booking === "recommended") out.push({ cls:"f-info", txt:"建议预约" });
+  // 核实被拦截：必须显眼，否则用户会把未核实的信息当成已核实的
+  const v = p.verify;
+  if(v && v.state && v.state !== "verified"){
+    out.push({ cls:"f-unverified",
+      txt: v.state === "blocked" ? "官方信息未能核实" : "信息仅部分核实" });
+  }
   return out;
+}
+
+function verifyBox(p){
+  const v = p.verify;
+  if(!v || !v.state || v.state === "verified") return "";
+  return `<div class="verify-box">
+    <b>${v.state === "blocked" ? "这个地点的官方信息没能查到" : "这个地点只核实了一部分信息"}</b><br>
+    ${rich(v.note || "")}
+    ${(v.check || []).length ? `<ul>${v.check.map(x => `<li>需自行确认：${esc(x)}</li>`).join("")}</ul>` : ""}
+    <div style="margin-top:6px">查到之后告诉 AI，它会补进数据里。</div>
+  </div>`;
 }
 
 /* ─────────────────────────────────────────────── 渲染辅助 */
@@ -637,7 +673,8 @@ function pickHTML(p){
 function cardHTML(p, children){
   const fl = flags(p);
   const loc = p.name_local && p.name_local !== p.name ? `<span class="loc">${esc(p.name_local)}</span>` : "";
-  return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}">
+  const unv = p.verify && p.verify.state && p.verify.state !== "verified" ? ` data-verify="${esc(p.verify.state)}"` : "";
+  return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
     <div class="card-in">
       ${thumb(p)}
       <div class="body">
@@ -646,7 +683,7 @@ function cardHTML(p, children){
           <span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
           <span class="stars" title="出片指数 ${p.photo_index||0}/5">${stars(p.photo_index)}</span>
         </div>
-        <p class="pitch">${esc(p.pitch)}</p>
+        <p class="pitch">${rich(p.pitch)}</p>
         <div class="facts">
           <span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
           <span>◎ ${esc(p.ticket)}</span>
@@ -655,6 +692,7 @@ function cardHTML(p, children){
           <span>${esc(CATMAP[p.category] || p.category)}</span>
         </div>
         ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
+        ${verifyBox(p)}
         ${pickHTML(p)}
         ${p.choice === "no" && p.choice_reason ? `<div class="why">不去的理由：${esc(p.choice_reason)}</div>` : ""}
         ${children.length ? spotsHTML(children) : ""}
@@ -669,7 +707,7 @@ function spotsHTML(kids){
     <div class="spots-h">顺路打卡点 · ${kids.length} 个</div>
     ${kids.map(k => `<div class="spot" data-id="${esc(k.id)}">
       <span class="sn" data-detail="${esc(k.id)}">${esc(k.name)}</span>
-      <span class="sd">${esc(k.pitch)}</span>
+      <span class="sd">${rich(k.pitch)}</span>
       ${pickHTML(k)}
     </div>`).join("")}
   </div>`;
@@ -680,6 +718,7 @@ function visible(){
   const q = ui.q.trim().toLowerCase();
   return PLACES.filter(p => {
     if(ui.scope === "todo" && p.choice) return false;
+    if(ui.unv && !(p.verify && p.verify.state && p.verify.state !== "verified")) return false;
     if(ui.cats.size && !ui.cats.has(p.category)) return false;
     if(ui.tags.size && !(p.tags||[]).some(t => ui.tags.has(t))) return false;
     if(q){
@@ -752,8 +791,10 @@ function renderChips(){
   for(const p of PLACES) for(const t of p.tags||[]) tagCount[t] = (tagCount[t]||0)+1;
   const topTags = Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
 
+  const nUnv = PLACES.filter(p => p.verify && p.verify.state && p.verify.state !== "verified").length;
   $("#chips").innerHTML =
-    CATS.filter(c => counts[c.id]).map(c =>
+    (nUnv ? `<button class="chip" data-unv="1" aria-pressed="false" title="官方信息没能查到的地点，需要你自己确认">⚠ 待你确认<span class="c">${nUnv}</span></button>` : "")
+    + CATS.filter(c => counts[c.id]).map(c =>
       `<button class="chip" data-cat="${esc(c.id)}" aria-pressed="false">${esc(c.label)}<span class="c">${counts[c.id]}</span></button>`).join("")
     + topTags.map(([t,n]) =>
       `<button class="chip" data-tag="${esc(t)}" aria-pressed="false">#${esc(t)}<span class="c">${n}</span></button>`).join("");
@@ -833,8 +874,9 @@ function openDetail(id){
       ${im && im.url ? `<img class="dlg-img" src="${esc(im.url)}" alt="${esc(p.name)}" onerror="this.remove()">
         ${im.credit ? `<div class="credit">${esc(im.credit)}</div>` : ""}` : ""}
       ${fl.length ? `<div class="flags" style="margin-bottom:14px">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
-      <p>${esc(p.detail || p.pitch)}</p>
-      ${p.photo_note ? `<h4>拍摄建议</h4><p>${esc(p.photo_note)}</p>` : ""}
+      ${verifyBox(p)}
+      ${richP(p.detail || p.pitch)}
+      ${p.photo_note ? `<h4>拍摄建议</h4>${richP(p.photo_note)}` : ""}
       <h4>实用信息</h4>
       <dl class="kv">${kv.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
       ${p.booking_url ? `<h4>预约</h4><ul class="srcs"><li><a href="${esc(p.booking_url)}" target="_blank" rel="noopener">${esc(p.booking_url)}</a></li></ul>` : ""}
@@ -1756,6 +1798,7 @@ document.addEventListener("click", e => {
   if(chip){
     const on = chip.getAttribute("aria-pressed") === "true";
     chip.setAttribute("aria-pressed", !on);
+    if(chip.dataset.unv){ ui.unv = !on; render(); return; }
     const set = chip.dataset.cat ? ui.cats : ui.tags;
     const key = chip.dataset.cat || chip.dataset.tag;
     on ? set.delete(key) : set.add(key);

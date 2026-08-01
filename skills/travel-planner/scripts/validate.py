@@ -30,6 +30,7 @@ SCALES = {"spot", "30min", "1-2h", "2-3h", "half-day", "full-day"}
 STATUSES = {"open", "renovating", "seasonal_closed", "permanently_closed"}
 BOOKINGS = {"required", "recommended", "none"}
 CHOICES = {None, "yes", "maybe", "no"}
+VERIFY_STATES = {"verified", "partial", "blocked"}
 
 # 契约允许的全部字段。多出来的字段说明 AI 自己发明了 schema，
 # 而模板不会渲染它们——静默丢失比报错更糟，所以要提示。
@@ -39,7 +40,7 @@ KNOWN_PLACE_FIELDS = {
     "closed", "ticket", "booking", "booking_url", "status", "status_note",
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
     "photo_note", "tags", "media", "museum", "images", "sources",
-    "choice", "choice_reason",
+    "verify", "choice", "choice_reason",
 }
 KNOWN_TRIP_FIELDS = {
     "destination", "destination_local", "destination_en", "country", "bbox",
@@ -161,12 +162,26 @@ def check_place(p, idx, doc, rep: Report) -> None:
     where = f"places[{idx}] {pid}"
     trip = doc.get("trip") or {}
 
+    # 核实被拦截时，这几个字段允许为空——那正是「查不到」的含义。
+    # 逼着填反而会让用户把猜测当成已核实的信息。
+    vstate = (p.get("verify") or {}).get("state")
+    excused = {"hours", "ticket", "status", "closed", "last_entry"} if vstate in ("blocked", "partial") else set()
+
     for f in REQUIRED_STR:
+        if f in excused:
+            continue
         if _blank(p.get(f)):
             rep.add("P0", where, f"缺少必填字段 {f}")
     for f in REQUIRED_ANY:
+        if f in excused:
+            continue
         if p.get(f) is None:
             rep.add("P0", where, f"缺少必填字段 {f}")
+    if excused:
+        got = [f for f in sorted(excused) if not _blank(p.get(f))]
+        rep.add("P2", where,
+                f"因 verify.state={vstate} 豁免了 {sorted(excused)} 的必填检查"
+                + (f"，其中 {got} 实际有值" if got else "，均为空"))
 
     # 枚举
     for field, allowed in (("tier", TIERS), ("scale", SCALES),
@@ -210,6 +225,26 @@ def check_place(p, idx, doc, rep: Report) -> None:
     # 状态
     if p.get("status") and p["status"] != "open" and _blank(p.get("status_note")):
         rep.add("P0", where, f"status={p['status']} 但缺少 status_note（需说明起止时间）")
+
+    # 核实状态。与 status 正交：status 说场馆开不开，verify 说我们查没查清。
+    v = p.get("verify")
+    if v is not None:
+        if not isinstance(v, dict):
+            rep.add("P0", where, "verify 必须是对象 {state, note, check}")
+        else:
+            st = v.get("state")
+            if st not in VERIFY_STATES:
+                rep.add("P0", where, f"verify.state={st!r} 非法，应为 {sorted(VERIFY_STATES)}")
+            elif st != "verified":
+                if _blank(v.get("note")):
+                    rep.add("P0", where,
+                            f"verify.state={st} 但缺少 note——必须写清尝试过什么、为什么失败，"
+                            f"否则用户无从判断该不该自己去查")
+                if not v.get("check"):
+                    rep.add("P1", where, f"verify.state={st} 建议用 check 列出需用户自行确认的项")
+                rep.add("P1", where,
+                        f"核实被拦截或不完整（{st}）：{str(v.get('note'))[:60]}…"
+                        f" —— 页面会标注提醒用户自行确认")
 
     # closed_days
     cd = p.get("closed_days")

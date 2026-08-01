@@ -165,6 +165,22 @@ def main() -> int:
     case("spot 没有 parent_id（应只提示，不拒绝）",
          lambda d: d["places"][1].update(scale="spot"), "P2", "将作为独立卡片显示")
 
+    print("\nverify · 核实被拦截的处理")
+    def blocked(d, **kw):
+        p = d["places"][1]
+        p["verify"] = {"state": "blocked", "note": "官网 404，专用域名连不上",
+                       "check": ["营业时间", "票价"]}
+        p.update(**kw)
+    case("blocked 时 hours/ticket/status 允许为空",
+         lambda d: blocked(d, hours=None, ticket=None, status=None), "P1", "核实被拦截")
+    case("blocked 但没写 note —— 必须拒绝",
+         lambda d: d["places"][1].update(verify={"state": "blocked"}), "P0", "缺少 note")
+    case("verify.state 非法值",
+         lambda d: d["places"][1].update(verify={"state": "maybe", "note": "x"}), "P0", "非法")
+    case("verified 时不豁免必填",
+         lambda d: d["places"][1].update(verify={"state": "verified"}, hours=None),
+         "P0", "缺少必填字段 hours")
+
     ok, total = sum(results), len(results)
     print(f"\n{'\033[92m' if ok == total else '\033[91m'}{ok}/{total} 通过\033[0m")
     return 0 if ok == total else 1
