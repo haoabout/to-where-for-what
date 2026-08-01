@@ -332,8 +332,11 @@ pre.code{
 }
 .attrib a{color:inherit}
 
-/* 地图 marker（HTML 元素，可承载中文名与序号） */
-.mk{cursor:pointer;transform:translate(-50%,-50%);position:relative}
+/* 地图 marker（HTML 元素，可承载中文名与序号）
+   注意：不要在这里设 position 或 transform —— MapLibre 会给 marker 元素加
+   .maplibregl-marker（position:absolute）并用 inline transform 定位。
+   我们插手任何一个，marker 都会脱离地图坐标系。静态兜底图另有自己的定位规则。 */
+.mk{cursor:pointer}
 .mk i{
   display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
   font:700 10px/1 var(--mono);color:#fff;font-style:normal;
@@ -351,7 +354,9 @@ pre.code{
 .static-map .sm-grid{position:absolute;inset:0;opacity:.5;
   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
   background-size:52px 52px}
-.static-map .mk{position:absolute}
+/* 静态兜底图里的定位由我们自己负责（用 left/top 百分比 + 居中位移），
+   这是唯一该给 .mk 设 position/transform 的地方 */
+.static-map .mk{position:absolute;transform:translate(-50%,-50%)}
 
 @media (max-width:860px){
   .map-wrap{grid-template-columns:1fr;height:auto}
@@ -1205,6 +1210,9 @@ const MAP = (() => {
   /* ---------- marker ---------- */
   function markerEl(p, idx){
     const el = document.createElement("div");
+    // 这里可以直接赋 className：元素刚创建、还没交给 MapLibre，
+    // 它的 .maplibregl-marker 类是在 new Marker() 之后才加上的。
+    // 但此后任何时候都只能用 classList 增删（见 paintMarker）。
     el.className = "mk " + kind(p);
     el.dataset.id = p.id;
     el.dataset.nm = p.name;
@@ -1238,17 +1246,28 @@ const MAP = (() => {
     if(node) node.style.display = on ? "" : "none";
   }
 
+  /* 只增删我们自己的类，绝不整体覆盖 className。
+     踩过的坑：`el.className = "mk " + kind(p)` 会把 MapLibre 自己加的
+     .maplibregl-marker（携带 position:absolute）一并冲掉，marker 随即落入
+     正常文档流，位置被前面所有 marker 的高度累加推偏——实测最大偏差 828px，
+     且缩放时 marker 与底图各走各的。表现为「点一下某个点，所有点突然全乱」。 */
+  const MK_STATE = ["yes", "maybe", "no", "none"];
+
+  function paintMarker(el, p){
+    el.classList.remove(...MK_STATE, "on");
+    el.classList.add(kind(p));
+    if(st.focus === p.id) el.classList.add("on");
+    const dot = el.querySelector("i");
+    if(dot) dot.style.background = COLOR[kind(p)];
+    el.style.display = st.show.has(kind(p)) ? "" : "none";
+  }
+
   function refresh(){
     if(!st.ready) return;
     pts().forEach(p => {
       const m = st.markers.get(p.id);
       const el = st.engine === "maplibre" ? m?.getElement?.() : null;
-      if(el){
-        el.className = "mk " + kind(p) + (st.focus === p.id ? " on" : "");
-        const dot = el.querySelector("i");
-        if(dot) dot.style.background = COLOR[kind(p)];
-        el.style.display = st.show.has(kind(p)) ? "" : "none";
-      }
+      if(el) paintMarker(el, p);
     });
     if(st.engine === "static") renderStatic();
     if(st.engine === "leaflet"){ addMarkers(); }
