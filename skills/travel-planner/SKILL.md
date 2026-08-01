@@ -83,12 +83,20 @@ mkdir -p ~/.travel-planner
 - 坐标用 `{"lon":…, "lat":…}` 对象形式，不许用数组
 - 图片 URL 必须从 API 拿，**不许手工拼**（见 playbook 里的 Wikimedia 教训）
 
-### A3. 校验 + 构建
+### A3. 补齐坐标与配图 · 校验 · 构建
+
+**坐标和配图不要自己填，跑脚本。** 它们是确定性的 API 调用，脚本比你准，
+而且已经处理好了 Nominatim 的 1 req/s 限速、bbox 越界校验、
+以及 Wikimedia 缩略图必须走 API 的问题。
 
 ```bash
+python3 <SKILL_ROOT>/scripts/enrich.py   trips/<行程>/places.json --coords --images
 python3 <SKILL_ROOT>/scripts/validate.py trips/<行程>/places.json --check-links
-python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
+python3 <SKILL_ROOT>/scripts/build.py    trips/<行程> --serve
 ```
+
+`enrich.py` 补不上的会明确报出来（多半是查不到，或搜到的点落在 bbox 外），
+这时才需要你人工处理——**它宁可留空也不会填一个看似合理的错坐标**。
 
 **必须零 P0 才能交付。** P1 逐条看过再决定忽略还是修。
 
@@ -196,5 +204,6 @@ trips/2026-09-osaka/
 | [references/museum-module.md](references/museum-module.md) | 路线含博物馆时 |
 | [references/media-pilgrimage.md](references/media-pilgrimage.md) | 做影视动漫打卡地时 |
 | [references/checklist.md](references/checklist.md) | 交付前 |
+| `scripts/enrich.py` | 补坐标与配图，写完 `places.json` 主体后 |
 | `scripts/validate.py` | 每次改完 `places.json` |
 | `scripts/build.py` | 生成/更新页面 |
