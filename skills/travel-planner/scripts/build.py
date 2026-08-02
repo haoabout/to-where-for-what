@@ -212,24 +212,69 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 # ------------------------------------------------------------------ serve
 
 SERVER_SRC = r'''
-import json, sys
+import json, re, sys, urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(sys.argv[2]).resolve()
 
-class H(SimpleHTTPRequestHandler):
-    """静态服务 + 一个 /__save__ 写回端点。
+# ÖPNVKarte（公交/地铁专题图）。只允许代理这一个上游，路径形状写死在正则里。
+OPNV_URL = "https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png"
+TILE_RE = re.compile(r"^/__tiles__/opnv/(\d{1,2})/(\d{1,7})/(\d{1,7})\.png$")
+TILE_CACHE = {}          # (z,x,y) -> bytes，上限见下方；减轻上游负担
+TILE_CACHE_MAX = 800
 
-    为什么需要这个端点：File System Access API 在多数内置浏览器里
+class H(SimpleHTTPRequestHandler):
+    """静态服务 + /__save__ 写回端点 + /__tiles__/opnv 瓦片代理。
+
+    为什么需要 /__save__：File System Access API 在多数内置浏览器里
     「函数存在但写入被拒」（createWritable 抛 NotAllowedError），
     剪贴板也常被禁。POST 回本地服务是唯一在所有浏览器里都可靠的回传方式。
+
+    为什么需要 /__tiles__/opnv：MapLibre 用 fetch() 拉光栅瓦片（要拿
+    ArrayBuffer 解成 WebGL 纹理），而 ÖPNVKarte 的服务器不发
+    Access-Control-Allow-Origin，浏览器直接拦死 —— 实测 <img> 能加载、
+    fetch 报 "Failed to fetch"。转一道同源代理就绕开了。
+    （Leaflet 用 <img>，所以网上 ÖPNVKarte 的例子几乎全是 Leaflet。）
     """
     def __init__(self, *a, **k):
         super().__init__(*a, directory=str(ROOT), **k)
 
     def log_message(self, *a):
         pass
+
+    def do_GET(self):
+        m = TILE_RE.match(self.path)
+        if m:
+            self.proxy_tile(*(int(v) for v in m.groups()))
+            return
+        super().do_GET()
+
+    def proxy_tile(self, z, x, y):
+        if not (0 <= z <= 19 and 0 <= x < 2 ** z and 0 <= y < 2 ** z):
+            self.send_error(400, "tile out of range")
+            return
+        buf = TILE_CACHE.get((z, x, y))
+        if buf is None:
+            try:
+                req = urllib.request.Request(
+                    OPNV_URL.format(z=z, x=x, y=y),
+                    headers={"User-Agent": "travel-planner-skill (local tile proxy)"})
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    buf = r.read(4 * 1024 * 1024)
+            except Exception as e:
+                self.send_error(502, "upstream: %s" % e)
+                return
+            if len(TILE_CACHE) >= TILE_CACHE_MAX:
+                TILE_CACHE.pop(next(iter(TILE_CACHE)), None)
+            TILE_CACHE[(z, x, y)] = buf
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(buf)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "public, max-age=604800")
+        self.end_headers()
+        self.wfile.write(buf)
 
     def do_POST(self):
         if self.path.rstrip("/") != "/__save__":
@@ -278,6 +323,7 @@ def serve(trip_dir: Path, page: Path, port: int) -> None:
     print(f"✓ 本地服务已启动: {url}")
     print(f"  停止: python3 build.py {trip_dir} --stop")
     print("  页面「保存筛选结果」会 POST 到 /__save__ 由本服务写回 places.json")
+    print("  地铁底图经 /__tiles__/opnv 代理（ÖPNVKarte 无 CORS 头，直连会被浏览器拦死）")
     print("  （走 http 还能让 OSM 官方底图合规可用）")
     try:
         webbrowser.open(url)

@@ -528,7 +528,6 @@ pre.code{
         <div id="map-canvas"></div>
         <div class="map-bar">
           <div class="mgroup" id="basemaps"></div>
-          <div class="mgroup"><button id="subway" aria-pressed="false" title="叠加公交/地铁线路图">地铁</button></div>
         </div>
         <div class="map-note" id="map-note"></div>
         <div class="attrib" id="attrib"></div>
@@ -1069,16 +1068,27 @@ function toast(msg){
      ③ OSM 官方光栅        仅 http 下解锁 —— file:// 不发 Referer，
                            OSM 会返回一张写着「Access blocked」的图片，
                            且 HTTP 状态码是 200，onerror 抓不到
-     ④ 无 WebGL → Leaflet 光栅
-     ⑤ 全挂 → 静态散点图，至少还能看清相对位置
+     ④ ÖPNVKarte 地铁图    仅 --serve 下解锁，经本地代理，见下方注释
+     ⑤ 无 WebGL → Leaflet 光栅
+     ⑥ 全挂 → 静态散点图，至少还能看清相对位置
    ═══════════════════════════════════════════════════════════════════ */
 const MAP = (() => {
   const MAPLIBRE_JS  = "https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js";
   const MAPLIBRE_CSS = "https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.css";
   const LEAFLET_JS   = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
   const LEAFLET_CSS  = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-  const SUBWAY_TILES = "https://tileserver.memomaps.de/tilegen/{z}/{x}/{y}.png";
-  const SUBWAY_ATTR  = "© OpenStreetMap contributors, Style: ÖPNVKarte";
+
+  /* ÖPNVKarte 为什么是「底图」而不是「叠加层」，为什么要走本地代理：
+       1. 实测抓大阪那张瓦片，256×256 调色板 PNG，全透明像素占比 0.0% ——
+          它是一整幅不透明专题图，不是透明叠加层。盖在 OFM 上只会把底图糊死。
+       2. tileserver.memomaps.de 不发 Access-Control-Allow-Origin。MapLibre 用
+          fetch() 拉光栅瓦片（要 ArrayBuffer 解成 WebGL 纹理），会全部
+          "Failed to fetch"；<img> 反而正常 —— 所以网上的例子几乎全是 Leaflet。
+          build.py 的 /__tiles__/opnv 同源代理绕开这一层。
+     它的价值在于线路直接标着线号（大阪是 M/T/Y/C/S/N/I + HK/HS/K/JR），
+     OFM 矢量只有地铁几何、没有线名，OpenRailwayMap 只标站名不标线号。 */
+  const ORIGIN = location.origin;
+  const OPNV_TILES = ORIGIN + "/__tiles__/opnv/{z}/{x}/{y}.png";
 
   const BASEMAPS = [
     { id:"ofm", label:"矢量", kind:"vector",
@@ -1091,10 +1101,13 @@ const MAP = (() => {
     { id:"osm", label:"OSM", kind:"raster", httpOnly:true,
       tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       attrib:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' },
+    { id:"opnv", label:"地铁", kind:"raster", proxied:true, maxZoom:18,
+      tiles:[OPNV_TILES],
+      attrib:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Style: <a href="https://xn--pnvkarte-m4a.de/" target="_blank" rel="noopener">ÖPNVKarte</a> · 经本地服务代理' },
   ];
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
-               base:"ofm", subway:false, focus:null, show:new Set(["yes","maybe","none","no"]) };
+               base:"ofm", focus:null, show:new Set(["yes","maybe","none","no"]) };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
@@ -1131,22 +1144,44 @@ const MAP = (() => {
     }catch(e){ return false; }
   }
 
+  /* 行程中心点落在哪张瓦片上 —— 探测底图可用性时用它取一张「必定有内容」的瓦片，
+     取空白海面的瓦片会让「几 KB 算正常」的判断失去意义。 */
+  function centerTile(z){
+    const c = center();
+    const rad = c.lat * Math.PI / 180;
+    return {
+      z,
+      x: Math.floor((c.lon + 180) / 360 * 2 ** z),
+      y: Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * 2 ** z),
+    };
+  }
+
   /* ---------- OSM 封禁瓦片探测 ----------
      封禁响应是一张 256×256 的 PNG，内容是「Access blocked 403」，
      大小约 6987 字节，HTTP 状态码却是 200。
      只看状态码或 onerror 永远发现不了，必须看字节数。 */
   async function osmUsable(){
-    if(location.protocol !== "http:" && location.protocol !== "https:") return false;
-    const c = center();
-    const z = 12;
-    const x = Math.floor((c.lon + 180) / 360 * 2 ** z);
-    const rad = c.lat * Math.PI / 180;
-    const y = Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * 2 ** z);
+    if(!location.protocol.startsWith("http")) return false;
+    const { z, x, y } = centerTile(12);
     try{
       const r = await fetch(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`, { cache:"no-store" });
       if(!r.ok) return false;
       const b = await r.blob();
       return b.size > 12000;   // 真实城市瓦片通常 20-50KB，封禁瓦片约 7KB
+    }catch(e){ return false; }
+  }
+
+  /* ---------- 地铁底图（本地代理）探测 ----------
+     页面可能被别的静态服务托管（没有 /__tiles__ 端点），也可能是 file:// 直接打开。
+     两种情况下这个按钮都得置灰，而不是点了没反应。 */
+  async function opnvUsable(){
+    if(!location.protocol.startsWith("http")) return false;
+    const { z, x, y } = centerTile(12);
+    try{
+      const r = await fetch(`${ORIGIN}/__tiles__/opnv/${z}/${x}/${y}.png`, { cache:"no-store" });
+      if(!r.ok) return false;
+      const b = await r.blob();
+      return b.type.includes("png") && b.size > 1000;
     }catch(e){ return false; }
   }
 
@@ -1172,23 +1207,64 @@ const MAP = (() => {
     });
   }
 
-  async function probeOSM(){
-    const btn = document.querySelector('#basemaps [data-base="osm"]');
-    if(!btn) return;
-    if(location.protocol === "file:"){
-      btn.disabled = true;
-      btn.title = "本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。";
-      return;
+  const PROBES = {
+    osm: {
+      test: osmUsable,
+      offline: "本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。",
+      ok:   "OpenStreetMap 官方底图",
+      fail: "探测到 OSM 返回封禁瓦片（约 7KB 的「Access blocked」图），已停用",
+    },
+    opnv: {
+      test: opnvUsable,
+      offline: "地铁专题图（ÖPNVKarte）的服务器不发 CORS 头，MapLibre 无法直接加载，必须经本地服务代理。用 build.py --serve 打开即可解锁。",
+      ok:   "ÖPNVKarte 公交/地铁专题图：线路上直接标注线号，用来查换乘",
+      fail: "当前服务没有 /__tiles__/opnv 代理端点（页面可能由别的静态服务托管），已停用",
+    },
+  };
+
+  async function probe(id){
+    const sel = `#basemaps [data-base="${id}"]`;
+    const btn = document.querySelector(sel);
+    const cfg = PROBES[id];
+    if(!btn || !cfg) return;
+    if(!location.protocol.startsWith("http")){
+      btn.disabled = true; btn.title = cfg.offline; return;
     }
     btn.disabled = true;
-    btn.title = "正在探测 OSM 是否可用…";
-    const ok = await osmUsable();
+    btn.title = "正在探测是否可用…";
+    const ok = await cfg.test();
     if(st.degraded) return;                       // 降级后不要复活按钮
-    const b2 = document.querySelector('#basemaps [data-base="osm"]');
+    const b2 = document.querySelector(sel);       // 探测期间按钮可能已被重绘
     if(!b2) return;
     b2.disabled = !ok;
-    b2.title = ok ? "OpenStreetMap 官方底图"
-                  : "探测到 OSM 返回封禁瓦片（约 7KB 的「Access blocked」图），已停用";
+    b2.title = ok ? cfg.ok : cfg.fail;
+  }
+
+  /* ---------- 瓦片持续失败的监听 ----------
+     实测教训：startMapLibre 里的 once("error") 只覆盖启动阶段，之后切底图
+     或叠加图层再失败，错误就只剩 console 里的 AJAXError，页面上完全没反应——
+     按钮亮着、图层也加上了，就是不出图，用户只会觉得「点了没用」。 */
+  const deadBases = new Set();
+  function watchTiles(){
+    let hits = 0, watching = st.base, timer = null;
+    st.map.on("error", ev => {
+      const msg = String((ev && ev.error && ev.error.message) || (ev && ev.message) || "");
+      if(!/AJAX|Failed to fetch|NetworkError|Load failed/i.test(msg)) return;
+      if(watching !== st.base){ watching = st.base; hits = 0; }
+      if(deadBases.has(watching)) return;
+      hits++;
+      clearTimeout(timer);
+      timer = setTimeout(() => { hits = 0; }, 8000);   // 偶发的单张失败不算数
+      if(hits < 5) return;
+
+      deadBases.add(watching);
+      const b = BASEMAPS.find(x => x.id === watching);
+      const btn = document.querySelector(`#basemaps [data-base="${watching}"]`);
+      if(btn){ btn.disabled = true; btn.title = "瓦片持续加载失败，已停用：" + msg; }
+      note(`<b>「${b ? b.label : watching}」底图的瓦片加载失败</b>，已自动切回矢量底图。`
+         + `控制台原始错误：<code>${esc(msg)}</code>`);
+      if(watching !== "ofm") switchBase("ofm");
+    });
   }
 
   /* ---------- 样式构造 ---------- */
@@ -1197,14 +1273,15 @@ const MAP = (() => {
     if(b.kind === "vector") return b.style;
     return {
       version:8,
-      sources:{ base:{ type:"raster", tiles:b.tiles, tileSize:256, attribution:"" } },
+      sources:{ base:{ type:"raster", tiles:b.tiles, tileSize:256,
+                       maxzoom:b.maxZoom || 19, attribution:"" } },
       layers:[{ id:"base", type:"raster", source:"base" }],
     };
   }
 
   function setAttrib(){
     const b = BASEMAPS.find(x => x.id === st.base);
-    $("#attrib").innerHTML = (b ? b.attrib : "") + (st.subway ? " · " + SUBWAY_ATTR : "");
+    $("#attrib").innerHTML = b ? b.attrib : "";
   }
 
   /* ---------- marker ---------- */
@@ -1324,22 +1401,6 @@ const MAP = (() => {
         : "").join("") + `</div>`;
   }
 
-  /* ---------- 地铁叠加 ---------- */
-  function setSubway(on){
-    st.subway = on;
-    $("#subway").setAttribute("aria-pressed", on);
-    setAttrib();
-    if(st.engine !== "maplibre" || !st.map) return;
-    const has = st.map.getLayer("subway");
-    if(on && !has){
-      if(!st.map.getSource("subway-src"))
-        st.map.addSource("subway-src", { type:"raster", tiles:[SUBWAY_TILES], tileSize:256 });
-      st.map.addLayer({ id:"subway", type:"raster", source:"subway-src", paint:{ "raster-opacity":0.85 } });
-    }else if(!on && has){
-      st.map.removeLayer("subway");
-    }
-  }
-
   /* ---------- 引擎启动 ---------- */
   async function startMapLibre(){
     await Promise.all([loadCSS(MAPLIBRE_CSS), loadJS(MAPLIBRE_JS)]);
@@ -1349,14 +1410,28 @@ const MAP = (() => {
       container:"map-canvas", style:styleFor(st.base),
       center:[c.lon, c.lat], zoom:11.5, attributionControl:false,
     });
-    st.engine = "maplibre";
     await new Promise((res, rej) => {
       // OpenFreeMap 是单人维护的捐赠项目，无 SLA，慢的时候真的很慢。
       // 20 秒是实测取的折中：够宽容，又不至于让用户干等。
-      const t = setTimeout(() => rej(new Error("矢量底图 20 秒未加载完成")), 20000);
-      st.map.once("load", () => { clearTimeout(t); res(); });
-      st.map.once("error", e => { clearTimeout(t); rej(e.error || new Error("底图出错")); });
+      //
+      // 但这 20 秒只能算「页面可见」的那部分时间。后台标签页里浏览器会暂停
+      // requestAnimationFrame，而 MapLibre 的 load 事件要等首次渲染完成 ——
+      // 于是它永远不会触发。实测被这个误判过两次：OFM 本身 2 秒就响应了，
+      // 只因为标签页在后台，20 秒一到就降级成 Leaflet，用户切回来时看到的
+      // 是一张已经降级、且底图按钮全部禁用的地图，而且无法恢复。
+      let waited = 0, settled = false;
+      const stop = () => { settled = true; clearInterval(tick); };
+      const tick = setInterval(() => {
+        if(document.hidden || settled) return;
+        waited += 500;
+        if(waited >= 20000){ stop(); rej(new Error("矢量底图 20 秒未加载完成")); }
+      }, 500);
+      st.map.once("load",  () => { if(!settled){ stop(); res(); } });
+      st.map.once("error", e => { if(!settled){ stop(); rej(e.error || new Error("底图出错")); } });
     });
+    // 放在 await 之后：加载期间 st.engine 还不该是 maplibre，
+    // 否则用户这时点底图按钮，操作的是一个可能马上要被拆掉的 map 实例。
+    st.engine = "maplibre";
     st.map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "bottom-right");
     st.map.resize();          // 容器可能刚从 hidden 变可见，尺寸要重新量
     fitAll();
@@ -1417,13 +1492,8 @@ const MAP = (() => {
     if(st.engine !== "maplibre" || id === st.base) return;
     st.base = id;
     $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === id));
-    const wasSubway = st.subway;
     st.map.setStyle(styleFor(id));
-    st.map.once("styledata", () => {
-      addMarkers();
-      if(wasSubway) setSubway(true);
-      setAttrib();
-    });
+    st.map.once("styledata", () => { addMarkers(); setAttrib(); });
   }
 
   /* ---------- 入口 ---------- */
@@ -1446,7 +1516,8 @@ const MAP = (() => {
     try{
       if(!webgl) throw new Error("需要 WebGL");
       await startMapLibre();
-      probeOSM();                       // 不 await：探测慢不该挡住地图显示
+      watchTiles();
+      probe("osm"); probe("opnv");       // 不 await：探测慢不该挡住地图显示
     }catch(e1){
       problems.push("矢量底图不可用（" + (e1.message || e1) + "）");
       try{
@@ -1456,10 +1527,8 @@ const MAP = (() => {
         await startLeaflet();
         st.degraded = true;
         fitAll(); st.fitted = true;
-        note(`<b>已降级</b>：${problems.join("；")}。当前使用 Leaflet + CARTO 光栅底图，点位、联动、导出都不受影响，只是不能切底图和叠加地铁层。`);
+        note(`<b>已降级</b>：${problems.join("；")}。当前使用 Leaflet + CARTO 光栅底图，点位、联动、导出都不受影响，只是不能切底图。`);
         lockBaseButtons("降级模式下不可切换底图");
-        $("#subway").disabled = true;
-        $("#subway").title = "地铁叠加层需要矢量引擎";
       }catch(e2){
         problems.push("光栅底图也不可用（" + (e2.message || e2) + "）");
         st.degraded = true;
@@ -1467,7 +1536,6 @@ const MAP = (() => {
         st.map = null;
         note(`<b>底图全部不可用</b>：${problems.join("；")}。下面是按经纬度换算的相对位置示意图——比例不准，但方位和聚集关系是对的，导出功能照常可用。`);
         lockBaseButtons("无可用底图");
-        $("#subway").disabled = true;
       }
     }
 
@@ -1525,8 +1593,6 @@ ${selected().map(p => `<Placemark>
     if(go){ focus(go.dataset.goto, false); return; }
     const bm = e.target.closest("#basemaps button");
     if(bm && !bm.disabled){ switchBase(bm.dataset.base); return; }
-    const sw = e.target.closest("#subway");
-    if(sw && !sw.disabled){ setSubway(sw.getAttribute("aria-pressed") !== "true"); return; }
     const mf = e.target.closest(".mfil");
     if(mf){
       const on = mf.getAttribute("aria-pressed") === "true";
