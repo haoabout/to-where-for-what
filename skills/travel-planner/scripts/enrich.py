@@ -376,8 +376,15 @@ out tags center;'''
             "geometry": {"type": "MultiLineString", "coordinates": rec["segs"]},
         })
 
-    # 车站来自同一个响应里的 node 元素。同名站点会被多条线各挂一个节点，去重。
-    stations, seen_st = [], set()
+    # 车站来自同一个响应里的 node 元素。
+    #
+    # 不要按站名去重。同名的多个节点**不是重复录入**，而是各条线自己的站台，
+    # 物理上确实分开：实测本町有 3 个节点、最远相隔 354m（御堂筋・中央・四つ橋
+    # 三条线的本町站本来就不在同一处），天王寺 2 个相隔 404m。
+    # 早先按名字只留第一个，等于随机保留其中一条线的站台，另外两条线上就没点了 ——
+    # 用户一眼就看出「本町连着三条线，却只有红线上有点」。
+    # 152 个原始节点里有 23 个属于这种情况，占 15%。
+    stations = []
     for el in data.get("elements", []):
         if el.get("type") != "node":
             continue
@@ -386,11 +393,8 @@ out tags center;'''
         name = t.get("name") or t.get("name:en") or ""
         if lon is None or lat is None or not name:
             continue
-        if name in seen_st:            # 换乘站在 OSM 里常有多个同名节点
-            continue
-        seen_st.add(name)
         # 空值直接不写这个键。写成 "" 的话，页面里 MapLibre 的 coalesce
-        # 会把空字符串当成有效值 —— 实测 129 个站有 120 个的 name:zh 是空串，
+        # 会把空字符串当成有效值 —— 实测 129 个站名里有 120 个的 name:zh 是空串，
         # 结果站名标签全渲染成空白，图上什么都看不见。
         props = {"name": name}
         for key, tag in (("name_en", "name:en"), ("name_zh", "name:zh")):
