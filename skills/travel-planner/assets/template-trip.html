@@ -1063,14 +1063,25 @@ function toast(msg){
    地图视图
 
    底图分层与降级链（每一级都实测过）：
-     ① OpenFreeMap 矢量   默认。含地铁几何与双语站名，缩放不产生流量
-     ② CARTO 光栅          备用。干净但完全没有轨道数据
-     ③ OSM 官方光栅        仅 http 下解锁 —— file:// 不发 Referer，
-                           OSM 会返回一张写着「Access blocked」的图片，
-                           且 HTTP 状态码是 200，onerror 抓不到
-     ④ ÖPNVKarte 地铁图    仅 --serve 下解锁，经本地代理，见下方注释
-     ⑤ 无 WebGL → Leaflet 光栅
-     ⑥ 全挂 → 静态散点图，至少还能看清相对位置
+     ① 标准  graybeard style + OSM 官方 Shortbread 矢量瓦片。默认
+     ② 简约  OpenFreeMap positron。另一种观感，同时充当矢量源的备份
+     ③ 光栅  OSM 官方光栅，仅 http 下解锁 —— file:// 不发 Referer，
+             OSM 会返回一张写着「Access blocked」的图片，
+             且 HTTP 状态码是 200，onerror 抓不到
+     ④ 无 WebGL → Leaflet + CARTO 光栅
+     ⑤ 全挂 → 静态散点图，至少还能看清相对位置
+
+   为什么默认是 ①（实测依据）：
+     · OSM 官方矢量瓦片**不要 Referer**，file:// 下同样返回 200 ——
+       而官方光栅那套会被挡。双击打开也有一个像样的底图。
+     · OFM 的 park 源图层实测是空的（大阪城/中之岛/万博全是 0 个要素），
+       绿地只能从 landcover.grass 绕；OSM Shortbread 的 land 层直接带
+       park/garden/forest/grass 分类。
+     · 官方运营，不是单人维护的捐赠项目。
+     · 全球覆盖抽查 9 城（含拉萨、雷克雅未克）全部有数据。
+
+   ①③ 都是 OSM 官方，②是 OpenFreeMap；两个矢量源 schema 不同、运营方不同，
+   不会一起挂。
    ═══════════════════════════════════════════════════════════════════ */
 const MAP = (() => {
   const MAPLIBRE_JS  = "https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js";
@@ -1078,36 +1089,83 @@ const MAP = (() => {
   const LEAFLET_JS   = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
   const LEAFLET_CSS  = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 
-  /* ÖPNVKarte 为什么是「底图」而不是「叠加层」，为什么要走本地代理：
-       1. 实测抓大阪那张瓦片，256×256 调色板 PNG，全透明像素占比 0.0% ——
-          它是一整幅不透明专题图，不是透明叠加层。盖在 OFM 上只会把底图糊死。
-       2. tileserver.memomaps.de 不发 Access-Control-Allow-Origin。MapLibre 用
-          fetch() 拉光栅瓦片（要 ArrayBuffer 解成 WebGL 纹理），会全部
-          "Failed to fetch"；<img> 反而正常 —— 所以网上的例子几乎全是 Leaflet。
-          build.py 的 /__tiles__/opnv 同源代理绕开这一层。
-     它的价值在于线路直接标着线号（大阪是 M/T/Y/C/S/N/I + HK/HS/K/JR），
-     OFM 矢量只有地铁几何、没有线名，OpenRailwayMap 只标站名不标线号。 */
-  const ORIGIN = location.origin;
-  const OPNV_TILES = ORIGIN + "/__tiles__/opnv/{z}/{x}/{y}.png";
+  /* graybeard 绑定的是 Shortbread **schema**，不是 VersaTiles 这家供应商。
+     把 sources 指向 OSM 官方的 Shortbread 端点即可，其余 324 个图层一字不改。
+     （反过来不成立：graybeard 与 positron 引用的 source-layer 零重叠，
+       想让 graybeard 跑在 OpenFreeMap 上得把每个图层重写一遍。） */
+  const GRAYBEARD  = "https://tiles.versatiles.org/assets/styles/graybeard/style.json";
+  const OSM_VECTOR = "https://vector.openstreetmap.org/shortbread_v1/{z}/{x}/{y}.mvt";
+  const OSM_ATTRIB = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  // Leaflet 降级时用：CARTO 有 CORS、不要 Referer，file:// 下也能出图
+  const CARTO_RASTER = ["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+                        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"];
+  let gbStyle = null;      // graybeard 的 style JSON 只抓一次，切回来不重复请求
 
   const BASEMAPS = [
-    { id:"ofm", label:"矢量", kind:"vector",
+    { id:"gb", label:"标准", kind:"vector", schema:"shortbread",
+      style:() => (gbStyle ||= fetch(GRAYBEARD, { cache:"force-cache" })
+        .then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(s => {
+          const src = s.sources["versatiles-shortbread"];
+          src.tiles = [OSM_VECTOR];
+          src.maxzoom = 14;      // 与 vector.openstreetmap.org 的 tilejson 一致
+          src.attribution = "";
+          return s;
+        })
+        .catch(e => { gbStyle = null; throw e; })),   // 失败不要缓存，下次还能重试
+      attrib: OSM_ATTRIB + ' · 矢量瓦片 <a href="https://vector.openstreetmap.org/" target="_blank" rel="noopener">vector.openstreetmap.org</a> · Style: VersaTiles graybeard' },
+    { id:"ofm", label:"简约", kind:"vector", schema:"openmaptiles",
       style:"https://tiles.openfreemap.org/styles/positron",
       attrib:'OpenFreeMap © OpenMapTiles Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' },
-    { id:"carto", label:"光栅", kind:"raster",
-      tiles:["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-             "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"],
-      attrib:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © CARTO' },
-    { id:"osm", label:"OSM", kind:"raster", httpOnly:true,
+    { id:"osm", label:"光栅", kind:"raster", httpOnly:true,
       tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      attrib:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors' },
-    { id:"opnv", label:"地铁", kind:"raster", proxied:true, maxZoom:18,
-      tiles:[OPNV_TILES],
-      attrib:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors · Style: <a href="https://xn--pnvkarte-m4a.de/" target="_blank" rel="noopener">ÖPNVKarte</a> · 经本地服务代理' },
+      attrib: OSM_ATTRIB },
   ];
 
+  /* ---------- 水体与绿地上色 ----------
+     两套 style 都把水和绿地画成了灰（graybeard 是 colorful 把饱和度压成 0，
+     色相其实还留着；positron 本来就是浅灰）。这里只把这两类还原成彩色，
+     道路建筑注记一律保持灰 —— 让画面里的彩色只剩三样：
+     点位、地铁线、水与绿地。 */
+  const WATER = "rgb(190,221,243)";
+  const TINT = {
+    shortbread: {
+      "water-ocean":WATER, "water-area":WATER, "water-area-river":WATER,
+      "water-area-small":WATER, "water-river":WATER, "water-canal":WATER,
+      "water-stream":WATER, "water-ditch":WATER, "water-dam":WATER,
+      "land-park":"rgb(217,217,165)", "land-garden":"rgb(217,217,165)",
+      "land-vegetation":"rgb(217,217,165)", "land-forest":"rgb(150,196,124)",
+      "land-grass":"rgb(216,232,200)", "land-leisure":"rgb(231,237,222)",
+      "land-wetland":"rgb(211,230,219)",
+    },
+    openmaptiles: { "water":WATER, "waterway":WATER, "landcover_wood":"rgb(186,214,180)" },
+  };
+
+  function applyTint(map, schema){
+    for(const [id, color] of Object.entries(TINT[schema] || {})){
+      const l = map.getLayer(id);
+      if(l) map.setPaintProperty(id, l.type === "line" ? "line-color" : "fill-color", color);
+    }
+    if(schema !== "openmaptiles") return;
+    // positron 根本没有画 grass 的图层，而大阪城那张瓦片里有 200 个 grass 要素。
+    // 补一层，插在 water 下面免得盖住河道。
+    if(!map.getLayer("x-grass") && map.getLayer("water")){
+      map.addLayer({
+        id:"x-grass", type:"fill", source:"openmaptiles", "source-layer":"landcover",
+        filter:["in", ["get","class"], ["literal",["grass","farmland","wetland"]]],
+        paint:{ "fill-color":"rgb(211,228,186)",
+                "fill-opacity":["interpolate",["linear"],["zoom"], 9,0, 12,1] },
+      }, "water");
+    }
+    // landcover_wood 原本 z10 才出现，缩小时绿地整片消失
+    if(map.getLayer("landcover_wood")){
+      map.setPaintProperty("landcover_wood","fill-opacity",
+        ["interpolate",["linear"],["zoom"], 6,0, 9,1]);
+    }
+  }
+
   const st = { ready:false, engine:null, map:null, markers:new Map(),
-               base:"ofm", focus:null, show:new Set(["yes","maybe","none","no"]) };
+               base:"gb", focus:null, show:new Set(["yes","maybe","none","no"]) };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
@@ -1171,19 +1229,6 @@ const MAP = (() => {
     }catch(e){ return false; }
   }
 
-  /* ---------- 地铁底图（本地代理）探测 ----------
-     页面可能被别的静态服务托管（没有 /__tiles__ 端点），也可能是 file:// 直接打开。
-     两种情况下这个按钮都得置灰，而不是点了没反应。 */
-  async function opnvUsable(){
-    if(!location.protocol.startsWith("http")) return false;
-    const { z, x, y } = centerTile(12);
-    try{
-      const r = await fetch(`${ORIGIN}/__tiles__/opnv/${z}/${x}/${y}.png`, { cache:"no-store" });
-      if(!r.ok) return false;
-      const b = await r.blob();
-      return b.type.includes("png") && b.size > 1000;
-    }catch(e){ return false; }
-  }
 
   function note(html){
     const n = $("#map-note");
@@ -1213,12 +1258,6 @@ const MAP = (() => {
       offline: "本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。",
       ok:   "OpenStreetMap 官方底图",
       fail: "探测到 OSM 返回封禁瓦片（约 7KB 的「Access blocked」图），已停用",
-    },
-    opnv: {
-      test: opnvUsable,
-      offline: "地铁专题图（ÖPNVKarte）的服务器不发 CORS 头，MapLibre 无法直接加载，必须经本地服务代理。用 build.py --serve 打开即可解锁。",
-      ok:   "ÖPNVKarte 公交/地铁专题图：线路上直接标注线号，用来查换乘",
-      fail: "当前服务没有 /__tiles__/opnv 代理端点（页面可能由别的静态服务托管），已停用",
     },
   };
 
@@ -1261,16 +1300,18 @@ const MAP = (() => {
       const b = BASEMAPS.find(x => x.id === watching);
       const btn = document.querySelector(`#basemaps [data-base="${watching}"]`);
       if(btn){ btn.disabled = true; btn.title = "瓦片持续加载失败，已停用：" + msg; }
-      note(`<b>「${b ? b.label : watching}」底图的瓦片加载失败</b>，已自动切回矢量底图。`
+      note(`<b>「${b ? b.label : watching}」底图的瓦片加载失败</b>，已自动切回标准底图。`
          + `控制台原始错误：<code>${esc(msg)}</code>`);
-      if(watching !== "ofm") switchBase("ofm");
+      if(watching !== "gb") switchBase("gb");
     });
   }
 
-  /* ---------- 样式构造 ---------- */
-  function styleFor(id){
+  /* ---------- 样式构造 ----------
+     异步：graybeard 的 style 要先抓下来、把 sources 改指 OSM 官方端点再交给
+     MapLibre。其余两个是常量，await 一个非 Promise 也没有代价。 */
+  async function styleFor(id){
     const b = BASEMAPS.find(x => x.id === id) || BASEMAPS[0];
-    if(b.kind === "vector") return b.style;
+    if(b.kind === "vector") return typeof b.style === "function" ? await b.style() : b.style;
     return {
       version:8,
       sources:{ base:{ type:"raster", tiles:b.tiles, tileSize:256,
@@ -1279,9 +1320,12 @@ const MAP = (() => {
     };
   }
 
+  const schemaOf = id => (BASEMAPS.find(x => x.id === id) || {}).schema;
+
   function setAttrib(){
     const b = BASEMAPS.find(x => x.id === st.base);
-    $("#attrib").innerHTML = b ? b.attrib : "";
+    $("#attrib").innerHTML = b ? b.attrib
+      : (st.engine === "leaflet" ? OSM_ATTRIB + " © CARTO" : "");
   }
 
   /* ---------- marker ---------- */
@@ -1407,16 +1451,16 @@ const MAP = (() => {
     if(!window.maplibregl) throw new Error("MapLibre 未就绪");
     const c = center();
     st.map = new maplibregl.Map({
-      container:"map-canvas", style:styleFor(st.base),
+      container:"map-canvas", style:await styleFor(st.base),
       center:[c.lon, c.lat], zoom:11.5, attributionControl:false,
     });
     await new Promise((res, rej) => {
-      // OpenFreeMap 是单人维护的捐赠项目，无 SLA，慢的时候真的很慢。
+      // 矢量瓦片源都是免费无 SLA 的公共服务，慢的时候真的很慢。
       // 20 秒是实测取的折中：够宽容，又不至于让用户干等。
       //
       // 但这 20 秒只能算「页面可见」的那部分时间。后台标签页里浏览器会暂停
       // requestAnimationFrame，而 MapLibre 的 load 事件要等首次渲染完成 ——
-      // 于是它永远不会触发。实测被这个误判过两次：OFM 本身 2 秒就响应了，
+      // 于是它永远不会触发。实测被这个误判过两次：瓦片源本身 2 秒就响应了，
       // 只因为标签页在后台，20 秒一到就降级成 Leaflet，用户切回来时看到的
       // 是一张已经降级、且底图按钮全部禁用的地图，而且无法恢复。
       let waited = 0, settled = false;
@@ -1432,6 +1476,7 @@ const MAP = (() => {
     // 放在 await 之后：加载期间 st.engine 还不该是 maplibre，
     // 否则用户这时点底图按钮，操作的是一个可能马上要被拆掉的 map 实例。
     st.engine = "maplibre";
+    applyTint(st.map, schemaOf(st.base));
     st.map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "bottom-right");
     st.map.resize();          // 容器可能刚从 hidden 变可见，尺寸要重新量
     fitAll();
@@ -1443,10 +1488,9 @@ const MAP = (() => {
     if(!window.L) throw new Error("Leaflet 未就绪");
     const c = center();
     st.map = L.map("map-canvas", { attributionControl:false }).setView([c.lat, c.lon], 12);
-    const b = BASEMAPS.find(x => x.id === "carto");
-    L.tileLayer(b.tiles[0], { maxZoom:19, referrerPolicy:"strict-origin-when-cross-origin" }).addTo(st.map);
+    L.tileLayer(CARTO_RASTER[0], { maxZoom:19, referrerPolicy:"strict-origin-when-cross-origin" }).addTo(st.map);
     st.engine = "leaflet";
-    st.base = "carto";
+    st.base = null;           // CARTO 不在 BASEMAPS 里，只服务于降级路径
   }
 
   function fitAll(){
@@ -1488,12 +1532,32 @@ const MAP = (() => {
     }).observe(el);
   }
 
+  /* styleFor("gb") 要 fetch 一份 style JSON，是异步的。快速连点
+     「标准 → 简约」时，graybeard 的 fetch 可能后返回，setStyle 就把
+     positron 覆盖掉了 —— 按钮显示「简约」，地图却是「标准」。
+     用一个自增令牌把过期的那次请求丢掉。 */
+  let switchSeq = 0;
   async function switchBase(id){
     if(st.engine !== "maplibre" || id === st.base) return;
+    const seq = ++switchSeq;
     st.base = id;
     $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === id));
-    st.map.setStyle(styleFor(id));
-    st.map.once("styledata", () => { addMarkers(); setAttrib(); });
+    let style;
+    try{
+      style = await styleFor(id);
+    }catch(e){
+      if(seq !== switchSeq) return;
+      note(`<b>「${(BASEMAPS.find(x => x.id === id) || {}).label || id}」底图加载失败</b>：${esc(e.message || e)}`);
+      return;
+    }
+    if(seq !== switchSeq) return;        // 期间又点了别的，这次作废
+    st.map.setStyle(style);
+    st.map.once("styledata", () => {
+      if(seq !== switchSeq) return;
+      applyTint(st.map, schemaOf(id));   // setStyle 会整份换掉，上色补丁得重打
+      addMarkers();
+      setAttrib();
+    });
   }
 
   /* ---------- 入口 ---------- */
@@ -1515,9 +1579,26 @@ const MAP = (() => {
 
     try{
       if(!webgl) throw new Error("需要 WebGL");
-      await startMapLibre();
+      try{
+        await startMapLibre();
+      }catch(eGb){
+        // 默认矢量源挂了不必直接跌到 Leaflet —— 还有第二个矢量源，
+        // 而且它是另一家运营、另一套 schema，不会跟着一起挂。
+        if(st.base === "gb"){
+          problems.push("标准底图不可用（" + (eGb.message || eGb) + "），已改用简约");
+          if(st.map && st.map.remove){ try{ st.map.remove(); }catch(_){} }
+          st.map = null;
+          $("#map-canvas").innerHTML = "";
+          st.base = "ofm";
+          $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === "ofm"));
+          const gbBtn = document.querySelector('#basemaps [data-base="gb"]');
+          if(gbBtn){ gbBtn.disabled = true; gbBtn.title = "该底图当前不可用：" + (eGb.message || eGb); }
+          await startMapLibre();
+          note(problems.join("；") + "。点位、联动、导出都不受影响。");
+        }else throw eGb;
+      }
       watchTiles();
-      probe("osm"); probe("opnv");       // 不 await：探测慢不该挡住地图显示
+      probe("osm");                     // 不 await：探测慢不该挡住地图显示
     }catch(e1){
       problems.push("矢量底图不可用（" + (e1.message || e1) + "）");
       try{
