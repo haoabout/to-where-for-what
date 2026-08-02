@@ -35,6 +35,7 @@ TEMPLATE = SKILL_ROOT / "assets" / "template-trip.html"
 
 DATA_MARK = "/*__TRIP_DATA__*/null"
 ROUTE_MARK = "/*__ROUTE_HTML__*/null"
+TRANSIT_MARK = "/*__TRANSIT__*/null"
 BUILT_MARK = "/*__BUILT_AT__*/null"
 PID_FILE = ".server.pid"
 
@@ -180,6 +181,15 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     if route_path.exists():
         route_md = route_path.read_text(encoding="utf-8")
 
+    # 轨道交通图层。没有就没有——地铁层是加分项，不该阻塞出图。
+    transit = None
+    transit_path = trip_dir / "transit.geojson"
+    if transit_path.exists():
+        try:
+            transit = json.loads(transit_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            print(f"  ⚠ transit.geojson 解析失败，本次不含地铁层: {e}")
+
     html = TEMPLATE.read_text(encoding="utf-8")
     for mark in (DATA_MARK, BUILT_MARK):
         if mark not in html:
@@ -188,9 +198,11 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     # </script> 出现在 JSON 字符串里会提前关闭标签；转义掉。
     data_js = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     route_js = json.dumps(md_to_html(route_md), ensure_ascii=False).replace("</", "<\\/")
+    transit_js = json.dumps(transit, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
     html = html.replace(DATA_MARK, data_js)
     html = html.replace(ROUTE_MARK, route_js)
+    html = html.replace(TRANSIT_MARK, transit_js)
     html = html.replace(BUILT_MARK, json.dumps(time.strftime("%Y-%m-%d %H:%M")))
     if standalone:
         html = html.replace("__STANDALONE__", "true")
@@ -206,6 +218,11 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     print(f"✓ {kind}: {out}")
     print(f"  {n} 个景点，{chosen} 个已表态，{out.stat().st_size / 1024:.0f} KB"
           + ("，含攻略正文" if route_md else "，攻略正文尚未生成"))
+    if transit:
+        print(f"  地铁层：{len(transit.get('lines', {}).get('features') or [])} 条线路 / "
+              f"{len(transit.get('stations', {}).get('features') or [])} 个车站")
+    elif not standalone:
+        print("  无地铁层（跑 enrich.py --transit 可生成 transit.geojson）")
     return out
 
 

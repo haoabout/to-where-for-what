@@ -22,12 +22,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 UA = "travel-planner-enrich/1.0 (https://github.com/; trip planning skill)"
 NOMINATIM_QPS = 1.1          # 政策要求 ≤1 req/s，留一点余量
@@ -230,18 +232,203 @@ def fill_images(doc: dict, dry: bool) -> int:
     return ok
 
 
+# ------------------------------------------------------------------ 轨道交通
+
+OVERPASS = "https://overpass-api.de/api/interpreter"
+
+# 只要城市轨道，不要公交。公交线路密到会把画面糊死，而且旅行者极少按公交线规划。
+# monorail / light_rail 收进来是因为大阪的南港ポートタウン線、大阪モノレール
+# 这类线路在出行体验上跟地铁没区别。
+RAIL_ROUTES = ("subway", "light_rail", "monorail", "tram")
+
+# 简化容差，约 13m。城市尺度下肉眼看不出差别，但点数能降到 1/4。
+RDP_EPS = 0.00012
+
+
+def _rdp(pts: list[tuple[float, float]], eps: float) -> list[tuple[float, float]]:
+    """Douglas-Peucker 抽稀。"""
+    if len(pts) < 3:
+        return pts
+
+    def dist(p, a, b):
+        (x, y), (x1, y1), (x2, y2) = p, a, b
+        dx, dy = x2 - x1, y2 - y1
+        if dx == 0 and dy == 0:
+            return math.hypot(x - x1, y - y1)
+        t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)))
+        return math.hypot(x - (x1 + t * dx), y - (y1 + t * dy))
+
+    i = max(range(1, len(pts) - 1), key=lambda k: dist(pts[k], pts[0], pts[-1]))
+    if dist(pts[i], pts[0], pts[-1]) > eps:
+        return _rdp(pts[:i + 1], eps)[:-1] + _rdp(pts[i:], eps)
+    return [pts[0], pts[-1]]
+
+
+# Overpass 是公共免费服务，限流和过载是常态而非异常 —— 实测连着跑两次
+# 第二次就吃到 504。退避重试，不要让用户自己去猜「要不要再跑一遍」。
+OVERPASS_MIRRORS = ("https://overpass-api.de/api/interpreter",
+                    "https://overpass.kumi.systems/api/interpreter")
+RETRY_STATUS = {429, 502, 503, 504}
+
+
+def overpass(query: str, timeout: int = 180, tries: int = 4) -> dict:
+    last = None
+    for i in range(tries):
+        url = OVERPASS_MIRRORS[i % len(OVERPASS_MIRRORS)]
+        req = urllib.request.Request(url, data=query.encode("utf-8"),
+                                     headers={"User-Agent": UA})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code not in RETRY_STATUS:
+                raise
+        except Exception as e:  # noqa: BLE001  超时、连接重置都值得重试
+            last = e
+        if i < tries - 1:
+            wait = 5 * 2 ** i          # 5s, 10s, 20s
+            print(f"    ({type(last).__name__}) {wait}s 后换镜像重试…", file=sys.stderr)
+            time.sleep(wait)
+    raise last
+
+
+# OSM 里线路的 colour 缺失时的兜底色板。刻意选高区分度、且与点位配色
+# （绿/琥珀/灰）不撞的颜色。用到它时会在图例里注明「非官方配色」。
+FALLBACK_COLORS = ["#E5171F", "#0078BE", "#019A66", "#522886", "#EE7B1A",
+                   "#E44D93", "#814721", "#00A0DE", "#7A8B1F", "#B02A8F"]
+
+
+def fetch_transit(doc: dict) -> dict:
+    """抓目的地范围内的轨道交通线路与车站，产出一份 GeoJSON。"""
+    bbox = doc.get("trip", {}).get("bbox")
+    if not bbox or len(bbox) != 4:
+        sys.exit("trip.bbox 缺失或格式不对，无法确定抓取范围")
+    s, w, n, e = bbox[1], bbox[0], bbox[3], bbox[2]      # Overpass 用 (南,西,北,东)
+    area = f"({s},{w},{n},{e})"
+
+    # 线路和车站合成一个请求。分两次发实测会被限流打中第二次：
+    # Overpass 按 IP 分配执行槽，连发两条几乎必然吃 429/504。
+    print(f"→ Overpass 查询轨道交通线路与车站 {area}")
+    q = f'''[out:json][timeout:180];
+relation["route"~"^({"|".join(RAIL_ROUTES)})$"]{area};
+out geom;
+(node["railway"="station"]["station"~"^(subway|light_rail|monorail)$"]{area};
+ node["railway"="station"]["subway"="yes"]{area};
+ node["railway"="station"]["light_rail"="yes"]{area};
+ node["railway"="halt"]["subway"="yes"]{area};);
+out tags center;'''
+    try:
+        data = overpass(q)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ✗ 查询失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+        print("    Overpass 是公共免费服务，限流时稍后重试即可。地铁层会被跳过，"
+              "其余功能不受影响。", file=sys.stderr)
+        return {}
+
+    # 同一条线的往返两个方向几何几乎一样，按 ref+colour 归并只留一份
+    lines: dict[tuple, dict] = {}
+    for el in data.get("elements", []):
+        if el.get("type") != "relation":      # 同一个响应里还有车站节点
+            continue
+        tags = el.get("tags", {})
+        ref = tags.get("ref") or tags.get("name", "")
+        if not ref:
+            continue
+        colour = (tags.get("colour") or "").strip()
+        key = (ref, colour.upper())
+        rec = lines.setdefault(key, {
+            "ref": ref, "colour": colour,
+            "name": (tags.get("name") or "").split(" (")[0],
+            "route": tags.get("route"), "segs": [], "seen": set(),
+        })
+        for m in el.get("members", []):
+            g = m.get("geometry")
+            if m.get("type") != "way" or not g:
+                continue
+            pts = [(round(p["lon"], 5), round(p["lat"], 5)) for p in g]
+            sig = (pts[0], pts[-1], len(pts))
+            if sig in rec["seen"]:
+                continue
+            rec["seen"].add(sig)
+            rec["segs"].append(_rdp(pts, RDP_EPS))
+
+    # 兜底色必须避开已被官方色占用的那些，否则会出现两条线同色。
+    # 实测大阪：阪堺電気軌道没有 colour 标签，色板第一个 #E5171F 正好
+    # 撞上御堂筋線的官方红，图上完全分不出来。
+    used = {(r["colour"] or "").upper() for r in lines.values() if r["colour"]}
+    palette = iter([c for c in FALLBACK_COLORS if c.upper() not in used])
+
+    feats, kept_pts, no_colour = [], 0, 0
+    for rec in lines.values():
+        if not rec["segs"]:
+            continue
+        colour = rec["colour"]
+        if not colour:
+            no_colour += 1
+            colour = next(palette, "#888888")
+        kept_pts += sum(len(x) for x in rec["segs"])
+        feats.append({
+            "type": "Feature",
+            "properties": {"ref": rec["ref"], "name": rec["name"],
+                           "colour": colour, "route": rec["route"],
+                           "guessed": not rec["colour"]},
+            "geometry": {"type": "MultiLineString", "coordinates": rec["segs"]},
+        })
+
+    # 车站来自同一个响应里的 node 元素。同名站点会被多条线各挂一个节点，去重。
+    stations, seen_st = [], set()
+    for el in data.get("elements", []):
+        if el.get("type") != "node":
+            continue
+        t = el.get("tags", {})
+        lon, lat = el.get("lon"), el.get("lat")
+        name = t.get("name") or t.get("name:en") or ""
+        if lon is None or lat is None or not name:
+            continue
+        if name in seen_st:            # 换乘站在 OSM 里常有多个同名节点
+            continue
+        seen_st.add(name)
+        # 空值直接不写这个键。写成 "" 的话，页面里 MapLibre 的 coalesce
+        # 会把空字符串当成有效值 —— 实测 129 个站有 120 个的 name:zh 是空串，
+        # 结果站名标签全渲染成空白，图上什么都看不见。
+        props = {"name": name}
+        for key, tag in (("name_en", "name:en"), ("name_zh", "name:zh")):
+            v = (t.get(tag) or "").strip()
+            if v:
+                props[key] = v
+        stations.append({
+            "type": "Feature",
+            "properties": props,
+            "geometry": {"type": "Point", "coordinates": [round(lon, 5), round(lat, 5)]},
+        })
+
+    print(f"  线路 {len(feats)} 条、车站 {len(stations)} 个；坐标点简化后 {kept_pts}")
+    if no_colour:
+        print(f"  ⚠ 其中 {no_colour} 条线 OSM 里没有 colour 标签，已用兜底色板，"
+              f"图例会注明「非官方配色」")
+    for f in sorted(feats, key=lambda f: f["properties"]["ref"]):
+        p = f["properties"]
+        print(f"    {p['ref']:8s} {p['colour']:9s}{'（推测）' if p['guessed'] else '        '} {p['name'][:32]}")
+
+    return {"lines": {"type": "FeatureCollection", "features": feats},
+            "stations": {"type": "FeatureCollection", "features": stations}}
+
+
 # ------------------------------------------------------------------ cli
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="补齐 places.json 的坐标与配图")
+    ap = argparse.ArgumentParser(description="补齐 places.json 的坐标与配图，并抓取轨道交通线路")
     ap.add_argument("path")
     ap.add_argument("--coords", action="store_true")
     ap.add_argument("--images", action="store_true")
+    ap.add_argument("--transit", action="store_true",
+                    help="抓取轨道交通线路与车站，写到同目录的 transit.geojson")
     ap.add_argument("--dry-run", action="store_true", help="只报告，不写文件")
     args = ap.parse_args()
 
-    if not (args.coords or args.images):
-        ap.error("至少指定 --coords 或 --images")
+    if not (args.coords or args.images or args.transit):
+        ap.error("至少指定 --coords / --images / --transit 之一")
 
     with open(args.path, encoding="utf-8") as f:
         doc = json.load(f)
@@ -252,6 +439,32 @@ def main() -> int:
     if args.images:
         n += fill_images(doc, args.dry_run)
 
+    if args.transit:
+        out = Path(args.path).with_name("transit.geojson")
+        tr = fetch_transit(doc)
+        if tr and not args.dry_run:
+            # Overpass 会分别限流两条查询。若这次只拿到线路、车站空了，
+            # 而磁盘上已有一份带车站的，就保留旧的 —— 部分失败绝不能让
+            # 已有数据变差。（实测踩过：重试耗尽后写了个 0 车站的文件，
+            # 把上一次好不容易抓到的 152 个站覆盖没了。）
+            if out.exists():
+                try:
+                    old = json.loads(out.read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001
+                    old = {}
+                for key in ("lines", "stations"):
+                    new_n = len(tr.get(key, {}).get("features") or [])
+                    old_n = len(old.get(key, {}).get("features") or [])
+                    if new_n == 0 and old_n > 0:
+                        tr[key] = old[key]
+                        print(f"  ↷ 本次没抓到{'线路' if key == 'lines' else '车站'}，"
+                              f"保留已有的 {old_n} 条")
+            out.write_text(json.dumps(tr, ensure_ascii=False, separators=(",", ":")),
+                           encoding="utf-8")
+            print(f"✓ 轨道交通已写入 {out}（{out.stat().st_size / 1024:.0f} KB，"
+                  f"线路 {len(tr['lines']['features'])} 条 / "
+                  f"车站 {len(tr['stations']['features'])} 个）")
+
     if args.dry_run:
         print(f"\n[dry-run] 本可补齐 {n} 项，未写入文件")
     elif n:
@@ -259,7 +472,7 @@ def main() -> int:
             json.dump(doc, f, ensure_ascii=False, indent=2)
         print(f"\n✓ 已补齐 {n} 项并写回 {args.path}")
         print("  下一步：python3 validate.py <places.json> --check-links")
-    else:
+    elif not args.transit:
         print("\n没有需要补齐的内容")
     return 0
 

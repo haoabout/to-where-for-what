@@ -318,6 +318,28 @@ pre.code{
 .mgroup button:last-child{border-right:0}
 .mgroup button[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600}
 .mgroup button:disabled{opacity:.38;cursor:not-allowed}
+/* 图例默认只显示线号色块（两行就够），点一下才展开全名。
+   12 条线的完整列表要 210×340px，占掉地图 14% 的面积，而且正好压在
+   左上角的点位上 —— 常驻显示是不合适的。 */
+#map-legend{
+  position:absolute;top:52px;left:10px;z-index:5;max-width:212px;cursor:pointer;
+  background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:8px;padding:7px 9px;
+  box-shadow:var(--shadow);font-size:11.5px;line-height:1.5;
+}
+#map-legend .lg-chips{display:flex;flex-wrap:wrap;gap:4px}
+#map-legend .lg-ref{
+  min-width:16px;text-align:center;font-weight:700;font-size:10.5px;line-height:16px;
+  color:#fff;border-radius:3px;padding:0 4px;text-shadow:0 0 2px rgba(0,0,0,.45);
+}
+#map-legend .lg-list{display:none;margin-top:6px;max-height:min(40vh,300px);overflow:auto}
+#map-legend.open .lg-list{display:block}
+#map-legend.open .lg-chips{display:none}
+#map-legend .lg-row{display:flex;align-items:center;gap:7px;color:var(--ink-2)}
+#map-legend .lg-row+.lg-row{margin-top:3px}
+#map-legend .lg-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#map-legend .lg-foot{margin-top:6px;padding-top:5px;border-top:1px solid var(--line);color:var(--ink-3);font-size:10.5px}
+#map-legend .lg-hint{color:var(--ink-3);font-size:10px;margin-top:5px}
 .map-note{
   position:absolute;left:10px;bottom:10px;right:10px;z-index:5;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
@@ -528,7 +550,11 @@ pre.code{
         <div id="map-canvas"></div>
         <div class="map-bar">
           <div class="mgroup" id="basemaps"></div>
+          <div class="mgroup" id="transit-group" hidden>
+            <button id="transit-btn" aria-pressed="false">地铁</button>
+          </div>
         </div>
+        <div class="legend" id="map-legend" hidden></div>
         <div class="map-note" id="map-note"></div>
         <div class="attrib" id="attrib"></div>
       </div>
@@ -565,6 +591,7 @@ pre.code{
    ═══════════════════════════════════════════════════════════════════ */
 const DATA       = /*__TRIP_DATA__*/null;
 const ROUTE_HTML = /*__ROUTE_HTML__*/null;
+const TRANSIT    = /*__TRANSIT__*/null;
 const BUILT_AT   = /*__BUILT_AT__*/null;
 const STANDALONE = __STANDALONE__;
 
@@ -1165,7 +1192,7 @@ const MAP = (() => {
   }
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
-               base:"gb", focus:null, show:new Set(["yes","maybe","none","no"]) };
+               base:"gb", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]) };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
@@ -1312,8 +1339,12 @@ const MAP = (() => {
   async function styleFor(id){
     const b = BASEMAPS.find(x => x.id === id) || BASEMAPS[0];
     if(b.kind === "vector") return typeof b.style === "function" ? await b.style() : b.style;
+    // 光栅 style 也要给 glyphs —— 底图本身不需要（图片里已经有字了），
+    // 但地铁层的线号和站名是我们自己画的 symbol 图层，缺了字体服务
+    // 会静默不出字：图层在、要素也被放置，就是一个字看不见。
     return {
       version:8,
+      glyphs:"https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
       sources:{ base:{ type:"raster", tiles:b.tiles, tileSize:256,
                        maxzoom:b.maxZoom || 19, attribution:"" } },
       layers:[{ id:"base", type:"raster", source:"base" }],
@@ -1326,6 +1357,116 @@ const MAP = (() => {
     const b = BASEMAPS.find(x => x.id === st.base);
     $("#attrib").innerHTML = b ? b.attrib
       : (st.engine === "leaflet" ? OSM_ATTRIB + " © CARTO" : "");
+  }
+
+  /* ═══════════════ 轨道交通叠加层 ═══════════════
+     数据由 enrich.py --transit 从 OSM 抓好、build.py 内联进来，
+     运行期零网络请求。这跟底图无关 —— 三个底图上都能开，file:// 也能用。
+
+     为什么不用现成的地铁专题瓦片（试过 ÖPNVKarte，已放弃）：
+       那是一整幅不透明光栅图，盖上去等于换底图；而且它按「交通方式」上色，
+       八条地铁线全是同一个蓝，还混着大量公交线。
+     自己画的好处：线路用 OSM 的 colour 标签，也就是官方色，一条一个颜色。 */
+  const TRANSIT_SRC = "transit-lines", STATION_SRC = "transit-stations";
+  const T_LAYERS = ["transit-line", "transit-line-label", "transit-station", "transit-station-label"];
+
+  const hasTransit = () => !!(TRANSIT && (TRANSIT.lines?.features || []).length);
+
+  /* 字体名必须从当前 style 里取，不能写死。
+     实测：graybeard 的 glyphs 服务认的是 "noto_sans_bold"，positron 认的是
+     "Noto Sans Bold" —— 写死任何一个，换到另一个底图时标注会一个都不出，
+     而且 MapLibre 对缺失字体是静默失败，图层看着正常就是没字。 */
+  function pickFont(map, bold){
+    const fonts = [];
+    for(const l of map.getStyle().layers){
+      const f = (l.layout || {})["text-font"];
+      if(Array.isArray(f)) for(const x of f) if(typeof x === "string" && !fonts.includes(x)) fonts.push(x);
+    }
+    const want = bold ? /bold/i : /regular|book|normal/i;
+    return [fonts.find(f => want.test(f)) || fonts[0] || "Noto Sans Regular"];
+  }
+
+  function addTransit(){
+    if(!hasTransit() || st.engine !== "maplibre" || !st.map) return;
+    const m = st.map;
+    const FONT_B = pickFont(m, true), FONT_R = pickFont(m, false);
+    if(!m.getSource(TRANSIT_SRC)) m.addSource(TRANSIT_SRC, { type:"geojson", data:TRANSIT.lines });
+    if(!m.getSource(STATION_SRC)) m.addSource(STATION_SRC, { type:"geojson", data:TRANSIT.stations || { type:"FeatureCollection", features:[] } });
+
+    if(!m.getLayer("transit-line")) m.addLayer({
+      id:"transit-line", type:"line", source:TRANSIT_SRC,
+      layout:{ "line-cap":"round", "line-join":"round" },
+      paint:{
+        "line-color":["get","colour"],
+        "line-width":["interpolate",["linear"],["zoom"], 9,1.6, 12,2.8, 15,4.6, 17,6.5],
+        "line-opacity":0.9,
+      },
+    });
+    // 线号沿线重复标注。symbol-placement:line 会让文字跟着线走，
+    // 这正是纸质地铁图的读法：顺着一条颜色走，随时知道自己在哪条线上。
+    if(!m.getLayer("transit-line-label")) m.addLayer({
+      id:"transit-line-label", type:"symbol", source:TRANSIT_SRC, minzoom:11,
+      layout:{
+        "symbol-placement":"line", "symbol-spacing":190,
+        "text-field":["get","ref"], "text-size":11, "text-font":FONT_B,
+        "text-allow-overlap":false, "text-padding":3,
+      },
+      paint:{ "text-color":["get","colour"], "text-halo-color":"#fff", "text-halo-width":1.8 },
+    });
+    if(!m.getLayer("transit-station")) m.addLayer({
+      id:"transit-station", type:"circle", source:STATION_SRC, minzoom:12,
+      paint:{
+        "circle-radius":["interpolate",["linear"],["zoom"], 12,1.8, 15,3.4, 17,4.6],
+        "circle-color":"#fff", "circle-stroke-color":"#5b5b5b", "circle-stroke-width":1.2,
+      },
+    });
+    // 站名从 z13 起才出 —— 129 个站在缩小时会糊成一片
+    if(!m.getLayer("transit-station-label")) m.addLayer({
+      id:"transit-station-label", type:"symbol", source:STATION_SRC, minzoom:13,
+      layout:{
+        // 不能只用 coalesce —— 它把空字符串当有效值。数据可能是手工改过的，
+        // 这里按「长度 > 0」判断，enrich.py 那边也已经不再写空串。
+        "text-field":["case",
+          [">", ["length", ["coalesce", ["get","name_zh"], ""]], 0], ["get","name_zh"],
+          ["get","name"]],
+        "text-size":["interpolate",["linear"],["zoom"], 13,9.5, 16,12],
+        "text-font":FONT_R, "text-offset":[0,0.95],
+        "text-anchor":"top", "text-optional":true, "text-padding":2,
+      },
+      paint:{ "text-color":"#4a4a4a", "text-halo-color":"#fff", "text-halo-width":1.6 },
+    });
+    setTransitVisible(st.transit);
+  }
+
+  function setTransitVisible(on){
+    st.transit = !!on;
+    const btn = $("#transit-btn");
+    if(btn) btn.setAttribute("aria-pressed", String(st.transit));
+    $("#map-legend").hidden = !st.transit;
+    if(st.engine !== "maplibre" || !st.map) return;
+    for(const id of T_LAYERS){
+      if(st.map.getLayer(id)) st.map.setLayoutProperty(id, "visibility", st.transit ? "visible" : "none");
+    }
+  }
+
+  function paintLegend(){
+    if(!hasTransit()) return;
+    const feats = [...TRANSIT.lines.features].sort((a, b) =>
+      String(a.properties.ref).localeCompare(String(b.properties.ref), "en"));
+    const guessed = feats.filter(f => f.properties.guessed).length;
+    const chip = p => `<span class="lg-ref" style="background:${esc(p.colour)}" `
+                    + `title="${esc(p.name || p.ref)}">${esc(p.ref)}</span>`;
+    $("#map-legend").innerHTML =
+      `<div class="lg-chips">${feats.map(f => chip(f.properties)).join("")}</div>`
+    + `<div class="lg-list">`
+    + feats.map(f => {
+        const p = f.properties, nm = p.name || p.ref;
+        return `<div class="lg-row">${chip(p)}<span class="lg-nm" title="${esc(nm)}">${esc(nm)}</span></div>`;
+      }).join("")
+    + (guessed
+        ? `<div class="lg-foot">其中 ${guessed} 条 OSM 未标注官方配色，颜色为自动分配</div>`
+        : `<div class="lg-foot">配色取自 OSM 的 colour 标签，即官方线路色</div>`)
+    + `</div><div class="lg-hint">点击${feats.length > 0 ? "展开线路名" : ""}</div>`;
   }
 
   /* ---------- marker ---------- */
@@ -1470,13 +1611,38 @@ const MAP = (() => {
         waited += 500;
         if(waited >= 20000){ stop(); rej(new Error("矢量底图 20 秒未加载完成")); }
       }, 500);
-      st.map.once("load",  () => { if(!settled){ stop(); res(); } });
-      st.map.once("error", e => { if(!settled){ stop(); rej(e.error || new Error("底图出错")); } });
+      st.map.once("load", () => { if(!settled){ stop(); res(); } });
+      // 只有「网络形态的失败」才算底图不可用。
+      //
+      // 这里踩过两次坑。第一版对任何 map error 都 reject —— 一个与底图完全
+      // 无关的异常（实测是别处一次 queryRenderedFeatures 查了不存在的图层）
+      // 就被记成「标准底图不可用」，按钮永久禁用、还给用户看一条误导的提示。
+      // 第二版按关键词过滤，却把 style 也写进了正则，而那条报错正好含
+      // "in the map's style" —— 又匹配上了。
+      //
+      // 所以判据不看措辞，只看形态：要么带 HTTP 状态码（AJAXError），
+      // 要么是明确的网络失败字样。单张瓦片的失败交给 watchTiles 在
+      // 加载完成后处理，不在这里管。
+      st.map.on("error", e => {
+        if(settled) return;
+        if(st.map.isStyleLoaded && st.map.isStyleLoaded()) return;   // 样式已就绪，不是它的问题
+        const err = e && e.error;
+        const msg = String((err && err.message) || (e && e.message) || "");
+        const networkish = (err && typeof err.status === "number")
+                        || /Failed to fetch|NetworkError|Load failed|ERR_/.test(msg);
+        if(!networkish) return;
+        stop(); rej(err || new Error("底图出错"));
+      });
     });
     // 放在 await 之后：加载期间 st.engine 还不该是 maplibre，
     // 否则用户这时点底图按钮，操作的是一个可能马上要被拆掉的 map 实例。
     st.engine = "maplibre";
     applyTint(st.map, schemaOf(st.base));
+    // 地铁层是加分项，出问题不该把整张底图拖下水 ——
+    // 实测就发生过：addTransit 抛错，异常一路冒到 init 的 catch，
+    // 于是标准底图被判定为「不可用」并禁用，用户看到的是莫名其妙的降级。
+    try{ addTransit(); }
+    catch(e){ console.warn("地铁层加载失败（不影响底图）:", e); st.transitBroken = String(e.message || e); }
     st.map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "bottom-right");
     st.map.resize();          // 容器可能刚从 hidden 变可见，尺寸要重新量
     fitAll();
@@ -1554,7 +1720,8 @@ const MAP = (() => {
     st.map.setStyle(style);
     st.map.once("styledata", () => {
       if(seq !== switchSeq) return;
-      applyTint(st.map, schemaOf(id));   // setStyle 会整份换掉，上色补丁得重打
+      applyTint(st.map, schemaOf(id));   // setStyle 会整份换掉，上色补丁和地铁层都得重挂
+      try{ addTransit(); }catch(e){ console.warn("地铁层重挂失败:", e); }
       addMarkers();
       setAttrib();
     });
@@ -1599,6 +1766,12 @@ const MAP = (() => {
       }
       watchTiles();
       probe("osm");                     // 不 await：探测慢不该挡住地图显示
+      if(hasTransit() && !st.transitBroken){
+        $("#transit-group").hidden = false;
+        paintLegend();
+      }else if(st.transitBroken){
+        note(`地铁层未能加载（${esc(st.transitBroken)}），其余功能不受影响。`);
+      }
     }catch(e1){
       problems.push("矢量底图不可用（" + (e1.message || e1) + "）");
       try{
@@ -1674,6 +1847,15 @@ ${selected().map(p => `<Placemark>
     if(go){ focus(go.dataset.goto, false); return; }
     const bm = e.target.closest("#basemaps button");
     if(bm && !bm.disabled){ switchBase(bm.dataset.base); return; }
+    const tb = e.target.closest("#transit-btn");
+    if(tb && !tb.disabled){ setTransitVisible(tb.getAttribute("aria-pressed") !== "true"); return; }
+    const lg = e.target.closest("#map-legend");
+    if(lg){
+      const open = lg.classList.toggle("open");
+      const hint = lg.querySelector(".lg-hint");
+      if(hint) hint.textContent = open ? "点击收起" : "点击展开线路名";
+      return;
+    }
     const mf = e.target.closest(".mfil");
     if(mf){
       const on = mf.getAttribute("aria-pressed") === "true";
