@@ -135,8 +135,8 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
 .card:hover{border-color:var(--line-2)}
 .card[data-choice=no]{opacity:.5}
 .card[data-choice=no]:hover{opacity:.82}
-.card[data-choice=yes]{border-left:3px solid var(--ok)}
-.card[data-choice=maybe]{border-left:3px solid var(--warn)}
+/* 选择状态由三态按钮和圆点表达，不再加彩色左边框：
+   同一件事说三遍是冗余，而 3px 彩色侧边条又是最容易辨认的模板化特征。 */
 
 .card-in{display:flex;gap:15px;padding:14px}
 .thumb{
@@ -179,9 +179,8 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
   background:repeating-linear-gradient(-45deg,var(--warn-soft),var(--warn-soft) 5px,transparent 5px,transparent 10px);
   color:var(--warn);border-color:color-mix(in srgb,var(--warn) 34%,transparent);font-weight:600;
 }
-/* 核实被拦截的景点：卡片给一条斜纹左边，一眼能从清单里认出来 */
-.card[data-verify]{border-left:3px solid transparent;
-  border-image:repeating-linear-gradient(45deg,var(--warn) 0 4px,transparent 4px 8px) 1}
+/* 核实被拦截的景点：卡片内有完整的 .verify-box 说明，顶部筛选条还有
+   「⚠ 待你确认」把它们一次性挑出来 —— 那比一条边框更好用，所以边框去掉。 */
 .verify-box{
   margin-top:10px;padding:9px 12px;border-radius:7px;font-size:12.5px;line-height:1.6;
   background:var(--warn-soft);border:1px dashed color-mix(in srgb,var(--warn) 40%,transparent);color:var(--ink-2);
@@ -293,8 +292,23 @@ pre.code{
   display:grid;place-items:center;font:700 9.5px/1 var(--mono);color:#fff;
 }
 .map-side .mi .t{flex:1;min-width:0}
-.map-side .mi .t b{display:block;font:500 13.5px/1.35 var(--sans);font-weight:500}
-.map-side .mi .t s{display:block;font-size:11.5px;color:var(--ink-3);text-decoration:none}
+/* 严格两行：名称一行、元信息一行。原来把整段票价文案铺进来，
+   一个条目能占五六行，三栏布局下这一列只有 ~230px，根本放不下。 */
+.map-side .mi .t b{
+  display:block;font:500 13.5px/1.35 var(--sans);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.map-side .mi .t s{
+  display:flex;align-items:center;gap:5px;margin-top:2px;
+  font-size:11.5px;color:var(--ink-3);text-decoration:none;
+  overflow:hidden;white-space:nowrap;
+}
+.map-side .mi .t s em{font-style:normal;flex:none}
+.map-side .mi .t s .w{
+  flex:none;padding:0 5px;border-radius:4px;font-size:10.5px;line-height:15px;
+  background:var(--warn-soft);color:var(--warn);
+}
+.map-side .mi.on{background:var(--paper-2)}
 .map-side .grp{
   position:sticky;top:0;background:var(--paper-2);padding:6px 12px;
   font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
@@ -370,8 +384,8 @@ pre.code{
      refresh 时引发成片的布局重算。 */
   transition:transform .14s;
 }
-.mk:hover i,.mk.on i{transform:scale(1.28)}
-.mk.on::after{
+.mk:hover i,.mk.on i,.mk.hi i{transform:scale(1.28)}
+.mk.on::after,.mk.hi::after{
   content:attr(data-nm);position:absolute;left:15px;top:-7px;white-space:nowrap;
   background:var(--ink);color:var(--paper);font-size:11px;padding:3px 8px;border-radius:5px;
 }
@@ -1695,11 +1709,62 @@ const MAP = (() => {
     });
     box.innerHTML = [...byArea.entries()].map(([area, ps]) =>
       `<div class="grp">${esc(area)} · ${ps.length}</div>` + ps.map(p =>
-        `<div class="mi${st.focus === p.id ? " on" : ""}" data-goto="${esc(p.id)}">
+        `<div class="mi${st.focus === p.id ? " on" : ""}" data-card="${esc(p.id)}">
            <span class="pin" style="${pinStyle(p)}">${pinText(p)}</span>
-           <span class="t"><b>${esc(p.name)}</b><s>${esc(SCALE_TXT[p.scale] || p.scale)} · ${esc(p.ticket)}</s></span>
+           <span class="t"><b>${esc(p.name)}</b><s>${metaLine(p)}</s></span>
          </div>`).join("")).join("") ||
       `<div class="empty-state" style="padding:34px 16px"><div>当前筛选下没有可显示的地点</div></div>`;
+  }
+
+  /* 元信息压到一行：时长 · 价格 · 最多一个警示。
+     原来把整段 ticket 文案铺进来（"公共空间免费；行程期间在展的…一般 ¥3,000、
+     高大生 ¥1,500、小中生 ¥500"），一个条目占五六行。完整信息在详情 dialog 里，
+     这里只负责让人认出是哪个、以及有没有坑。 */
+  /* ticket 是自由文本，压成一个短标签很容易变成谎话。踩过两次：
+       「天守阁 ¥600（中学生以下免费）」——先匹配「免费」会写成免费，少算一张票
+       「公共空间免费；特展一般 ¥3,000、高大生 ¥1,500」——先匹配金额会写成
+         「¥3,000 起」，而这个馆的建筑本身是可以免费进的
+     所以两者都要看，谁在前谁定调；两者都有就并列，让人知道「看情况」。 */
+  const FREE_RE = /免费|免費|無料|无料|free/i;
+  const AMT_RE = /[¥￥$€£]\s*[\d,]+/;
+
+  function shortPrice(t){
+    if(!t) return "";
+    const s = String(t);
+    const amt = s.match(AMT_RE), free = s.match(FREE_RE);
+    if(amt && free){
+      const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
+      return free.index < amt.index
+        ? `免费 / ${amt[0].replace(/\s+/g, "")}${many ? "起" : ""}`
+        : `${amt[0].replace(/\s+/g, "")}${many ? "起" : ""}`;
+    }
+    if(amt){
+      const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
+      return amt[0].replace(/\s+/g, "") + (many ? "起" : "");
+    }
+    return free ? "免费" : "";
+  }
+
+  function warnOf(p){
+    if(p.status === "permanently_closed") return "已关闭";
+    if(p.status && p.status !== "open") return "非正常营业";
+    if(p.verify && p.verify.state && p.verify.state !== "verified") return "待确认";
+    if(p.booking === "required") return "须预约";
+    // 排进了它闭馆的那天 —— 这是硬冲突，优先级高于上面的软提示
+    for(const s of schedOf(p.id)){
+      const day = ITIN.find(d => d.n === s.n);
+      const wd = day && day.date ? new Date(day.date + "T12:00:00").getDay() || 7 : null;
+      if(wd && Array.isArray(p.closed_days) && p.closed_days.includes(wd)) return "当天闭馆";
+    }
+    return "";
+  }
+
+  function metaLine(p){
+    if(isLodging(p)) return `<em>住宿</em>`;
+    const bits = [SCALE_TXT[p.scale] || p.scale, shortPrice(p.ticket)].filter(Boolean);
+    const w = warnOf(p);
+    return bits.map(x => `<em>${esc(x)}</em>`).join(" · ")
+         + (w ? `<span class="w">${esc(w)}</span>` : "");
   }
 
   function focus(id, fromMap){
@@ -1711,7 +1776,7 @@ const MAP = (() => {
       if(st.engine === "leaflet")  st.map.setView([p.coord.lat, p.coord.lon], Math.max(st.map.getZoom(), 15));
     }
     refresh();
-    const item = document.querySelector(`.mi[data-goto="${CSS.escape(id)}"]`);
+    const item = document.querySelector(`.mi[data-card="${CSS.escape(id)}"]`);
     if(item && fromMap) item.scrollIntoView({ block:"nearest", behavior:"smooth" });
   }
 
@@ -1994,8 +2059,35 @@ ${selected().map(p => `<Placemark>
     toast(`已导出 ${name}（${selected().length} 个地点）`);
   }
 
+  /* ---------- hover 双向联动 ----------
+     鼠标在清单条目上 → 地图对应图标放大并显示名字；
+     鼠标在地图图标上 → 对应条目高亮。
+     反向只高亮、不滚动 —— 列表跟着鼠标自动跳很晕。 */
+  function hilite(id, on){
+    const mk = st.markers.get(id);
+    const el = mk && mk.getElement ? mk.getElement()
+             : document.querySelector(`.static-map .mk[data-goto="${CSS.escape(id)}"]`);
+    if(el) el.classList.toggle("hi", on);
+    const item = document.querySelector(`.mi[data-card="${CSS.escape(id)}"]`);
+    if(item) item.classList.toggle("on", on || st.focus === id);
+  }
+
+  for(const [evt, on] of [["mouseover", true], ["mouseout", false]]){
+    document.addEventListener(evt, e => {
+      const src = e.target.closest("[data-card]") || e.target.closest(".mk");
+      if(!src) return;
+      const id = src.dataset.card || src.dataset.id || src.dataset.goto;
+      if(id) hilite(id, on);
+    });
+  }
+
   /* ---------- 事件 ---------- */
   document.addEventListener("click", e => {
+    // 清单条目 → 弹详情。以前是把地图飞到该点，但 hover 已经能定位，
+    // 而点开卡片想看的其实是「它到底是什么」。
+    const card = e.target.closest("[data-card]");
+    if(card){ openDetail(card.dataset.card); return; }
+    // data-goto 只剩静态兜底图上的 marker 在用
     const go = e.target.closest("[data-goto]");
     if(go){ focus(go.dataset.goto, false); return; }
     const bm = e.target.closest("#basemaps button");
