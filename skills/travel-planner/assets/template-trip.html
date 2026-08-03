@@ -1111,11 +1111,11 @@ const themeIsDark = () => {
   return p === "auto" ? DARK_MQ.matches : p === "dark";
 };
 
-function applyTheme(pref){
+function applyTheme(pref, persist = true){
   const root = document.documentElement;
   if(pref === "auto") root.removeAttribute("data-theme");
   else root.dataset.theme = pref;
-  try{ localStorage.setItem(LS_KEY + ":theme", pref); }catch(e){}
+  if(persist){ try{ localStorage.setItem(LS_KEY + ":theme", pref); }catch(e){} }
 
   const btn = $("#theme");
   if(btn){
@@ -1137,6 +1137,13 @@ function initTheme(){
   // 停在「跟随系统」时，系统切换要当场生效
   DARK_MQ.addEventListener?.("change", () => {
     if(themePref() === "auto") applyTheme("auto");
+  });
+  /* 同一份行程开了两个标签页（--serve 下很常见）：在 A 里换了配色，
+     B 的 localStorage 变了但按钮不会自己重画，图标和标签就会跟实际状态对不上。
+     storage 事件只在别的标签页触发，所以这里不会打转；persist=false 是因为
+     值本来就是别人写进去的，不用再写一遍。 */
+  addEventListener("storage", e => {
+    if(e.key === LS_KEY + ":theme") applyTheme(themePref(), false);
   });
 }
 
