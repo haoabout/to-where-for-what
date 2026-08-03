@@ -603,9 +603,10 @@ pre.code{
 }
 .table-wrap{overflow-x:auto;margin:0 0 17px;border:1px solid var(--line);border-radius:8px}
 .guide table,.card-table{width:100%;border-collapse:collapse;font-size:13.5px}
-.guide td,.card-table td,.card-table th{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left}
-.guide tr:last-child td,.card-table tr:last-child td{border-bottom:0}
-.guide tr:first-child td{background:var(--paper-2);font-weight:600;color:var(--ink)}
+.guide th,.guide td,.card-table td,.card-table th{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left}
+.guide tbody tr:last-child td,.card-table tr:last-child td{border-bottom:0}
+/* 表头认 th，不认「第一行」——位置选择器在行序变化时会静默失效 */
+.guide th{background:var(--paper-2);font-weight:600;color:var(--ink)}
 
 /* 时间轴：对 route.md 里以时间开头的条目做渐进增强 */
 .guide li.tl{list-style:none;position:relative;padding-left:16px;margin-bottom:11px}
@@ -641,7 +642,17 @@ pre.code{
   border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;
 }
 .sum-h span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
+/* 天分隔行。比 .sum-h 轻一档——它是同一张表里的分组，不是新表 */
+.sum-d{
+  display:flex;align-items:center;gap:8px;padding:6px 13px;
+  background:color-mix(in srgb,var(--paper-2) 60%,transparent);
+  border-bottom:1px solid var(--line);
+  font:600 11.5px/1.35 var(--sans);color:var(--ink-2);letter-spacing:.3px;
+}
+.sum-d span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
 .ck{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
+/* 按天列时序号取代 emoji，要对齐成一列数字 */
+.ck .m{font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-3)}
 .ck:last-child{border-bottom:0}
 .ck .m{width:17px;flex:none;text-align:center}
 .ck .n{flex:1;min-width:0}
@@ -3090,8 +3101,9 @@ $("#exp-kml").onclick = () => MAP.exportKML();
    route.md 由 AI 撰写（正文、路线设计逻辑、逐日节点）；
    下面三块由页面自动生成，保证永远和数据一致：
      · 天气   —— 浏览器端实时拉 Open-Meteo，每次打开都是最新的
-     · 费用   —— 从选中景点的 ticket 字段解析
-     · 对照表 —— 从 choice 字段生成，不可能和清单对不上
+     · 费用   —— 按 itinerary 逐日汇总 ticket；日程为空时才退回按 choice 估
+     · 对照表 —— 上半按 itinerary 逐日列，下半按 choice 列剩下的，
+                 两者都直接读数据，不可能和清单、日程对不上
    ═══════════════════════════════════════════════════════════════════ */
 const GUIDE = (() => {
 
@@ -3244,12 +3256,15 @@ const GUIDE = (() => {
     return null;
   }
 
-  function renderCost(){
-    const going = PLACES.filter(p => p.choice === "yes");
-    if(!going.length) return "";
+  /* 费用按**日程**算，不是按 choice。
+     用户排完之后，「实际要花的钱」是排进某一天的那些点——里面有不少是
+     「待定」但真排上了的，而标了「想去」却没排进任何一天的（比如太远的那个），
+     一分钱都不会花。按 choice 算会同时多算和少算。
+     日程为空时（还没排）才退回按 choice=yes 估。 */
+  function costRows(list, dayLabel){
     let sum = 0, parsed = 0;
     const unparsed = [];
-    const rows = going.map(p => {
+    const rows = list.map(p => {
       const v = parseMoney(p.ticket);
       if(v == null) unparsed.push(p.name);
       else { sum += v; parsed++; }
@@ -3258,12 +3273,48 @@ const GUIDE = (() => {
         <span class="n">${esc(p.name)}<span class="sub">${esc(p.ticket)}</span></span>
       </div>`;
     }).join("");
-    const cur = /[¥￥]|日元|円/.test(going.map(p=>p.ticket).join("")) ? "¥" : "";
+    return { html: (dayLabel ? `<div class="sum-d">${esc(dayLabel)}</div>` : "") + rows,
+             sum, parsed, unparsed };
+  }
+
+  function renderCost(){
+    const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
+    // 同一个点排了两天（比如连着去两天的展）也只买一次票，按 id 去重
+    const seen = new Set();
+    const groups = [];
+    for(const d of days){
+      const list = [];
+      for(const e of d.places){
+        const p = BY_ID[e.id];
+        if(!p || isLodging(p) || seen.has(p.id)) continue;
+        seen.add(p.id);
+        list.push(p);
+      }
+      if(list.length) groups.push([`第 ${d.n} 天${d.date ? " · " + d.date.slice(5) : ""}`, list]);
+    }
+    const byDay = groups.length > 0;
+    if(!byDay){
+      const going = PLACES.filter(p => p.choice === "yes" && !isLodging(p));
+      if(!going.length) return "";
+      groups.push([null, going]);
+    }
+
+    let sum = 0, parsed = 0, n = 0;
+    const unparsed = [];
+    const html = groups.map(([label, list]) => {
+      const r = costRows(list, label);
+      sum += r.sum; parsed += r.parsed; n += list.length;
+      unparsed.push(...r.unparsed);
+      return r.html;
+    }).join("");
+    const all = groups.flatMap(([, l]) => l);
+    const cur = /[¥￥]|日元|円/.test(all.map(p => p.ticket).join("")) ? "¥" : "";
     return `<h2>费用汇总</h2>
       <div class="sum">
-        <div class="sum-h">门票与入场费<span>${going.length} 个「想去」的地点</span></div>
-        ${rows}
+        <div class="sum-h">门票与入场费<span>${byDay ? `已排进日程的 ${n} 个地点` : `${n} 个「想去」的地点`}</span></div>
+        ${html}
         <div class="cost-total">已解析 ${parsed} 项，合计约 <b>${cur}${sum.toLocaleString()}</b></div>
+        ${byDay ? "" : `<div class="caveat">日程还没排，这里按「想去」的地点估算。排完之后会改成按每天实际要去的点计算。</div>`}
         ${unparsed.length ? `<div class="caveat">以下 ${unparsed.length} 项的票价是文字描述，未计入合计：${esc(unparsed.join("、"))}。
           特别展、体验项目、夜间加价通常另计，实际花费会高于此数。</div>`
           : `<div class="caveat">仅含门票，不含交通、餐饮与特别展加价。</div>`}
@@ -3273,22 +3324,72 @@ const GUIDE = (() => {
   /* ---------- 全景点对照表 ----------
      直接由 choice 生成，因此不可能与清单视图不一致。
      放弃的景点也全部列出——方便快速判断要不要捡回来。 */
+  /* 对照表分两块：**排进日程的按天列**（这是真正要去的），
+     剩下的按表态列。分开是因为这两块回答的是不同问题——
+     前者是「那天走哪几个」，后者是「有没有漏掉什么」。 */
+  function ckRow(p, mark, out, extra){
+    // 住宿没有 scale，直接拼会留下一个孤零零的「·」
+    const scale = SCALE_TXT[p.scale] || p.scale || (isLodging(p) ? "住宿" : "");
+    return `<div class="ck${out ? " out" : ""}">
+      <span class="m">${mark}</span>
+      <span class="n">${esc(p.name)}<span class="sub">${esc(p.area)}${scale ? " · " + esc(scale) : ""}</span></span>
+      ${extra || (p.choice_reason ? `<span class="why">${esc(p.choice_reason)}</span>` : "")}
+    </div>`;
+  }
+
   function renderChecklist(){
-    const MARK = { yes:["✅","要去"], maybe:["🔸","待定"], no:["❌","放弃"], none:["⬜","未表态"] };
-    const order = ["yes","maybe","none","no"];
-    const by = {};
-    PLACES.forEach(p => (by[p.choice || "none"] = by[p.choice || "none"] || []).push(p));
-    const total = PLACES.length;
-    return `<h2>全部景点对照表</h2>
-      <p>包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。</p>
-      <div class="sum">
-        <div class="sum-h">共 ${total} 个候选<span>${order.map(k => `${MARK[k][1]} ${(by[k]||[]).length}`).join(" · ")}</span></div>
-        ${order.flatMap(k => (by[k] || []).map(p => `<div class="ck${k === "no" ? " out" : ""}">
-          <span class="m">${MARK[k][0]}</span>
-          <span class="n">${esc(p.name)}<span class="sub">${esc(p.area)} · ${esc(SCALE_TXT[p.scale] || p.scale)}</span></span>
-          ${p.choice_reason ? `<span class="why">${esc(p.choice_reason)}</span>` : ""}
-        </div>`)).join("")}
+    const MARK = { yes:["✅","想去"], maybe:["🔸","待定"], no:["❌","放弃"], none:["⬜","未表态"] };
+    const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
+    const scheduled = new Set(days.flatMap(d => d.places.map(e => e.id)));
+
+    let html = "";
+    if(days.length){
+      let items = 0;
+      const blocks = days.map(d => {
+        let seq = 0;
+        const rows = d.places.map(e => {
+          const p = BY_ID[e.id];
+          if(!p) return "";
+          items++;
+          const lod = isLodging(p);
+          if(!lod) seq++;
+          return ckRow(p, lod ? "🏠" : seq,
+            false, e.note ? `<span class="why">${esc(e.note)}</span>` : "");
+        }).join("");
+        return `<div class="sum-d">第 ${d.n} 天${d.date ? " · " + d.date.slice(5) : ""}
+          <span>${d.places.length} 项</span></div>${rows}`;
+      }).join("");
+      html += `<div class="sum">
+        <div class="sum-h">按天的行程<span>${days.length} 天 · ${items} 项</span></div>
+        ${blocks}</div>`;
+    }
+
+    // 标了「想去」却没排进任何一天的——最容易被漏掉，单独提出来
+    const missed = PLACES.filter(p => p.choice === "yes" && !isLodging(p) && !scheduled.has(p.id));
+    if(days.length && missed.length){
+      html += `<div class="sum">
+        <div class="sum-h">想去，但没排进任何一天<span>${missed.length} 个</span></div>
+        ${missed.map(p => ckRow(p, "⚠️")).join("")}
+        <div class="caveat">要么加进某一天，要么改成「待定」——否则出发时才发现漏了。</div>
       </div>`;
+    }
+
+    const rest = PLACES.filter(p => !isLodging(p) && !scheduled.has(p.id) && !missed.includes(p));
+    const by = {};
+    rest.forEach(p => (by[p.choice || "none"] = by[p.choice || "none"] || []).push(p));
+    const order = ["maybe", "none", "no"];
+    if(rest.length){
+      html += `<div class="sum">
+        <div class="sum-h">${days.length ? "没排进日程的" : "全部候选"}
+          <span>${order.map(k => `${MARK[k][1]} ${(by[k] || []).length}`).join(" · ")}</span></div>
+        ${order.flatMap(k => (by[k] || []).map(p => ckRow(p, MARK[k][0], k === "no"))).join("")}
+      </div>`;
+    }
+
+    return `<h2>全部景点对照表</h2>
+      <p>${days.length ? "上半部分是你排好的每天行程，下半部分是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。"
+                       : "包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。"}</p>
+      ${html}`;
   }
 
   /* ---------- 时间轴渐进增强 ----------

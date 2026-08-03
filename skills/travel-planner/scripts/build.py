@@ -116,10 +116,17 @@ def md_to_html(md: str) -> str:
                 continue  # 分隔行
             if not in_table:
                 close_lists()
-                out.append('<div class="table-wrap"><table><tbody>')
-                in_table = True
-            tag = "td"
-            out.append("<tr>" + "".join(f"<{tag}>{inline(c)}</{tag}>" for c in cells) + "</tr>")
+                out.append('<div class="table-wrap"><table>')
+                in_table = "head"          # markdown 表格的第一行永远是表头
+            if in_table == "head":
+                # 表头必须是 th：渲染成 td 的话，「区间/方式/时长/费用」和数据行
+                # 长得一模一样，读者要靠猜才知道哪行是表头
+                out.append("<thead><tr>"
+                           + "".join(f"<th>{inline(c)}</th>" for c in cells)
+                           + "</tr></thead><tbody>")
+                in_table = "body"
+            else:
+                out.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in cells) + "</tr>")
             continue
         if in_table:
             out.append("</tbody></table></div>"); in_table = False
