@@ -239,11 +239,30 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 # ------------------------------------------------------------------ serve
 
 SERVER_SRC = r'''
-import json, sys
+import json, subprocess, sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(sys.argv[2]).resolve()
+BUILD_PY = sys.argv[3]
+
+
+def rebuild():
+    """写回 places.json 后立刻重建 trip.html。
+
+    不重建的话页面就和数据脱节了：用户点完保存，磁盘上的 trip.html 还停在
+    上一次构建的状态。之后双击打开、或者把这个 html 分享给同行的人，
+    看到的都是保存**之前**的选择和日程——而且没有任何迹象表明它是旧的。
+
+    重建失败不能让保存失败：places.json 已经落盘了，那才是真相。
+    """
+    try:
+        r = subprocess.run([sys.executable, BUILD_PY, str(ROOT)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=120)
+        return r.returncode == 0
+    except Exception:
+        return False
 
 class H(SimpleHTTPRequestHandler):
     """静态服务 + 一个 /__save__ 写回端点。
@@ -275,8 +294,8 @@ class H(SimpleHTTPRequestHandler):
                 raise ValueError("路径越界")
             target.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
             n_choice = sum(1 for p in doc["places"] if p.get("choice"))
-            body = json.dumps({"ok": True, "path": str(target), "chosen": n_choice},
-                              ensure_ascii=False).encode()
+            body = json.dumps({"ok": True, "path": str(target), "chosen": n_choice,
+                               "rebuilt": rebuild()}, ensure_ascii=False).encode()
             self.send_response(200)
         except Exception as e:
             body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode()
@@ -294,7 +313,8 @@ ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 def serve(trip_dir: Path, page: Path, port: int) -> None:
     stop(trip_dir, quiet=True)
     proc = subprocess.Popen(
-        [sys.executable, "-c", SERVER_SRC, str(port), str(trip_dir)],
+        [sys.executable, "-c", SERVER_SRC, str(port), str(trip_dir),
+         str(Path(__file__).resolve())],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     (trip_dir / PID_FILE).write_text(f"{proc.pid} {port}")
     time.sleep(0.8)
@@ -304,7 +324,7 @@ def serve(trip_dir: Path, page: Path, port: int) -> None:
     url = f"http://localhost:{port}/{page.name}"
     print(f"✓ 本地服务已启动: {url}")
     print(f"  停止: python3 build.py {trip_dir} --stop")
-    print("  页面「保存筛选结果」会 POST 到 /__save__ 由本服务写回 places.json")
+    print("  页面「保存选择和日程」会 POST 到 /__save__，本服务写回 places.json 并重建页面")
     print("  （走 http 还能让 OSM 官方光栅底图合规可用；矢量底图 file:// 下也能用）")
     try:
         webbrowser.open(url)

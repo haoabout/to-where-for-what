@@ -746,7 +746,7 @@ pre.code{
 
 <div class="actionbar">
   <div class="actionbar-in">
-    <button class="btn primary" id="save">保存筛选结果</button>
+    <button class="btn primary" id="save">保存选择和日程</button>
     <button class="btn" id="download">下载 JSON</button>
     <button class="btn" id="copy">复制短码</button>
     <div class="hint" id="hint"></div>
@@ -814,6 +814,14 @@ buildSched();
 const schedOf = id => SCHED.get(id) || [];
 const daysOf  = id => [...new Set(schedOf(id).map(s => s.n))].sort((a, b) => a - b);
 const firstSeq = id => (schedOf(id).find(s => s.seq != null) || {}).seq ?? null;
+
+/* 草稿新不新，判据是「文件里那份日程被改过没有」——不是构建时间。
+   构建时间每 build 一次就变，而 AI 完全可能只是补了个开放时间就重跑一次；
+   拿它当判据，用户排了半小时的日程会在那次无关的 rebuild 后静默消失。 */
+const itinSig = a => JSON.stringify((a || []).map(d =>
+  [d.n, d.date || "", (d.places || []).map(e => (e && e.id) || "")]));
+const FILE_SIG = itinSig(DATA.itinerary);   // 本次加载时文件里那份，全程不变
+let  SAVED_SIG = null;                      // 最近一次**真的写进文件**的那份
 
 /* 能力检测：保存能力取决于浏览器引擎，与 file:// / http:// 无关。
    实测 file:// 下 showSaveFilePicker 同样可用；真正不支持的是 Firefox / Safari。 */
@@ -1083,15 +1091,20 @@ function saveLocal(){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify(
       PLACES.filter(p => p.choice).map(p => [p.id, p.choice, p.choice_reason || ""])));
-    // 排半小时的天，刷新一下没了会很崩溃。连同构建时间一起存 —— 见 loadItin。
+    // 排半小时的天，刷新一下没了会很崩溃。连同两个指纹一起存 —— 见 loadItin。
     localStorage.setItem(LS_KEY + ":itin",
-      JSON.stringify({ builtAt: BUILT_AT, itinerary: DATA.itinerary || [] }));
+      JSON.stringify({ sig: FILE_SIG, savedSig: SAVED_SIG, itinerary: DATA.itinerary || [] }));
   }catch(e){ /* 隐私模式下 localStorage 不可用，忽略 */ }
 }
 
-/* 草稿和文件谁新？用构建时间判断：
-     builtAt 相同 → 这份草稿就是在当前这个 trip.html 上排的，比文件里的新，恢复它
-     builtAt 不同 → AI 重新生成过文件，文件更新，丢掉草稿
+/* 草稿和文件谁新？只有一种情况该丢掉草稿：**文件里的日程被别人改了**。
+   两个指纹合起来正好覆盖四种情形：
+
+     文件没动过                  → sig 命中，草稿更新，恢复          ✓
+     用户存过盘、AI 又 rebuild 过 → savedSig 命中（文件就是我们写的），恢复 ✓
+     存到了别处 / 没放回去        → sig 仍然命中（文件确实没变），恢复    ✓
+     AI 重写了 itinerary          → 两个都不命中，文件更新，丢掉草稿    ✓
+
    只比"文件里有没有 itinerary"是不够的：用户在浏览器里排完，文件里还留着
    AI 早先写的那版，一刷新就把半小时的工作盖掉了。 */
 function loadItin(){
@@ -1099,7 +1112,9 @@ function loadItin(){
     const raw = localStorage.getItem(LS_KEY + ":itin");
     if(!raw) return 0;
     const d = JSON.parse(raw);
-    if(!d || d.builtAt !== BUILT_AT || !Array.isArray(d.itinerary)) return 0;
+    if(!d || !Array.isArray(d.itinerary)) return 0;
+    if(d.sig !== FILE_SIG && d.savedSig !== FILE_SIG) return 0;
+    SAVED_SIG = d.savedSig ?? null;
     // 必须让 DATA.itinerary 和 ITIN 始终是**同一个数组**。
     // 写成 DATA.itinerary = d.itinerary 会让两者分叉：日内改动因为共享
     // day 对象还能同步，但「增加一天」这种改数组本身的操作就只进其中一个，
@@ -1213,6 +1228,9 @@ function payload(){
   return JSON.stringify(out, null, 2);
 }
 
+/* 短码是最后一条兜底路（Firefox/Safari 三条写文件的路都断时）。
+   日程必须一起编进来——只回传选择的话，用户排的天会静默消失，
+   而且贴回去的人和读它的 AI 都不会发现少了东西。 */
 function shortCode(){
   const g = v => PLACES.filter(p => p.choice === v);
   const L = [`#travel-planner v1 · ${TRIP.destination || ""} · ${isoLocal(new Date())}`];
@@ -1220,7 +1238,15 @@ function shortCode(){
   if(yes.length)   L.push("+ " + yes.map(p => p.id).join(" "));
   if(maybe.length) L.push("? " + maybe.map(p => p.id).join(" "));
   if(no.length)    L.push("- " + no.map(p => p.id + (p.choice_reason ? `(${p.choice_reason})` : "")).join(" "));
-  L.push(`# 想去 ${yes.length} · 待定 ${maybe.length} · 不想去 ${no.length} · 未表态 ${PLACES.length-yes.length-maybe.length-no.length}`);
+  const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
+  let items = 0;
+  for(const d of days){
+    items += d.places.length;
+    L.push(`D${d.n} ${d.date || "-"} ` + d.places
+      .map(e => e.id + (e.note ? `(${e.note})` : "")).join(" "));
+  }
+  L.push(`# 想去 ${yes.length} · 待定 ${maybe.length} · 不想去 ${no.length} · 未表态 ${PLACES.length-yes.length-maybe.length-no.length}`
+    + (days.length ? ` · 日程 ${days.length} 天共 ${items} 项（D 行按顺序，即当天路线）` : " · 尚未排日程"));
   return L.join("\n");
 }
 
@@ -1268,25 +1294,45 @@ async function saveViaPicker(){
   }
 }
 
+/* 写进文件之后必须记下这份日程的指纹：否则 AI 之后重跑一次 build，
+   loadItin 会认为文件变了而丢掉草稿——丢掉的其实是用户自己刚存的那份。 */
+function markSaved(){
+  SAVED_SIG = itinSig(DATA.itinerary);
+  saveLocal();
+}
+
+function savedMsg(where){
+  const done = PLACES.filter(p => p.choice).length;
+  const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
+  const items = days.reduce((a, d) => a + d.places.length, 0);
+  return `已写回 ${where}：${done} 个已表态`
+    + (days.length ? ` · ${days.length} 天共 ${items} 项日程` : "，日程还没排")
+    + "，可以让 AI 写攻略了";
+}
+
 async function doSave(){
   const btn = $("#save");
   btn.disabled = true; btn.textContent = "保存中…";
   try{
     const srv = await saveViaServer();
     if(srv){
-      toast(`已写回 places.json（${srv.chosen} 个已表态），可以让 AI 继续设计路线了`);
+      markSaved();
+      // 页面本身是构建产物：不重新 build，双击打开或分享出去的 trip.html
+      // 还停在上一次构建的状态，和刚写回的 places.json 对不上。
+      toast(savedMsg("places.json") + (srv.rebuilt ? "。页面也已同步重建" : ""));
       return;
     }
     const pick = await saveViaPicker();
     if(pick === "abort") return;
     if(pick){
-      toast("已保存到 " + pick.name + "，可以让 AI 继续设计路线了");
+      markSaved();
+      toast(savedMsg(pick.name));
       return;
     }
     // 两条直写路都不通——直接下载，并说清楚为什么
     download(true);
   }finally{
-    btn.disabled = false; btn.textContent = "保存筛选结果";
+    btn.disabled = false; btn.textContent = "保存选择和日程";
   }
 }
 
@@ -1296,8 +1342,8 @@ function download(isFallback){
   a.href = URL.createObjectURL(b); a.download = "places.json"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   toast(isFallback
-    ? "这个浏览器不允许直接写文件，已改为下载。把 places.json 放回行程目录覆盖原文件即可"
-    : "已下载 places.json，把它放回行程目录覆盖原文件");
+    ? "这个浏览器不允许直接写文件，已改为下载。选择和日程都在里面，把 places.json 放回行程目录覆盖原文件即可"
+    : "已下载 places.json（含选择和日程），把它放回行程目录覆盖原文件");
   if(isFallback) setTimeout(showCode, 900);   // 下载也可能被拦，再给一条兜底
 }
 
@@ -3053,9 +3099,12 @@ function boot(){
 
   // 不再靠「函数是否存在」下结论——实测函数存在也可能写不了。
   // 只说会怎么尝试，真实结果等点击时告诉用户。
-  $("#hint").innerHTML = location.protocol.startsWith("http")
+  // 页面数据的时间戳要露出来：这个文件分享出去后，对方看到的就是这一刻的
+  // 快照，而不是你现在浏览器里的状态——不写明白，双方都会以为看到的是同一份。
+  $("#hint").innerHTML = (location.protocol.startsWith("http")
     ? "「保存」优先写回本地服务；服务不可用时自动降级为文件选择或下载。"
-    : "当前是本地文件方式打开，「保存」会尝试文件选择，不行则自动降级为下载。";
+    : "当前是本地文件方式打开，「保存」会尝试文件选择，不行则自动降级为下载。")
+    + (BUILT_AT ? ` 页面数据生成于 ${esc(BUILT_AT)}。` : "");
 
   renderChips();
   render();
