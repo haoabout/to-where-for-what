@@ -221,10 +221,17 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
   backdrop-filter:saturate(1.6) blur(12px);
   border-top:1px solid var(--line);
 }
+/* 本地服务下这一栏只是个状态行，不该占掉一条按钮那么高的地方。
+   有按钮时（file://）自然被按钮撑开，没按钮时就是一行小字。 */
 .actionbar-in{
-  max-width:1180px;margin:0 auto;padding:11px 20px;
+  max-width:1180px;margin:0 auto;padding:5px 20px;min-height:30px;
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;
 }
+.actionbar-in .btn{padding:5px 13px;font-size:12.5px}
+/* 状态文字占满剩余宽度，把折叠区和「其他方式…」一起推到最右。
+   展开时按钮就落在同一行里，栏高不变——放在链接右边会换行，高度翻倍。 */
+.actionbar-in .hint{margin-left:0;text-align:left;flex:1 1 auto}
+.more-box{display:flex;gap:8px}
 .btn{
   border:1px solid var(--line);background:var(--card);color:var(--ink);
   padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;transition:.15s;
@@ -751,12 +758,17 @@ pre.code{
   </section>
 </main>
 
+<!-- 本地服务下这三个按钮一个都用不到（改动会自动写回），所以默认收起来，
+     只留状态文字；file:// 下没有自动保存，「保存」才是主按钮。见 layoutActionbar。 -->
 <div class="actionbar">
   <div class="actionbar-in">
     <button class="btn primary" id="save">保存选择和日程</button>
-    <button class="btn" id="download">下载 JSON</button>
-    <button class="btn" id="copy">复制短码</button>
     <div class="hint" id="hint"></div>
+    <div class="more-box" id="more-box" hidden>
+      <button class="btn" id="download">下载 JSON</button>
+      <button class="btn" id="copy">复制短码</button>
+    </div>
+    <button class="lnk" id="more" aria-expanded="false">其他方式…</button>
   </div>
 </div>
 
@@ -1329,6 +1341,23 @@ addEventListener("pagehide", flushOnExit);
 // iOS Safari 上 pagehide 不总是触发，切到后台时补一次
 addEventListener("visibilitychange", () => { if(document.hidden) flushOnExit(); });
 
+/* 本地服务下这三个按钮一个都用不到——改动会自动写回，`file://` 才需要它们。
+   把「立即保存」也收进「其他方式…」：留在外面等于常驻提示用户去做一件
+   系统已经替他做了的事，反而让人怀疑到底存没存。用的是同一个 #save 节点，
+   不是复制一份，省得标签和禁用状态两处不同步。 */
+function layoutActionbar(){
+  const box = $("#more-box"), save = $("#save"), more = $("#more");
+  if(SERVED){
+    save.classList.remove("primary");
+    box.prepend(save);
+  }
+  more.onclick = () => {
+    const open = box.hidden;
+    box.hidden = !open;
+    more.setAttribute("aria-expanded", String(open));
+  };
+}
+
 /* 自动保存失败必须看得见：服务被停掉、端口被占，
    否则用户会以为一直在存，其实改动只躺在 localStorage 里。 */
 function setSaveState(kind){
@@ -1345,7 +1374,7 @@ function setSaveState(kind){
   el.textContent =
     kind === "saving" ? "保存中…" :
     kind === "dirty"  ? "有未保存的改动…" :
-    kind === "err"    ? `⚠ 自动保存失败（本地服务没响应）。改动只在这个浏览器里，点「${SAVE_LABEL}」重试` :
+    kind === "err"    ? `⚠ 自动保存失败（本地服务没响应）。改动只在这个浏览器里，点右边「其他方式…」→「${SAVE_LABEL}」重试` :
     kind === "ok"     ? `已自动保存到 places.json · ${t}` :
                         "改动会自动写回 places.json，不用手动保存。";
 }
@@ -3328,6 +3357,7 @@ function boot(){
   // 快照，而不是你现在浏览器里的状态——不写明白，双方都会以为看的是同一份。
   setSaveState("init");
   $("#save").textContent = SAVE_LABEL;
+  layoutActionbar();
 
   renderChips();
   render();
