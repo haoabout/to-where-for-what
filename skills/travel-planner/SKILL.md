@@ -50,13 +50,30 @@ A 搜索景点 →(你)→ ┌ ① 景点清单 ⇄ ② 地图（筛选 + 排程
 
 启动时：
 
-1. 读 `~/.travel-planner/preferences.md`。不存在就从 `preferences.template.md` 复制一份过去，并告诉用户"第一次用，我先建了个偏好文件"。
+1. 读 `~/.travel-planner/preferences.md`。不存在就把 `<SKILL_ROOT>/preferences.template.md` 的内容原样写过去，并告诉用户"第一次用，我先建了个偏好文件"。
 2. 文件里有、但模板新增的段落缺失时，**只补不改**——问用户那一项，然后追加。**绝不整体重写**，那会丢掉用户攒下的偏好。
 
-```bash
-mkdir -p ~/.travel-planner
-[ -f ~/.travel-planner/preferences.md ] || cp "<SKILL_ROOT>/preferences.template.md" ~/.travel-planner/preferences.md
-```
+**用你自己的读写工具做这两步，不要走 shell。** `mkdir -p`、`[ -f ... ]`、`cp` 都是
+POSIX 专有的，Windows 的 PowerShell / cmd 下会直接失败——而这是整个流程的第一步，
+断在这里用户连开始都开始不了。
+
+---
+
+## 跑脚本用哪个解释器
+
+**不要写死 `python3`。** Windows 上 python.org 的安装包只装 `python.exe` 和 `py.exe`，
+**不装 `python3.exe`**；而系统自带一个同名的应用执行别名，作用是**打开微软商店**。
+所以 Windows 用户跑 `python3 build.py` 最常见的结果不是报错，是弹出商店页面。
+
+第一次要跑脚本时探一次，之后整场对话都用探到的那个（下文一律写作 `<PY>`）：
+
+| 顺序 | 试 | 说明 |
+|---|---|---|
+| 1 | `py -3 --version` | Windows 官方启动器，最可靠 |
+| 2 | `python --version` | 要确认输出是 3.x，不是 2.7 |
+| 3 | `python3 --version` | macOS / Linux 上的常态 |
+
+需要 Python 3.9 以上。都不通就告诉用户去装，别硬跑。
 
 ---
 
@@ -67,21 +84,43 @@ mkdir -p ~/.travel-planner
 对话是新开的，但行程数据一直在磁盘上——**它跟对话 session 没有任何关系**。
 重新搜一轮不只是浪费，还会把用户上次筛的 `choice` 和排的 `itinerary` 全冲掉。
 
-1. 看当前目录下有没有 `trips/`。有匹配的目录就读它的 `places.json`
+1. 按下一节的顺序找到行程根目录，看里面有没有匹配的行程，有就读它的 `places.json`
 2. 那就是全部真相：`choice` 是用户筛的，`itinerary` 是用户排的天和顺序
-3. `trip.html` 是构建产物（在 `.gitignore` 里），**不要读它，也不要手改**
+3. `trip.html` 是构建产物，**不要读它，也不要手改**——重新 build 一次就有了
 
 重跑一次 build 就能把页面恢复到上次的样子：
 
 ```bash
-python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
+<PY> <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
 ```
 
-**不确定是哪个行程就列出 `trips/` 下的目录让用户选**，不要猜。
+**不确定是哪个行程就把根目录下的行程列出来让用户选**，不要猜。
 
-如果用户说"我明明排过日程"而 `places.json` 里没有：他多半排完没点保存。
-草稿只在**那台机器、那个浏览器、那个地址**（`file://` 和 `http://localhost`
-是两份不同的存储）里，你读不到。让他打开原来那个页面点一次保存。
+如果用户说"我明明排过日程"而 `places.json` 里没有：多半是他用 `file://` 双击打开的
+（那种方式没有自动保存），改动只在**那台机器、那个浏览器、那个地址**的 localStorage 里
+（`file://` 和 `http://localhost` 是两份不同的存储），你读不到。
+让他打开原来那个页面点一次「保存选择和日程」。
+
+---
+
+## 行程文件存哪
+
+**第一次用时问一次，记进 `preferences.md` 的 `trips_root`，之后不再问。**
+
+不问就默认落在"用户当时开着 AI 的那个目录"下，会把行程塞进一个毫不相干的代码仓库，
+换个目录再问「继续我的京都行程」就找不着了。
+
+按这个顺序定：
+
+1. `preferences.md` 里有 `trips_root` → 用它
+2. 当前目录下已经有 `trips/` → 用它（不必打扰用户）
+3. 否则问用户，默认建议 **`~/travel-plans/`**，把答案写进 `preferences.md`
+
+默认值不用 `~/.travel-planner/trips/`（隐藏目录里放用户要打开和分享的 HTML 不方便），
+也不用 `~/Documents`（不同语言的系统上目录名不一样）。
+
+行程目录本身是 AI 建的，用户不需要碰任何文件对话框。下文的 `trips/<行程>/`
+一律指 `<trips_root>/<行程>/`。
 
 ---
 
@@ -137,10 +176,10 @@ python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
 以及 Wikimedia 缩略图必须走 API 的问题。
 
 ```bash
-python3 <SKILL_ROOT>/scripts/enrich.py   trips/<行程>/places.json --coords --images
-python3 <SKILL_ROOT>/scripts/enrich.py   trips/<行程>/places.json --transit
-python3 <SKILL_ROOT>/scripts/validate.py trips/<行程>/places.json --check-links
-python3 <SKILL_ROOT>/scripts/build.py    trips/<行程> --serve
+<PY> <SKILL_ROOT>/scripts/enrich.py   trips/<行程>/places.json --coords --images
+<PY> <SKILL_ROOT>/scripts/enrich.py   trips/<行程>/places.json --transit
+<PY> <SKILL_ROOT>/scripts/validate.py trips/<行程>/places.json --check-links
+<PY> <SKILL_ROOT>/scripts/build.py    trips/<行程> --serve
 ```
 
 `--transit` 从 OSM 抓当地的地铁/轻轨线路与车站，产出 `transit.geojson`。
@@ -175,8 +214,10 @@ python3 <SKILL_ROOT>/scripts/build.py    trips/<行程> --serve
 - 一个地点可以出现在多天（世博会连着去两天），也可以一天出现两次（白天夜景各一次）
 - 航班傍晚才落地就点日程栏右上角的 `+` 加「第 0 天」
 
-**排完点「保存选择和日程」**——`choice` 和 `itinerary` 会一起写回 `places.json`，
-本地服务同时重建 `trip.html`。浏览器不支持直写时用「下载 JSON」或「复制短码」。
+**不用告诉用户去点保存。** `--serve` 起的服务下，改动会在几秒空闲后自动写回
+`places.json`，状态显示在页面底部。只有用 `file://` 打开时才需要点「保存选择和日程」
+（浏览器不允许网页在无用户手势时写文件），不支持直写的浏览器再退到「下载 JSON」
+或「复制短码」。
 
 短码里 `+ ? -` 三行是选择，`D1 D2 …` 行是日程（**行内顺序就是当天路线顺序**，
 `(括号)` 是备注）。用户贴短码回来时，按它更新 `places.json` 的 `choice` 和
@@ -211,13 +252,13 @@ python3 <SKILL_ROOT>/scripts/build.py    trips/<行程> --serve
 写完重新构建：
 
 ```bash
-python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
+<PY> <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
 ```
 
 想单独分享攻略（不带筛选界面）：
 
 ```bash
-python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --standalone   # 输出 guide.html
+<PY> <SKILL_ROOT>/scripts/build.py trips/<行程> --standalone   # 输出 guide.html
 ```
 
 ---
@@ -225,7 +266,7 @@ python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --standalone   # 输出 gui
 ## 文件布局
 
 ```
-trips/2026-09-osaka/
+<trips_root>/2026-09-osaka/          # 根目录见「行程文件存哪」
 ├── brief.md          # 行程参数（开场问卷的答案）
 ├── places.json       # ★唯一数据源，三个视图都从它渲染
 ├── transit.geojson   # 地铁线路与车站（enrich.py --transit 产出）

@@ -389,12 +389,23 @@ ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 '''
 
 
+def _detach() -> dict:
+    """让服务活过父进程。start_new_session 是 POSIX 专有的，
+    Windows 上被静默忽略（CPython 里参数名就叫 unused_start_new_session），
+    得改用 creationflags 才真的脱离控制台。"""
+    if hasattr(os, "setsid"):
+        return {"start_new_session": True}
+    flags = (getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+             | getattr(subprocess, "DETACHED_PROCESS", 0))
+    return {"creationflags": flags} if flags else {}
+
+
 def serve(trip_dir: Path, page: Path, port: int) -> None:
     stop(trip_dir, quiet=True)
     proc = subprocess.Popen(
         [sys.executable, "-c", SERVER_SRC, str(port), str(trip_dir),
          str(Path(__file__).resolve())],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **_detach())
     (trip_dir / PID_FILE).write_text(f"{proc.pid} {port}")
     time.sleep(0.8)
     if proc.poll() is not None:
@@ -402,8 +413,10 @@ def serve(trip_dir: Path, page: Path, port: int) -> None:
 
     url = f"http://localhost:{port}/{page.name}"
     print(f"✓ 本地服务已启动: {url}")
-    print(f"  停止: python3 build.py {trip_dir} --stop")
-    print("  页面「保存选择和日程」会 POST 到 /__save__，本服务写回 places.json 并重建页面")
+    # 打印当前解释器而不是写死 python3——Windows 上 python.org 的安装包
+    # 不装 python3.exe，而系统自带的同名别名会去打开微软商店。
+    print(f"  停止: {Path(sys.executable).name} {Path(__file__).name} {trip_dir} --stop")
+    print("  页面上的改动会自动写回 places.json（本服务负责合并落盘并重建页面）")
     print("  （走 http 还能让 OSM 官方光栅底图合规可用；矢量底图 file:// 下也能用）")
     try:
         webbrowser.open(url)
@@ -419,10 +432,17 @@ def stop(trip_dir: Path, quiet: bool = False) -> None:
         return
     try:
         pid, port = f.read_text().split()
-        os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
+        # os.killpg / os.getpgid 在 Windows 上根本不存在。原来直接调，抛的
+        # AttributeError 不在捕获列表里 → 崩栈，而 finally 照样删掉 pid 文件：
+        # 服务还在跑，记录它的东西没了，再也停不掉。serve() 开头就会调本函数，
+        # 所以残留一个 pid 文件连启动都会崩。
+        if hasattr(os, "killpg"):
+            os.killpg(os.getpgid(int(pid)), signal.SIGTERM)   # 连整个进程组一起
+        else:
+            os.kill(int(pid), signal.SIGTERM)                 # Windows：只能杀进程本身
         if not quiet:
             print(f"✓ 已停止端口 {port} 上的服务")
-    except (ProcessLookupError, ValueError, PermissionError):
+    except (OSError, ValueError):
         if not quiet:
             print("服务已不在运行")
     finally:
