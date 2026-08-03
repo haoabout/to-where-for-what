@@ -333,7 +333,7 @@ pre.code{
 .dbox.cur .dhead{background:color-mix(in srgb,var(--ink) 12%,var(--paper-2))}
 .dhead .swatch{width:9px;height:9px;border-radius:50%;flex:none}
 .dhead b{font:600 12.5px/1 var(--sans);color:var(--ink)}
-.dhead s{margin-left:auto;text-decoration:none;font-size:10.5px;color:var(--ink-3)}
+.dhead .sub{margin-left:auto;font-size:10.5px;color:var(--ink-3)}
 .dlist{padding:3px 0;min-height:34px}
 
 /* 日程栏的条目只有一行：序号 + 名称。四五个点就要占满这一列，不能再多 */
@@ -356,12 +356,27 @@ pre.code{
 .ditem:hover .dops,.ditem:focus-within .dops{opacity:1}
 @media (hover:none){ .ditem .dops{opacity:1} }
 .dop{
-  background:none;border:0;color:var(--ink-3);width:17px;height:17px;line-height:1;
-  border-radius:4px;font-size:12px;display:grid;place-items:center;
+  background:none;border:0;color:var(--ink-3);width:17px;height:17px;
+  border-radius:4px;display:grid;place-items:center;padding:0;
 }
 .dop:hover{background:var(--line);color:var(--ink)}
 .dop:disabled{opacity:.25;cursor:default}
 .dop:disabled:hover{background:none;color:var(--ink-3)}
+
+/* 从清单栏拖进日程时，被拖的是完整的两行卡片，落在一行密度的日程栏里很突兀。
+   一旦进入 .dlist 就按日程条目的样子渲染 —— 纯 CSS，不碰拖拽逻辑，
+   ghost 和落点预览会一起变对。 */
+.dlist .mi{
+  display:flex;align-items:center;gap:7px;padding:5px 10px;
+  border-bottom:0;background:none;
+}
+.dlist .mi .pin{margin-top:0}
+.dlist .mi .t{display:flex;align-items:center;min-width:0;flex:1}
+.dlist .mi .t b{
+  font:500 12.5px/1.4 var(--sans);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.dlist .mi .t .sub{display:none}   /* 日程栏一行放不下元信息，详情走 dialog */
 
 /* 拖拽中的样子 */
 .ditem.drag-ghost{opacity:.35}
@@ -389,42 +404,47 @@ pre.code{
   background:var(--line);color:var(--ink-3);
 }
 .ms-head .seg button[aria-pressed=true] .c{background:rgba(255,255,255,.24);color:inherit}
-.map-side .mi{
+/* 这些规则刻意不写成 `.map-side .mi` —— SortableJS 会把 .mi 搬出清单栏
+   （拖进日程列表、触屏下还会挂到 <body> 上做浮层）。一旦按容器限定作用域，
+   节点一离开容器整条规则就失效：实测圆点丢掉 17px 尺寸后按默认 15px 字体
+   撑到 25px 高，元信息还冒出了浏览器默认的删除线。
+   组件的样式跟着组件走，不跟着它此刻待在哪儿走。 */
+.mi{
   display:flex;gap:9px;align-items:flex-start;padding:9px 12px;
   border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s;
 }
-.map-side .mi:hover{background:var(--paper-2)}
-.map-side .mi.on{background:var(--accent-soft)}
+.mi:hover{background:var(--paper-2)}
+.mi.on{background:var(--accent-soft)}
 /* 与日程栏的序号圆圈同尺寸：两栏并排显示同一批地点，大小不一会显得是两套东西 */
 /* 与日程栏的序号圆圈同尺寸：两栏并排显示同一批地点，大小不一会显得是两套东西。
    它同时是个按钮 —— 点圆点＝把这个地点放进/移出「当前天」，点卡片其余部分＝看详情。
    状态控件和内容区分开，比再加一个 + 按钮省地方，也更符合「圆点就是状态」的直觉。 */
-.map-side .mi .pin{
+.mi .pin{
   width:17px;height:17px;border-radius:50%;flex:none;margin-top:2px;
   display:grid;place-items:center;font:700 9.5px/1 var(--mono);color:#fff;
   cursor:pointer;transition:transform .12s;
 }
-.map-side .mi .pin:hover{transform:scale(1.22)}
-.map-side .mi .t{flex:1;min-width:0}
+.mi .pin:hover{transform:scale(1.22)}
+.mi .t{flex:1;min-width:0}
 /* 严格两行：名称一行、元信息一行。原来把整段票价文案铺进来，
    一个条目能占五六行，三栏布局下这一列只有 ~230px，根本放不下。 */
 /* 清单栏与日程栏的条目必须同字体同字号 —— 它们并排显示同一批地点，
    字号不一致会让人以为是两种不同的东西。统一按小的来。 */
-.map-side .mi .t b{
+.mi .t b{
   display:block;font:500 12.5px/1.4 var(--sans);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.map-side .mi .t s{
+.mi .t .sub{
   display:flex;align-items:center;gap:5px;margin-top:2px;
-  font-size:11.5px;color:var(--ink-3);text-decoration:none;
+  font-size:11.5px;color:var(--ink-3);
   overflow:hidden;white-space:nowrap;
 }
-.map-side .mi .t s em{font-style:normal;flex:none}
-.map-side .mi .t s .w{
+.mi .t .sub em{font-style:normal;flex:none}
+.mi .t .sub .w{
   flex:none;padding:0 5px;border-radius:4px;font-size:10.5px;line-height:15px;
   background:var(--warn-soft);color:var(--warn);
 }
-.map-side .mi.on{background:var(--paper-2)}
+.mi.on{background:var(--paper-2)}
 .map-side .grp{
   position:sticky;top:0;background:var(--paper-2);padding:6px 12px;
   font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
@@ -581,7 +601,7 @@ pre.code{
 .wx-d .d{font:600 12px/1 var(--sans);color:var(--ink-3);margin-bottom:7px}
 .wx-d .ic{font-size:23px;line-height:1.15}
 .wx-d .t{font:400 19px/1.25 var(--serif);margin-top:3px}
-.wx-d .t s{font-size:14px;color:var(--ink-3);text-decoration:none}
+.wx-d .t .sub{font-size:14px;color:var(--ink-3)}
 .wx-d .r{font-size:11.5px;color:var(--ink-3);margin-top:5px}
 .wx-d .r b{color:var(--accent);font-weight:600}
 .wx-src{font-size:11.5px;color:var(--ink-3);margin:0 0 26px}
@@ -598,7 +618,7 @@ pre.code{
 .ck:last-child{border-bottom:0}
 .ck .m{width:17px;flex:none;text-align:center}
 .ck .n{flex:1;min-width:0}
-.ck .n s{color:var(--ink-3);text-decoration:none;font-size:11.5px;margin-left:7px}
+.ck .n .sub{color:var(--ink-3);font-size:11.5px;margin-left:7px}
 .ck .why{font-size:11.5px;color:var(--ink-3);font-style:italic}
 .ck.out{opacity:.55}
 .cost-total{
@@ -1694,6 +1714,18 @@ const MAP = (() => {
     + `fill="currentColor" aria-hidden="true" style="display:block">`
     + `<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>`;
 
+  /* ↑ ↓ × 也用 SVG，不用字符。实测三个字形在同一个 17px 盒子里宽度就不一样
+     （↑↓ 9.5px、× 7.7px，乘号本来就比箭头小一圈），箭头在多数字体里还偏上 ——
+     视觉重量不一致，而且随系统字体变。SVG 的几何是固定的。 */
+  const stroke = d => `<svg viewBox="0 0 16 16" width="11" height="11" fill="none" `
+    + `stroke="currentColor" stroke-width="1.7" stroke-linecap="round" `
+    + `stroke-linejoin="round" aria-hidden="true" style="display:block"><path d="${d}"/></svg>`;
+  const ICON = {
+    up:   stroke("M8 12.5V4M4.2 7.8 8 4l3.8 3.8"),
+    down: stroke("M8 3.5V12M4.2 8.2 8 12l3.8-3.8"),
+    del:  stroke("M4.5 4.5l7 7M11.5 4.5l-7 7"),
+  };
+
   function dotSpec(p){
     const lod = isLodging(p);
     const days = daysOf(p.id);
@@ -1882,9 +1914,9 @@ const MAP = (() => {
           <span class="n" style="background:${lod ? "#4A4A4A" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
           <span class="dnm" title="${esc(p.name)}${note ? " — " + esc(note) : ""}">${esc(p.name)}</span>
           <span class="dops">
-            <button class="dop" data-op="up"   title="上移" aria-label="上移">↑</button>
-            <button class="dop" data-op="down" title="下移" aria-label="下移">↓</button>
-            <button class="dop" data-op="del"  title="移出这一天" aria-label="移出">×</button>
+            <button class="dop" data-op="up"   title="上移" aria-label="上移">${ICON.up}</button>
+            <button class="dop" data-op="down" title="下移" aria-label="下移">${ICON.down}</button>
+            <button class="dop" data-op="del"  title="移出这一天" aria-label="移出">${ICON.del}</button>
           </span>
         </div>`;
     }).join("");
@@ -1892,7 +1924,7 @@ const MAP = (() => {
         <div class="dhead">
           <span class="swatch" style="background:${dayColor(d.n)}"></span>
           <b>${esc(dayLabel(d))}</b>
-          <s>${esc(dayDateTxt(d))}${d.date ? " · " : ""}${dayCount(d)} 个</s>
+          <span class="sub">${esc(dayDateTxt(d))}${d.date ? " · " : ""}${dayCount(d)} 个</span>
         </div>
         <div class="dlist">${rows || `<div class="dempty">还没放地点</div>`}</div>
       </div>`;
@@ -2065,7 +2097,7 @@ const MAP = (() => {
       `<div class="grp">${esc(area)} · ${ps.length}</div>` + ps.map(p =>
         `<div class="mi${st.focus === p.id ? " on" : ""}" data-card="${esc(p.id)}">
            <span class="pin" style="${pinStyle(p)}">${pinText(p)}</span>
-           <span class="t"><b>${esc(p.name)}</b><s>${metaLine(p)}</s></span>
+           <span class="t"><b>${esc(p.name)}</b><span class="sub">${metaLine(p)}</span></span>
          </div>`).join("")).join("") ||
       `<div class="empty-state" style="padding:34px 16px"><div>当前筛选下没有可显示的地点</div></div>`;
     wireSortable();
@@ -2591,7 +2623,7 @@ const GUIDE = (() => {
     return `<div class="wx-d">
       <div class="d">${esc(label)}</div>
       <div class="ic" title="${esc(desc)}">${icon}</div>
-      <div class="t">${t(tmax)}°<s> / ${t(tmin)}°</s></div>
+      <div class="t">${t(tmax)}°<span class="sub"> / ${t(tmin)}°</span></div>
       <div class="r">${rainLine}</div>
     </div>`;
   }
@@ -2669,7 +2701,7 @@ const GUIDE = (() => {
       else { sum += v; parsed++; }
       return `<div class="ck">
         <span class="m">${v === 0 ? "○" : v == null ? "?" : "●"}</span>
-        <span class="n">${esc(p.name)}<s>${esc(p.ticket)}</s></span>
+        <span class="n">${esc(p.name)}<span class="sub">${esc(p.ticket)}</span></span>
       </div>`;
     }).join("");
     const cur = /[¥￥]|日元|円/.test(going.map(p=>p.ticket).join("")) ? "¥" : "";
@@ -2699,7 +2731,7 @@ const GUIDE = (() => {
         <div class="sum-h">共 ${total} 个候选<span>${order.map(k => `${MARK[k][1]} ${(by[k]||[]).length}`).join(" · ")}</span></div>
         ${order.flatMap(k => (by[k] || []).map(p => `<div class="ck${k === "no" ? " out" : ""}">
           <span class="m">${MARK[k][0]}</span>
-          <span class="n">${esc(p.name)}<s>${esc(p.area)} · ${esc(SCALE_TXT[p.scale] || p.scale)}</s></span>
+          <span class="n">${esc(p.name)}<span class="sub">${esc(p.area)} · ${esc(SCALE_TXT[p.scale] || p.scale)}</span></span>
           ${p.choice_reason ? `<span class="why">${esc(p.choice_reason)}</span>` : ""}
         </div>`)).join("")}
       </div>`;
