@@ -365,7 +365,10 @@ pre.code{
 .mk i{
   display:grid;place-items:center;border-radius:50%;
   font:700 11px/1 var(--mono);color:#fff;font-style:normal;
-  transition:transform .14s,width .14s,height .14s;
+  /* 只过渡 transform。尺寸随「是否已排入」变化，是一次数据驱动的离散跳变，
+     不需要补间；而 47 个绝对定位的 marker 同时做 width/height 过渡会在每次
+     refresh 时引发成片的布局重算。 */
+  transition:transform .14s;
 }
 .mk:hover i,.mk.on i{transform:scale(1.28)}
 .mk.on::after{
