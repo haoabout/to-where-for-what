@@ -150,7 +150,11 @@ def md_to_html(md: str) -> str:
         m = re.match(r"^(#{1,4})\s+(.*)$", line)
         if m:
             close_lists()
-            lv = len(m.group(1))
+            # 整体降一级：页面本身已经有一个 <h1>（顶栏的目的地名），
+            # route.md 的 `#` 再渲染成 h1 就成了同一篇文档里的第二个一级标题，
+            # 读屏按标题跳转时会看到两个并列的顶层。攻略是页面的一块内容，
+            # 不是另一篇文档，所以它的标题从 h2 起。
+            lv = min(len(m.group(1)) + 1, 6)
             out.append(f"<h{lv}>{inline(m.group(2))}</h{lv}>")
             continue
 

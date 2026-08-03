@@ -263,6 +263,12 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .pitch{color:var(--ink-2);font-size:13.5px;margin:6px 0 0}
 .facts{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--ink-3)}
 .facts span{display:flex;align-items:center;gap:4px;white-space:nowrap}
+/* 票价是唯一可能写成一整段的 fact（「境内自由参拜免费；中心伽蓝 一般 ¥500／
+   宝物馆 ¥500／本坊庭园 ¥300，三处独立收费不通用…」）。跟着别的 fact 一起
+   nowrap 的话，375px 下它有 1129px 宽、卡片只有 335px —— 被 .card 的
+   overflow:hidden 裁掉 70%，而且是在数字中间断，连省略号都没有，
+   读者会以为票价就那么多。它是决策信息，该让它折行而不是藏起来。 */
+.facts .tk{white-space:normal;align-items:flex-start;min-width:0}
 
 .flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
 .flag{
@@ -700,13 +706,16 @@ pre.code{
 
 /* ═══════════════════════════════════════════════ 攻略视图 */
 .guide{max-width:800px;margin:0 auto}
-.guide h1,.guide h2{font-family:var(--serif);font-weight:400;letter-spacing:.2px}
-.guide h1{font-size:29px;margin:34px 0 14px}
-.guide h2{
+/* 攻略正文由 md_to_html 整体降一级输出（见 build.py），所以这里的 h2 是
+   route.md 的 `#`、h3 是 `##`，视觉层级不变，变的只是标签。
+   费用汇总与对照表是页面自己生成的，和 route.md 的 `##` 同级，也用 h3。 */
+.guide h2,.guide h3{font-family:var(--serif);font-weight:400;letter-spacing:.2px}
+.guide h2{font-size:29px;margin:34px 0 14px}
+.guide h3{
   font-size:23px;margin:38px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line);
 }
-.guide h3{font:600 16px/1.4 var(--sans);margin:26px 0 9px}
-.guide h4{font:600 13.5px/1.4 var(--sans);margin:19px 0 7px;color:var(--ink-2)}
+.guide h4{font:600 16px/1.4 var(--sans);margin:26px 0 9px}
+.guide h5{font:600 13.5px/1.4 var(--sans);margin:19px 0 7px;color:var(--ink-2)}
 .guide p{margin:0 0 13px;color:var(--ink-2);font-size:15px;line-height:1.78}
 .guide ul,.guide ol{margin:0 0 15px;padding-left:23px;color:var(--ink-2)}
 .guide li{margin-bottom:6px;line-height:1.72}
@@ -805,6 +814,20 @@ pre.code{
   .thumb{width:100%;height:150px}
   .hint{margin-left:0;text-align:left;max-width:none}
   main{padding-bottom:150px}
+}
+/* ═══════════════════════════════════════════════ 降低动效
+   刻意不写 *{transition:none!important}。这个页面里的过渡大多是状态反馈 ——
+   哪个被选中、哪一天是当前天、拖到哪儿了 —— 一刀切等于把信息也砍掉，
+   前庭敏感的人反而更难用。
+   这里只停「位移和缩放的动画」：状态照旧变，只是瞬间到位不再补间。
+   颜色、背景、透明度的过渡全部保留，它们不产生运动。 */
+@media (prefers-reduced-motion: reduce){
+  /* marker 与侧栏圆点：放大仍然发生（.on/.hi 是「选中了哪个」的唯一视觉线索），
+     去掉的只是放大的过程 */
+  .mk i,.mi .pin{transition:none}
+  /* toast 原来从下方 14px 滑上来。位移去掉，淡入留着 —— 它本来就该有个出现感 */
+  .toast{transform:translate(-50%,0);transition:opacity .22s}
+  .toast.on{transform:translate(-50%,0)}
 }
 @media print{
   .top,.actionbar,.toolbar,.chips,.pick{display:none!important}
@@ -1085,6 +1108,9 @@ function verifyBox(p){
    —— 也就是说 JS 挂了或者 localStorage 不可用，配色照样是对的。
    ═══════════════════════════════════════════════════════════════════ */
 const DARK_MQ = matchMedia("(prefers-color-scheme: dark)");
+/* 每次读 .matches 而不是缓存布尔值：系统里改了「减弱动态效果」应当当场生效，
+   不用重新打开页面。 */
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)");
 const THEMES = ["auto", "light", "dark"];
 const THEME_TXT = { auto:"跟随系统", light:"浅色", dark:"深色" };
 const THEME_ICON = {
@@ -1191,7 +1217,7 @@ function cardHTML(p, children){
         <p class="pitch">${rich(p.pitch)}</p>
         <div class="facts">
           <span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
-          <span>◎ ${esc(p.ticket)}</span>
+          <span class="tk">◎ ${esc(p.ticket)}</span>
           <span>${p.indoor ? "▢ 室内" : "△ 户外"}</span>
           ${p.night ? "<span>☾ 适合夜间</span>" : ""}
           <span>${esc(CATMAP[p.category] || p.category)}</span>
@@ -2773,7 +2799,8 @@ const MAP = (() => {
     if(typeof Sortable === "undefined") return;   // 没注入库时只剩 ↑↓ 按钮，功能不缺
 
     const common = {
-      animation: 130,
+      // 拖拽的补间是「这一项挪到了那儿」的解释，但它本身就是位移动画
+      animation: REDUCED.matches ? 0 : 130,
       // 卡片同时要能点击（弹详情/归入），阈值太小会把点击误判成拖拽
       fallbackTolerance: 4,
       delayOnTouchOnly: true, delay: 140,
@@ -3013,12 +3040,16 @@ const MAP = (() => {
     const p = PLACES.find(x => x.id === id);
     if(!p || !geo(p)) return;
     if(!fromMap && st.map){
-      if(st.engine === "maplibre") st.map.flyTo({ center:[p.coord.lon, p.coord.lat], zoom:Math.max(st.map.getZoom(), 14), duration:620 });
+      // 定位仍然发生，只是不再飞过去 —— 「地图跳到了哪」这件事本身是必要的反馈
+      if(st.engine === "maplibre"){
+        const to = { center:[p.coord.lon, p.coord.lat], zoom:Math.max(st.map.getZoom(), 14) };
+        REDUCED.matches ? st.map.jumpTo(to) : st.map.flyTo({ ...to, duration:620 });
+      }
       if(st.engine === "leaflet")  st.map.setView([p.coord.lat, p.coord.lon], Math.max(st.map.getZoom(), 15));
     }
     refresh();
     const item = document.querySelector(`.mi[data-card="${CSS.escape(id)}"]`);
-    if(item && fromMap) item.scrollIntoView({ block:"nearest", behavior:"smooth" });
+    if(item && fromMap) item.scrollIntoView({ block:"nearest", behavior:REDUCED.matches ? "auto" : "smooth" });
   }
 
   /* ---------- 静态兜底 ---------- */
@@ -3634,7 +3665,7 @@ const GUIDE = (() => {
     }).join("");
     const all = groups.flatMap(([, l]) => l);
     const cur = /[¥￥]|日元|円/.test(all.map(p => p.ticket).join("")) ? "¥" : "";
-    return `<h2>费用汇总</h2>
+    return `<h3>费用汇总</h3>
       <div class="sum">
         <div class="sum-h">门票与入场费<span>${byDay ? `已排进日程的 ${n} 个地点` : `${n} 个「想去」的地点`}</span></div>
         ${html}
@@ -3711,7 +3742,7 @@ const GUIDE = (() => {
       </div>`;
     }
 
-    return `<h2>全部景点对照表</h2>
+    return `<h3>全部景点对照表</h3>
       <p>${days.length ? "上半部分是你排好的每天行程，下半部分是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。"
                        : "包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。"}</p>
       ${html}`;
@@ -3865,8 +3896,15 @@ function boot(){
   layoutMap();
 }
 
-// 页头高度随宽度变（副标题折行），操作栏高度随「手动保存…」展开变，两者都得重量
-addEventListener("resize", layoutMap);
+/* 页头高度随宽度变（副标题折行），操作栏高度随「手动保存…」展开变，两者都得重量。
+   layoutMap 先读 offsetHeight 再写 CSS 变量，拖拽窗口时每个 resize 事件都强制
+   一次同步布局 —— 合并到下一帧，一帧最多算一次。 */
+let layoutRaf = 0;
+function scheduleLayout(){
+  if(layoutRaf) return;
+  layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; layoutMap(); });
+}
+addEventListener("resize", scheduleLayout);
 NARROW.addEventListener?.("change", () => { layoutMapActions(); layoutMap(); });
 
 /* ─────────────────────────────────────────────── 事件 */
