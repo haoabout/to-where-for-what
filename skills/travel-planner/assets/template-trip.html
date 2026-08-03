@@ -276,7 +276,77 @@ pre.code{
 }
 
 /* ═══════════════════════════════════════════════ 地图视图 */
+/* 地图视图突破正文的 1180px 上限。那个宽度是为行长可读性设的——
+   清单和攻略是要逐行读的文字，太宽反而难读；地图不是文字，越宽越好用。
+   排程模式加了一栏之后尤其明显：不放宽的话地图会从 794px 掉到 668px。
+   用 margin-left 负值撑开而不是 transform，后者会改变绝对定位的包含块。 */
+#view-map{
+  --vw:min(1640px, calc(100vw - 40px));
+  width:var(--vw);margin-left:calc(50% - var(--vw) / 2);
+}
+
+/* 筛选模式两栏，排程模式三栏：清单 | 日程 | 地图。
+   清单与日程相邻，从池子拖进某一天是一次约 260px 的横移；
+   把地图夹在中间的话这个距离会变成约 1160px，鼠标要划过整张地图，触屏基本没法用。 */
 .map-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;height:calc(100vh - 250px);min-height:460px}
+.map-wrap.sched{grid-template-columns:232px 212px 1fr}
+
+.day-col{
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;
+}
+.day-col .dc-head{
+  position:sticky;top:0;z-index:2;background:var(--paper-2);
+  padding:7px 10px;border-bottom:1px solid var(--line);
+  font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
+  display:flex;align-items:center;gap:6px;
+}
+.day-col .dc-head .sp{margin-left:auto;font-weight:400;letter-spacing:0}
+.lnk{background:none;border:0;color:var(--ink-3);font-size:11px;padding:2px 4px;border-radius:4px;letter-spacing:0}
+.lnk:hover{background:var(--line);color:var(--ink-2)}
+
+/* 日期胶囊：长线行程用，平铺到第三天就开始无限滚动 */
+.caps{display:flex;flex-wrap:wrap;gap:4px;padding:8px 9px;border-bottom:1px solid var(--line)}
+.caps button{
+  border:1px solid var(--line);background:var(--paper-2);color:var(--ink-2);
+  padding:3px 8px;border-radius:6px;font:600 11.5px/1.5 var(--mono);
+  display:flex;align-items:center;gap:4px;
+}
+/* 计数要有自己的底色，否则「D1」加「7」会被连读成「第 17 天」 */
+.caps button .c{
+  font-weight:600;font-size:9.5px;line-height:13px;min-width:13px;text-align:center;
+  padding:0 3px;border-radius:7px;background:var(--line);color:var(--ink-3);
+}
+.caps button[aria-pressed=true]{color:var(--paper)}
+.caps button[aria-pressed=true] .c{background:rgba(255,255,255,.28);color:#fff}
+
+/* 每一天：标题栏 + 条目。点标题栏把它设为「当前天」 */
+.dbox{border-bottom:1px solid var(--line)}
+.dbox:last-child{border-bottom:0}
+.dhead{
+  display:flex;align-items:center;gap:7px;padding:8px 10px;cursor:pointer;
+  background:var(--paper-2);transition:background .12s;
+}
+.dhead:hover{background:var(--line)}
+.dbox.cur .dhead{background:color-mix(in srgb,var(--ink) 12%,var(--paper-2))}
+.dhead .swatch{width:9px;height:9px;border-radius:50%;flex:none}
+.dhead b{font:600 12.5px/1 var(--sans);color:var(--ink)}
+.dhead s{margin-left:auto;text-decoration:none;font-size:10.5px;color:var(--ink-3)}
+.dlist{padding:3px 0;min-height:34px}
+
+/* 日程栏的条目只有一行：序号 + 名称。四五个点就要占满这一列，不能再多 */
+.ditem{
+  display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;
+  font-size:12.5px;color:var(--ink-2);transition:background .12s;
+}
+.ditem:hover,.ditem.on{background:var(--paper-2)}
+.ditem .n{
+  flex:none;min-width:17px;height:17px;border-radius:50%;display:grid;place-items:center;
+  font:700 9.5px/1 var(--mono);color:#fff;
+}
+.ditem .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ditem.lod .nm{color:var(--ink-3)}
+.dempty{padding:9px 11px;font-size:11.5px;color:var(--ink-3)}
 .map-side{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
   overflow-y:auto;overscroll-behavior:contain;
@@ -399,10 +469,19 @@ pre.code{
    这是唯一该给 .mk 设 position/transform 的地方 */
 .static-map .mk{position:absolute;transform:translate(-50%,-50%)}
 
+/* 窄屏降级。没做抽屉：抽屉会把两栏藏进隐藏状态，而排程时你恰恰要同时看见
+   池子、日程和地图。改成往下堆，地图始终留足高度。 */
+@media (max-width:1180px){
+  .map-wrap.sched{grid-template-columns:1fr 1fr;grid-template-rows:minmax(180px,34vh) 1fr;height:auto}
+  .map-wrap.sched .map-main{grid-column:1 / -1;height:min(56vh,540px)}
+}
 @media (max-width:860px){
   .map-wrap{grid-template-columns:1fr;height:auto}
+  .map-wrap.sched{grid-template-columns:1fr;grid-template-rows:none}
   .map-side{max-height:230px}
+  .day-col{max-height:260px}
   .map-main{height:440px}
+  .map-wrap.sched .map-main{height:440px}
 }
 
 /* ═══════════════════════════════════════════════ 攻略视图 */
@@ -559,12 +638,17 @@ pre.code{
         <button class="mfil" data-c="none"  aria-pressed="true">未表态</button>
         <button class="mfil" data-c="no"    aria-pressed="true">不想去</button>
       </div>
+      <div class="seg" role="group" aria-label="工作模式">
+        <button class="mode" data-mode="filter" aria-pressed="true">筛选</button>
+        <button class="mode" data-mode="sched"  aria-pressed="false">排程</button>
+      </div>
       <button class="btn" id="exp-csv">导出 CSV</button>
       <button class="btn" id="exp-kml">导出 KML</button>
       <div class="hint" style="margin-left:auto">CSV 可直接导入 Google My Maps</div>
     </div>
-    <div class="map-wrap">
+    <div class="map-wrap" id="map-wrap">
       <div class="map-side" id="map-list"></div>
+      <div class="day-col" id="day-col" hidden></div>
       <div class="map-main">
         <div id="map-canvas"></div>
         <div class="map-bar">
@@ -1250,7 +1334,8 @@ const MAP = (() => {
   }
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
-               base:"gb", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]) };
+               base:"gb", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
+               mode:"filter", curDay:null, flat:null };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
@@ -1664,6 +1749,7 @@ const MAP = (() => {
   }
 
   function refresh(){
+    if(st.mode === "sched") renderDays();
     if(!st.ready) return;
     pts().forEach(p => {
       const m = st.markers.get(p.id);
@@ -1695,6 +1781,84 @@ const MAP = (() => {
     if(isLodging(p)) return "🏨";
     const seq = firstSeq(p.id);
     return seq == null ? "" : String(seq);
+  }
+
+  /* ═══════════════ 日程栏 ═══════════════
+     天数少就平铺（可以直接往任意一天拖），多了就切日期胶囊只展开当前天。
+     阈值取 5：日程栏高约 600–700px，一天四五个点占 200–260px，
+     平铺到第三天就开始滚动，超过五天会退化成无限滚动列表。 */
+  const FLAT_MAX = 5;
+  const WD = ["日", "一", "二", "三", "四", "五", "六"];
+
+  const dayLabel = d => d.label || (d.n === 0 ? "第 0 天" : `第 ${d.n} 天`);
+  // 住宿不计入「几个景点」——每天首尾都有它，算进去这个数字就没意义了
+  const dayCount = d => (d.places || []).filter(e => !isLodging(BY_ID[e.id])).length;
+
+  function dayDateTxt(d){
+    if(!d.date) return "";
+    const t = new Date(d.date + "T12:00:00");   // 正午构造，避开时区把日期推前一天
+    return isNaN(t) ? d.date : `${d.date.slice(5)}(周${WD[t.getDay()]})`;
+  }
+
+  function dayBox(d){
+    let seq = 0;
+    const rows = (d.places || []).map((e, i) => {
+      const p = BY_ID[e && e.id];
+      if(!p) return "";
+      const lod = isLodging(p);
+      if(!lod) seq++;
+      return `<div class="ditem${lod ? " lod" : ""}" data-card="${esc(p.id)}" data-day="${d.n}" data-i="${i}">
+          <span class="n" style="background:${lod ? "#4A4A4A" : dayColor(d.n)}">${lod ? "🏨" : seq}</span>
+          <span class="nm" title="${esc(p.name)}">${esc(p.name)}</span>
+        </div>`;
+    }).join("");
+    return `<div class="dbox${d.n === st.curDay ? " cur" : ""}" data-day="${d.n}">
+        <div class="dhead">
+          <span class="swatch" style="background:${dayColor(d.n)}"></span>
+          <b>${esc(dayLabel(d))}</b>
+          <s>${esc(dayDateTxt(d))}${d.date ? " · " : ""}${dayCount(d)} 个</s>
+        </div>
+        <div class="dlist">${rows || `<div class="dempty">还没放地点</div>`}</div>
+      </div>`;
+  }
+
+  function renderDays(){
+    const col = $("#day-col");
+    if(!ITIN.length){
+      col.innerHTML = `<div class="dc-head">日程</div>
+        <div class="dempty">还没有分天。告诉 AI「按 ${TRIP.days || "N"} 天建日程」即可。</div>`;
+      return;
+    }
+    if(st.curDay == null || !ITIN.some(d => d.n === st.curDay)) st.curDay = ITIN[0].n;
+    if(st.flat == null) st.flat = ITIN.length <= FLAT_MAX;
+
+    const caps = st.flat ? "" : `<div class="caps">` + ITIN.map(d => {
+      const cur = d.n === st.curDay;
+      return `<button data-day="${d.n}" aria-pressed="${cur}"
+        style="${cur ? `background:${dayColor(d.n)};border-color:${dayColor(d.n)}` : ""}"
+        >D${d.n}<span class="c">${dayCount(d)}</span></button>`;
+    }).join("") + `</div>`;
+
+    col.innerHTML =
+      `<div class="dc-head">日程<span class="sp">${ITIN.length} 天</span>
+         <button id="day-mode" class="lnk">${st.flat ? "收起" : "平铺"}</button></div>`
+      + caps
+      + ITIN.filter(d => st.flat || d.n === st.curDay).map(dayBox).join("");
+  }
+
+  function setCurDay(n){
+    st.curDay = n;
+    renderDays();
+  }
+
+  function setMode(m){
+    st.mode = m;
+    $("#map-wrap").classList.toggle("sched", m === "sched");
+    $("#day-col").hidden = m !== "sched";
+    $$(".mode").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+    if(m === "sched") renderDays();
+    // 栅格变了，地图容器宽度跟着变，必须让 MapLibre 重新量一次
+    if(st.map && st.map.resize) setTimeout(() => st.map.resize(), 60);
   }
 
   /* ---------- 侧栏 ---------- */
@@ -2101,6 +2265,14 @@ ${selected().map(p => `<Placemark>
       if(hint) hint.textContent = open ? "点击收起" : "点击展开线路名";
       return;
     }
+    const md = e.target.closest(".mode");
+    if(md){ setMode(md.dataset.mode); return; }
+    const dm = e.target.closest("#day-mode");
+    if(dm){ st.flat = !st.flat; renderDays(); return; }
+    const cap = e.target.closest(".caps button");
+    if(cap){ setCurDay(+cap.dataset.day); return; }
+    const dh = e.target.closest(".dhead");
+    if(dh){ setCurDay(+dh.parentElement.dataset.day); return; }
     const mf = e.target.closest(".mfil");
     if(mf){
       const on = mf.getAttribute("aria-pressed") === "true";
