@@ -234,6 +234,8 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
 .btn.primary:hover{opacity:.87;background:var(--ink)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .hint{font-size:12px;color:var(--ink-3);margin-left:auto;text-align:right;max-width:52ch}
+/* 自动保存失败是用户唯一会丢数据的时刻，不能和普通说明长得一样 */
+.hint.bad{color:var(--danger);font-weight:500}
 
 /* ═══════════════════════════════════════════════ 弹窗 */
 dialog{
@@ -1084,6 +1086,7 @@ function setChoice(id, v, reason){
   p.choice = (p.choice === v) ? null : v;
   p.choice_reason = (p.choice === "no") ? (reason || p.choice_reason || "") : "";
   saveLocal();
+  scheduleAuto();
   render();
 }
 
@@ -1231,6 +1234,23 @@ function payload(){
 /* 短码是最后一条兜底路（Firefox/Safari 三条写文件的路都断时）。
    日程必须一起编进来——只回传选择的话，用户排的天会静默消失，
    而且贴回去的人和读它的 AI 都不会发现少了东西。 */
+/* 回传给本地服务的只有页面拥有的三个字段，不是整份文档。
+
+   一来页面内存里那份 DATA 是构建那一刻的快照，整份写回去会把 AI 之后
+   补的坐标、配图统统抹掉（服务端也做了合并，这里是第二道）。
+   二来 sendBeacon 的上限是 64KB，整份 122KB 会**返回 false 而不是抛错**——
+   实测过，关页那一刻的改动就那样静默没了。压到 ~2KB 才发得出去。
+   三来自动保存每几秒一次，没必要每次搬 122KB。
+
+   choice 为 null 的也要带上：清空表态同样是一次改动，漏掉就回退不了。 */
+function patch(){
+  return JSON.stringify({
+    patch: 1,
+    choices: PLACES.map(p => [p.id, p.choice || null, p.choice_reason || ""]),
+    itinerary: DATA.itinerary || [],
+  });
+}
+
 function shortCode(){
   const g = v => PLACES.filter(p => p.choice === v);
   const L = [`#travel-planner v1 · ${TRIP.destination || ""} · ${isoLocal(new Date())}`];
@@ -1250,6 +1270,71 @@ function shortCode(){
   return L.join("\n");
 }
 
+/* ── 自动保存 ─────────────────────────────────────────────────
+   页面是编辑器，不是表单：改了就落盘，不该让用户记得去点一个按钮。
+   只在本地服务下开——file:// 的文件选择框必须由用户手势触发，
+   拿不到 handle 就没法程序化写，那种情况下按钮仍是唯一的路。
+
+   两个节奏拆开：places.json 3 秒去抖（AI 读的真相，越新越好，125KB），
+   trip.html 由服务端延到 12 秒空闲才重建（只服务于双击/分享，晚点无所谓）。 */
+const SERVED = location.protocol === "http:" || location.protocol === "https:";
+const SAVE_LABEL = SERVED ? "立即保存" : "保存选择和日程";
+let autoTimer = null, autoBusy = false, autoDirty = false;
+
+function scheduleAuto(){
+  if(!SERVED || STANDALONE) return;
+  autoDirty = true;
+  setSaveState("dirty");
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(runAuto, 3000);
+}
+
+async function runAuto(){
+  if(!autoDirty || autoBusy) return;
+  autoBusy = true;
+  setSaveState("saving");
+  try{
+    const r = await saveViaServer(false);
+    if(r){ autoDirty = false; markSaved(); setSaveState("ok"); }
+    else  { setSaveState("err"); }
+  }finally{ autoBusy = false; }
+}
+
+/* 关标签页那一刻还没到 3 秒去抖的，fetch 会被连同页面一起掐掉。
+   sendBeacon 是唯一能在卸载时可靠发出的请求。 */
+function flushOnExit(){
+  if(!SERVED || STANDALONE || !autoDirty) return;
+  try{
+    // 返回 false 就是没发出去（超限/被拦），那时绝不能把 dirty 清掉
+    if(navigator.sendBeacon("/__save__?now=1",
+        new Blob([patch()], { type:"application/json" }))) autoDirty = false;
+  }catch(e){ /* 发不出去也只能认了，localStorage 里还有一份 */ }
+}
+addEventListener("pagehide", flushOnExit);
+// iOS Safari 上 pagehide 不总是触发，切到后台时补一次
+addEventListener("visibilitychange", () => { if(document.hidden) flushOnExit(); });
+
+/* 自动保存失败必须看得见：服务被停掉、端口被占，
+   否则用户会以为一直在存，其实改动只躺在 localStorage 里。 */
+function setSaveState(kind){
+  const el = $("#hint");
+  if(!el) return;
+  if(!SERVED){
+    el.className = "hint";
+    el.textContent = "当前是本地文件方式打开，「保存」会尝试文件选择，不行则自动降级为下载。"
+      + (BUILT_AT ? ` 页面数据生成于 ${BUILT_AT}。` : "");
+    return;
+  }
+  const t = new Date().toTimeString().slice(0, 5);
+  el.className = "hint" + (kind === "err" ? " bad" : "");
+  el.textContent =
+    kind === "saving" ? "保存中…" :
+    kind === "dirty"  ? "有未保存的改动…" :
+    kind === "err"    ? `⚠ 自动保存失败（本地服务没响应）。改动只在这个浏览器里，点「${SAVE_LABEL}」重试` :
+    kind === "ok"     ? `已自动保存到 places.json · ${t}` :
+                        "改动会自动写回 places.json，不用手动保存。";
+}
+
 /* 保存有三条路，按可靠性排序，任何一条失败都自动往下走——
    绝不能让用户点了保存却卡在一个报错提示上，筛了半天的结果没法带走。
 
@@ -1257,11 +1342,11 @@ function shortCode(){
      · showSaveFilePicker 函数存在，但 createWritable 抛 NotAllowedError
      · navigator.clipboard.writeText 抛 NotAllowedError
    也就是说「函数存在」完全不能证明「能用」，必须真的试一次才知道。 */
-async function saveViaServer(){
-  if(location.protocol !== "http:" && location.protocol !== "https:") return null;
+async function saveViaServer(now){
+  if(!SERVED) return null;
   try{
-    const r = await fetch("/__save__", {
-      method:"POST", headers:{ "Content-Type":"application/json" }, body:payload(),
+    const r = await fetch("/__save__" + (now ? "?now=1" : ""), {
+      method:"POST", headers:{ "Content-Type":"application/json" }, body:patch(),
     });
     const j = await r.json().catch(() => ({}));
     return j && j.ok ? j : null;
@@ -1312,11 +1397,14 @@ function savedMsg(where){
 
 async function doSave(){
   const btn = $("#save");
+  clearTimeout(autoTimer);            // 手动保存后不该再来一次自动的
   btn.disabled = true; btn.textContent = "保存中…";
   try{
-    const srv = await saveViaServer();
+    const srv = await saveViaServer(true);
     if(srv){
+      autoDirty = false;
       markSaved();
+      setSaveState("ok");
       // 页面本身是构建产物：不重新 build，双击打开或分享出去的 trip.html
       // 还停在上一次构建的状态，和刚写回的 places.json 对不上。
       toast(savedMsg("places.json") + (srv.rebuilt ? "。页面也已同步重建" : ""));
@@ -1330,9 +1418,10 @@ async function doSave(){
       return;
     }
     // 两条直写路都不通——直接下载，并说清楚为什么
+    if(SERVED) setSaveState("err");
     download(true);
   }finally{
-    btn.disabled = false; btn.textContent = "保存选择和日程";
+    btn.disabled = false; btn.textContent = SAVE_LABEL;
   }
 }
 
@@ -2307,6 +2396,7 @@ const MAP = (() => {
     refresh();        // 重画 marker + 清单栏 + 日程栏
     refreshRoute();   // 顺序变了，地图上的连线也要跟着变
     saveLocal();
+    scheduleAuto();   // 3 秒没有新动作就写回 places.json
   }
 
   const curDayObj = () => ITIN.find(d => d.n === st.curDay) || null;
@@ -3099,12 +3189,11 @@ function boot(){
 
   // 不再靠「函数是否存在」下结论——实测函数存在也可能写不了。
   // 只说会怎么尝试，真实结果等点击时告诉用户。
-  // 页面数据的时间戳要露出来：这个文件分享出去后，对方看到的就是这一刻的
-  // 快照，而不是你现在浏览器里的状态——不写明白，双方都会以为看到的是同一份。
-  $("#hint").innerHTML = (location.protocol.startsWith("http")
-    ? "「保存」优先写回本地服务；服务不可用时自动降级为文件选择或下载。"
-    : "当前是本地文件方式打开，「保存」会尝试文件选择，不行则自动降级为下载。")
-    + (BUILT_AT ? ` 页面数据生成于 ${esc(BUILT_AT)}。` : "");
+  // 本地服务下走自动保存，状态实时显示在这里；file:// 下说明按钮会怎么试。
+  // 页面数据的时间戳也要露出来：这个文件分享出去后，对方看到的就是那一刻的
+  // 快照，而不是你现在浏览器里的状态——不写明白，双方都会以为看的是同一份。
+  setSaveState("init");
+  $("#save").textContent = SAVE_LABEL;
 
   renderChips();
   render();

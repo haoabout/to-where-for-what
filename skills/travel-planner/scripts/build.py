@@ -239,20 +239,23 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 # ------------------------------------------------------------------ serve
 
 SERVER_SRC = r'''
-import json, subprocess, sys
+import json, os, subprocess, sys, threading, time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(sys.argv[2]).resolve()
 BUILD_PY = sys.argv[3]
+TARGET = ROOT / "places.json"
+LOCK = threading.Lock()
+_timer = None
 
 
 def rebuild():
-    """写回 places.json 后立刻重建 trip.html。
+    """写回 places.json 后重建 trip.html。
 
-    不重建的话页面就和数据脱节了：用户点完保存，磁盘上的 trip.html 还停在
-    上一次构建的状态。之后双击打开、或者把这个 html 分享给同行的人，
-    看到的都是保存**之前**的选择和日程——而且没有任何迹象表明它是旧的。
+    不重建的话页面就和数据脱节了：磁盘上的 trip.html 还停在上一次构建的状态，
+    之后双击打开、或者把这个 html 分享给同行的人，看到的都是保存**之前**的
+    选择和日程——而且没有任何迹象表明它是旧的。
 
     重建失败不能让保存失败：places.json 已经落盘了，那才是真相。
     """
@@ -263,6 +266,80 @@ def rebuild():
         return r.returncode == 0
     except Exception:
         return False
+
+
+def rebuild_soon(delay=12.0):
+    """自动保存每几秒就来一次，没必要每次都重建 360KB 的页面。
+
+    trip.html 只服务于「双击打开 / 分享给别人」，晚十几秒毫无影响；
+    places.json 才是 AI 读的那份，那个每次都立刻写。
+    """
+    global _timer
+    if _timer is not None:
+        _timer.cancel()
+    _timer = threading.Timer(delay, rebuild)
+    _timer.daemon = True
+    _timer.start()
+
+
+def merge(incoming):
+    """页面只回传 choice / choice_reason / itinerary，其余一律以磁盘为准。
+
+    整份覆盖是不行的：页面内存里那份 DATA 是**构建那一刻**的快照。
+    用户开着页面时 AI 跑一次 enrich.py 补了坐标或配图，页面一保存就把它抹掉，
+    而且两边都不会察觉。实测确认过这个行为，所以页面发的是补丁不是全文。
+    """
+    base = json.loads(TARGET.read_text(encoding="utf-8"))
+    if not isinstance(base, dict) or not isinstance(base.get("places"), list):
+        raise ValueError("磁盘上的 places.json 结构不对，拒绝在上面打补丁")
+
+    ch = {c[0]: c for c in incoming.get("choices") or []
+          if isinstance(c, list) and c and isinstance(c[0], str)}
+    for p in base["places"]:
+        c = ch.get(p.get("id"))
+        if c is None:
+            continue             # AI 新加的点，页面还不知道它 —— 保持原样
+        p["choice"] = c[1] if len(c) > 1 else None
+        p["choice_reason"] = (c[2] if len(c) > 2 else "") or ""
+
+    if "itinerary" in incoming:
+        # 日程里可能留着 AI 已经删掉的点，带着写回去会让校验器报 P0
+        alive = {p.get("id") for p in base["places"]}
+        days = []
+        for d in incoming.get("itinerary") or []:
+            if not isinstance(d, dict):
+                continue
+            d = dict(d)
+            d["places"] = [e for e in (d.get("places") or [])
+                           if isinstance(e, dict) and e.get("id") in alive]
+            days.append(d)
+        base["itinerary"] = days
+    return base
+
+
+def write_atomic(text):
+    """写临时文件再 rename。
+
+    自动保存把「写到一半被打断」的暴露窗口放大了几千倍，直接 write_text
+    留下的会是半个 JSON——那时 places.json 既读不了也没有备份。
+    Windows 上杀毒软件扫描会短暂锁住文件，所以要重试。
+    """
+    tmp = TARGET.with_name(TARGET.name + ".tmp")
+    err = None
+    for _ in range(4):
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            os.replace(tmp, TARGET)
+            return
+        except OSError as e:
+            err = e
+            time.sleep(0.15)
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    raise err
+
 
 class H(SimpleHTTPRequestHandler):
     """静态服务 + 一个 /__save__ 写回端点。
@@ -278,24 +355,26 @@ class H(SimpleHTTPRequestHandler):
         pass
 
     def do_POST(self):
-        if self.path.rstrip("/") != "/__save__":
+        path, _, query = self.path.partition("?")
+        if path.rstrip("/") != "/__save__":
             self.send_error(404)
             return
+        now = "now=1" in query          # 手动保存：立刻重建，别让用户等 12 秒
         try:
             n = int(self.headers.get("Content-Length") or 0)
-            if n <= 0 or n > 20 * 1024 * 1024:
+            if n <= 0 or n > 8 * 1024 * 1024:
                 raise ValueError("请求体大小异常")
             doc = json.loads(self.rfile.read(n).decode("utf-8"))
-            if not isinstance(doc, dict) or "places" not in doc:
-                raise ValueError("不是合法的 places.json 结构")
-            # 只允许写这一个文件名，且必须落在 ROOT 内——不接受来自页面的任意路径
-            target = (ROOT / "places.json").resolve()
-            if ROOT not in target.parents and target.parent != ROOT:
-                raise ValueError("路径越界")
-            target.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
-            n_choice = sum(1 for p in doc["places"] if p.get("choice"))
-            body = json.dumps({"ok": True, "path": str(target), "chosen": n_choice,
-                               "rebuilt": rebuild()}, ensure_ascii=False).encode()
+            if not isinstance(doc, dict) or not doc.get("patch"):
+                raise ValueError("不是合法的补丁结构")
+            # 写的永远是 ROOT 下这一个文件名，不接受来自页面的任意路径
+            with LOCK:
+                out = merge(doc)
+                write_atomic(json.dumps(out, ensure_ascii=False, indent=2))
+            rebuilt = rebuild() if now else (rebuild_soon() or False)
+            n_choice = sum(1 for p in out["places"] if p.get("choice"))
+            body = json.dumps({"ok": True, "path": str(TARGET), "chosen": n_choice,
+                               "rebuilt": bool(rebuilt)}, ensure_ascii=False).encode()
             self.send_response(200)
         except Exception as e:
             body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode()
