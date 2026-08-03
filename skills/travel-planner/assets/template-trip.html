@@ -257,6 +257,8 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .t-S{background:var(--accent);color:var(--on-accent)} .t-A{background:var(--accent-soft);color:var(--accent)}
 .t-B{background:var(--paper-2);color:var(--ink-2);border-color:var(--line)}
 .t-C{background:transparent;color:var(--ink-3);border-color:var(--line)}
+/* 用户手动添加、还没被 AI 研究过的粗胚。虚线边框呼应地图 marker 的同款记号 */
+.t-stub{background:transparent;color:var(--ink-3);border:1px dashed var(--line-2);font-weight:600}
 .stars{color:var(--accent);font-size:12px;letter-spacing:1px;align-self:center}
 .stars i{color:var(--line-2);font-style:normal}
 
@@ -618,6 +620,45 @@ pre.code{
 .mgroup button:last-child{border-right:0}
 .mgroup button[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600}
 .mgroup button:disabled{opacity:.38;cursor:not-allowed}
+
+/* 地点搜索。输入框和「搜索」按钮共用一个 mgroup 胶囊，风格与底图切换一致 */
+.msearch input{
+  background:none;border:0;border-right:1px solid var(--line);
+  padding:6px 11px;font-size:12px;color:var(--ink);width:168px;min-height:29px;
+}
+.msearch input::placeholder{color:var(--ink-3)}
+.msearch input:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px 0 0 8px}
+/* 结果面板压在图例的位置上没关系——两者不会同时出现：面板是搜索后的瞬时态，
+   点结果或点地图别处就收起 */
+#msq-panel{
+  position:absolute;top:52px;left:10px;z-index:22;width:min(320px,calc(100% - 20px));
+  background:color-mix(in srgb,var(--card) 96%,transparent);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);
+  overflow:hidden auto;max-height:min(46vh,340px);
+}
+#msq-panel .sr{
+  display:block;width:100%;text-align:left;background:none;border:0;
+  border-bottom:1px solid var(--line);padding:8px 11px;cursor:pointer;
+}
+#msq-panel .sr:last-child{border-bottom:0}
+#msq-panel .sr:hover,#msq-panel .sr:focus-visible{background:var(--paper-2)}
+#msq-panel .sr b{display:block;font:600 12.5px/1.4 var(--sans);color:var(--ink)}
+#msq-panel .sr span{
+  display:block;font-size:11px;color:var(--ink-3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#msq-panel .sr-note{padding:9px 11px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
+
+/* 选中搜索结果后的确认卡片：贴地图左下（map-note 的位置，同样不会同时出现） */
+#cand-card{
+  position:absolute;left:10px;bottom:10px;z-index:22;max-width:320px;
+  background:color-mix(in srgb,var(--card) 96%,transparent);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:8px;padding:11px 13px;box-shadow:var(--shadow);
+}
+#cand-card b{font:600 13.5px/1.4 var(--sans);color:var(--ink)}
+#cand-card .addr{font-size:11px;color:var(--ink-3);margin:3px 0 9px;line-height:1.5}
+#cand-card .row{display:flex;gap:6px;flex-wrap:wrap}
+#cand-card .hint{margin-top:7px;font-size:10.5px;color:var(--ink-3)}
 /* 图例默认只显示线号色块（两行就够），点一下才展开全名。
    12 条线的完整列表要 210×340px，占掉地图 14% 的面积，而且正好压在
    左上角的点位上 —— 常驻显示是不合适的。 */
@@ -677,6 +718,15 @@ pre.code{
   transition:transform .14s;
 }
 .mk:hover i,.mk.on i,.mk.hi i{transform:scale(1.28)}
+/* 粗胚点（origin=user 且未补全）：虚线边框是「这里的信息还没研究过」的记号。
+   颜色语义（描边=选择、填充=天）与普通点完全一致，只多这一层。 */
+.mk.stub i{border:1.5px dashed color-mix(in srgb,var(--ink) 55%,var(--paper))}
+/* 搜索候选 pin：还不是数据里的点，样式独立于 styleDot 的双层编码 */
+.mk.cand i{
+  width:19px;height:19px;border-radius:50%;
+  background:var(--accent);border:2px dashed #fff;
+  box-shadow:0 0 0 2.5px var(--accent),0 1px 6px rgba(0,0,0,.4);
+}
 .mk.on::after,.mk.hi::after{
   content:attr(data-nm);position:absolute;left:15px;top:-7px;white-space:nowrap;
   background:var(--ink);color:var(--paper);font-size:11px;padding:3px 8px;border-radius:5px;
@@ -896,11 +946,17 @@ pre.code{
       <div class="map-main">
         <div id="map-canvas"></div>
         <div class="map-bar">
+          <div class="mgroup msearch">
+            <input id="msq" type="search" placeholder="搜索想去的地点…" autocomplete="off"
+              aria-label="搜索地点并添加到行程" enterkeyhint="search">
+            <button id="msq-go">搜索</button>
+          </div>
           <div class="mgroup" id="basemaps"></div>
           <div class="mgroup" id="transit-group" hidden>
             <button id="transit-btn" aria-pressed="false">地铁</button>
           </div>
         </div>
+        <div id="msq-panel" hidden></div>
         <div class="legend" id="map-legend" hidden></div>
         <div class="map-note" id="map-note"></div>
         <div class="attrib" id="attrib"></div>
@@ -965,6 +1021,9 @@ const CATMAP = Object.fromEntries(CATS.map(c => [c.id, c.label || c.id]));
 const ITIN = DATA.itinerary || [];
 const BY_ID = Object.fromEntries(PLACES.map(p => [p.id, p]));
 const isLodging = p => !!p && p.kind === "lodging";
+/* 粗胚：用户在地图上搜索添加、AI 还没研究过的点。tier 是研究管线的产物，
+   有没有它就是「补全了没有」的判据（validate.py 用同一条）。 */
+const isStubP = p => !!p && p.origin === "user" && !p.tier;
 
 /* 必须避开绿（想去）/琥珀（待定）/灰（不想去），否则填充与描边同色系。
    亮度还要同时满足三件事，窗口很窄（相对亮度 L 落在 0.150–0.178）：
@@ -1203,24 +1262,31 @@ function pickHTML(p){
 
 function cardHTML(p, children){
   const fl = flags(p);
+  const stub = isStubP(p);
   const loc = p.name_local && p.name_local !== p.name ? `<span class="loc"${langAttr}>${esc(p.name_local)}</span>` : "";
   const unv = p.verify && p.verify.state && p.verify.state !== "verified" ? ` data-verify="${esc(p.verify.state)}"` : "";
+  // 粗胚没有 tier/scale/ticket 这些研究型字段。不能走通用模板——
+  // esc(undefined) 是空串，会剩下一排「◷ 」「◎ 」的空壳图标。
+  const facts = stub
+    ? `<span>手动添加 · 详情待 AI 补全</span>${p.area ? `<span>${esc(p.area)}</span>` : ""}`
+    : `<span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
+          <span class="tk">◎ ${esc(p.ticket)}</span>
+          <span>${p.indoor ? "▢ 室内" : "△ 户外"}</span>
+          ${p.night ? "<span>☾ 适合夜间</span>" : ""}
+          <span>${esc(CATMAP[p.category] || p.category)}</span>`;
   return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
     <div class="card-in">
       ${thumb(p)}
       <div class="body">
         <div class="hd">
           <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
-          <span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
-          <span class="stars" title="出片指数 ${p.photo_index||0}/5">${stars(p.photo_index)}</span>
+          ${stub ? `<span class="tier t-stub">待补全</span>`
+                 : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
+          <span class="stars" title="出片指数 ${p.photo_index||0}/5">${stars(p.photo_index)}</span>`}
         </div>
-        <p class="pitch">${rich(p.pitch)}</p>
+        ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
         <div class="facts">
-          <span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
-          <span class="tk">◎ ${esc(p.ticket)}</span>
-          <span>${p.indoor ? "▢ 室内" : "△ 户外"}</span>
-          ${p.night ? "<span>☾ 适合夜间</span>" : ""}
-          <span>${esc(CATMAP[p.category] || p.category)}</span>
+          ${facts}
         </div>
         ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
         ${verifyBox(p)}
@@ -1279,7 +1345,8 @@ function render(){
 
   const groups = new Map();
   for(const p of tops){
-    const key = ui.group === "area" ? (p.area || "其他") : `${p.tier} 级`;
+    const key = ui.group === "area" ? (p.area || "其他")
+              : p.tier ? `${p.tier} 级` : "手动添加·待补全";
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
@@ -1398,7 +1465,32 @@ function saveLocal(){
     // 排半小时的天，刷新一下没了会很崩溃。连同两个指纹一起存 —— 见 loadItin。
     localStorage.setItem(LS_KEY + ":itin",
       JSON.stringify({ sig: FILE_SIG, savedSig: SAVED_SIG, itinerary: DATA.itinerary || [] }));
+    // 用户搜索添加的粗胚。file:// 下没有写回，这是它们唯一的活路；
+    // 本地服务下磁盘那份才是真相，恢复时按 id 去重（见 loadAdded）。
+    localStorage.setItem(LS_KEY + ":added",
+      JSON.stringify(PLACES.filter(p => p.origin === "user")));
   }catch(e){ /* 隐私模式下 localStorage 不可用，忽略 */ }
+}
+
+/* 恢复用户添加的粗胚。必须在 loadItin 之前跑：日程草稿里可能引用 u- 开头的
+   点，先有点、后有日程，buildSched 才不会把它们当成幽灵条目。
+   文件里已有同 id 的跳过——那是保存/补全过的版本，比浏览器缓存新。 */
+function loadAdded(){
+  try{
+    const raw = localStorage.getItem(LS_KEY + ":added");
+    if(!raw) return 0;
+    let n = 0;
+    for(const s of JSON.parse(raw)){
+      if(!s || typeof s.id !== "string" || !s.id || BY_ID[s.id]) continue;
+      if(!s.coord || typeof s.coord.lon !== "number" || typeof s.coord.lat !== "number") continue;
+      s.origin = "user";
+      PLACES.push(s);
+      if(DATA.places !== PLACES) (DATA.places = DATA.places || []).push(s);
+      BY_ID[s.id] = s;
+      n++;
+    }
+    return n;
+  }catch(e){ return 0; }
 }
 
 /* 草稿和文件谁新？只有一种情况该丢掉草稿：**文件里的日程被别人改了**。
@@ -1473,6 +1565,8 @@ function openDetail(id){
         ${im.credit ? `<div class="credit">${esc(im.credit)}</div>` : ""}` : ""}
       ${fl.length ? `<div class="flags" style="margin-bottom:14px">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
       ${verifyBox(p)}
+      ${isStubP(p) ? `<p>你在地图上手动添加的地点，开放时间、门票等信息还没研究。
+        下次让 AI 继续规划时，它会自动补全这里。</p>` : ""}
       ${richP(p.detail || p.pitch)}
       ${p.photo_note ? `<h4>拍摄建议</h4>${richP(p.photo_note)}` : ""}
       <h4>实用信息</h4>
@@ -1559,6 +1653,10 @@ function patch(){
     patch: 1,
     choices: PLACES.map(p => [p.id, p.choice || null, p.choice_reason || ""]),
     itinerary: DATA.itinerary || [],
+    // 每次全量带上而不是只带「新的」——服务端按 id 去重天然幂等，
+    // 页面就不用维护一份「哪些已经落盘」的状态（那份状态一错就丢点）。
+    // 几个粗胚只有几百字节，离 sendBeacon 的 64KB 上限很远。
+    added_places: PLACES.filter(p => p.origin === "user"),
   });
 }
 
@@ -2573,7 +2671,7 @@ const MAP = (() => {
     // 这里可以直接赋 className：元素刚创建、还没交给 MapLibre，
     // 它的 .maplibregl-marker 类是在 new Marker() 之后才加上的。
     // 但此后任何时候都只能用 classList 增删（见 paintMarker）。
-    el.className = "mk " + kind(p);
+    el.className = "mk " + kind(p) + (isStubP(p) ? " stub" : "");
     el.dataset.id = p.id;
     el.dataset.nm = p.name;
     el.innerHTML = "<i></i>";
@@ -3029,6 +3127,7 @@ const MAP = (() => {
 
   function metaLine(p){
     if(isLodging(p)) return `<em>住宿</em>`;
+    if(isStubP(p)) return `<em>手动添加 · 待补全</em>`;
     const bits = [SCALE_TXT[p.scale] || p.scale, shortPrice(p.ticket)].filter(Boolean);
     const w = warnOf(p);
     return bits.map(x => `<em>${esc(x)}</em>`).join(" · ")
@@ -3238,6 +3337,162 @@ const MAP = (() => {
     if(st.engine !== "maplibre" || st.base !== ofm.id) return;
     st.base = null;                 // 绕开 switchBase 的「同一张底图就不动」
     switchBase(ofm.id);
+  });
+
+  /* ---------- 地点搜索（Nominatim） ----------
+     临时想去清单外的某个地方：搜到 → 地图飞过去落一个候选 pin → 确认后
+     以「粗胚」进数据（只有名字+坐标+OSM 来源），研究型字段等 AI 事后补全。
+
+     为什么是 Nominatim 而不是 Photon：Photon 的公共实例只索引 default/en/de/fr
+     四种名称，中文搜「大英博物馆」零结果；Nominatim 索引 OSM 全部 name:* 标签，
+     中文/英文/当地语言都命中（实测含餐厅级长尾 POI）。代价是它的使用政策
+     禁止 autocomplete —— 所以是回车触发的单次搜索，不做边打边出。 */
+  const NOMINATIM = "https://nominatim.openstreetmap.org/search";
+  let results = [], cand = null, candMk = null, searching = false, lastSearch = 0;
+
+  function searchPanel(html){
+    const el = $("#msq-panel");
+    if(!el) return;
+    el.hidden = !html;
+    el.innerHTML = html || "";
+  }
+
+  async function doSearch(){
+    const q = $("#msq").value.trim();
+    if(!q || searching) return;
+    searching = true;
+    // 政策限 1 req/s。回车触发本来就难超，这里只挡「连敲回车」
+    const wait = 1100 - (Date.now() - lastSearch);
+    if(wait > 0) await new Promise(r => setTimeout(r, wait));
+    lastSearch = Date.now();
+    searchPanel(`<div class="sr-note">搜索中…</div>`);
+    try{
+      const u = new URL(NOMINATIM);
+      u.search = new URLSearchParams({
+        q, format: "jsonv2", limit: "6", addressdetails: "1", namedetails: "1",
+        // 展示名跟着行程页语言走；viewbox 只做偏置不做过滤（bounded 默认 0）——
+        // 临时起意的点常在 bbox 外，比如大阪行程想去奈良
+        "accept-language": TRIP.output_language || "zh-CN",
+        ...(Array.isArray(TRIP.bbox) && TRIP.bbox.length === 4
+            ? { viewbox: TRIP.bbox.join(",") } : {}),
+      });
+      const r = await fetch(u);
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      const list = await r.json();
+      if(!Array.isArray(list) || !list.length){
+        searchPanel(`<div class="sr-note">没找到「${esc(q)}」。<br>
+          中文俗名偶尔对不上地图数据，试试英文或当地语言名称。</div>`);
+        return;
+      }
+      results = list;
+      searchPanel(list.map((x, i) =>
+        `<button class="sr" type="button" data-sr="${i}">
+           <b>${esc(x.name || (x.display_name || "").split(",")[0])}</b>
+           <span>${esc(x.display_name || "")}</span>
+         </button>`).join(""));
+    }catch(e){
+      searchPanel(`<div class="sr-note">搜索失败（${esc(e.message || e)}）。搜索需要联网，稍后再试。</div>`);
+    }finally{ searching = false; }
+  }
+
+  function clearCand(){
+    cand = null;
+    if(candMk){ candMk.remove && candMk.remove(); candMk = null; }
+    const c = document.getElementById("cand-card");
+    if(c) c.remove();
+  }
+
+  function pickResult(i){
+    const x = results[i];
+    if(!x) return;
+    const lon = +x.lon, lat = +x.lat;
+    if(!isFinite(lon) || !isFinite(lat)) return;
+    const nd = x.namedetails || {}, ad = x.address || {};
+    const outLang = (TRIP.output_language || "").split("-")[0];
+    clearCand();
+    cand = {
+      // 名称优先用行程页语言的 name:xx —— display_name 的第一段可能是门牌号
+      name: (outLang && nd["name:" + outLang]) || x.name || (x.display_name || "").split(",")[0].trim(),
+      name_local: (LOCAL_LANG && (nd["name:" + LOCAL_LANG] || nd.name)) || null,
+      area: ad.suburb || ad.city_district || ad.town || ad.village || ad.city || "",
+      lon, lat,
+      osm: x.osm_type && x.osm_id ? `https://www.openstreetmap.org/${x.osm_type}/${x.osm_id}` : null,
+      addr: x.display_name || "",
+    };
+    searchPanel("");
+    // 候选 pin + 飞过去。static 兜底引擎没有可交互的地图，跳过 pin，卡片照常
+    if(st.map){
+      const el = document.createElement("div");
+      el.className = "mk cand";
+      el.innerHTML = "<i></i>";
+      if(st.engine === "maplibre"){
+        candMk = new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(st.map);
+        const to = { center: [lon, lat], zoom: Math.max(st.map.getZoom(), 14) };
+        REDUCED.matches ? st.map.jumpTo(to) : st.map.flyTo({ ...to, duration: 620 });
+      }else if(st.engine === "leaflet"){
+        candMk = L.marker([lat, lon],
+          { icon: L.divIcon({ className: "", html: el.outerHTML, iconSize: [23, 23] }) }).addTo(st.map);
+        st.map.setView([lat, lon], Math.max(st.map.getZoom(), 15));
+      }
+    }
+    const d = curDayObj();
+    const div = document.createElement("div");
+    div.id = "cand-card";
+    div.innerHTML = `<b>${esc(cand.name)}</b>
+      <div class="addr">${esc(cand.addr)}</div>
+      <div class="row">
+        <button class="btn sm primary" data-cand="list">加入清单</button>
+        ${d ? `<button class="btn sm" data-cand="day">加入${esc(dayLabel(d))}</button>` : ""}
+        <button class="btn sm" data-cand="x">取消</button>
+      </div>
+      <div class="hint">先钉住位置和坐标，开放时间等详情之后让 AI 补全</div>`;
+    document.querySelector(".map-main").appendChild(div);
+  }
+
+  function addCand(toDay){
+    if(!cand) return;
+    const stub = {
+      id: "u-" + Date.now().toString(36),
+      name: cand.name,
+      area: cand.area || "手动添加",
+      coord: { lon: cand.lon, lat: cand.lat },
+      origin: "user",
+      choice: "yes",   // 特意搜出来加的，「想去」不言自明
+      sources: [{ url: cand.osm || "https://www.openstreetmap.org", title: "OpenStreetMap" }],
+    };
+    if(cand.name_local && cand.name_local !== stub.name) stub.name_local = cand.name_local;
+    PLACES.push(stub);   // PLACES 就是 DATA.places 那个数组，payload/patch 都能看到
+    if(DATA.places !== PLACES) (DATA.places = DATA.places || []).push(stub);
+    BY_ID[stub.id] = stub;
+    clearCand();
+    $("#msq").value = "";
+    addMarkers();                       // refresh 只重画已有 marker，新点要先建出来
+    if(toDay) toggleInCurDay(stub.id);  // 内部走 commit：重画三处 + 触发保存
+    else commit();
+    render();                           // 清单视图的卡片与进度
+    focus(stub.id, false);
+    toast(`已添加「${stub.name}」，详情待 AI 补全`);
+  }
+
+  $("#msq")?.addEventListener("keydown", e => {
+    if(e.key === "Enter"){ e.preventDefault(); doSearch(); }
+    if(e.key === "Escape"){ searchPanel(""); clearCand(); }
+  });
+  const msqGo = $("#msq-go");
+  if(msqGo) msqGo.onclick = doSearch;
+
+  document.addEventListener("click", e => {
+    const sr = e.target.closest("#msq-panel .sr");
+    if(sr){ pickResult(+sr.dataset.sr); return; }
+    const cb = e.target.closest("#cand-card [data-cand]");
+    if(cb){
+      const op = cb.dataset.cand;
+      if(op === "x") clearCand();
+      else addCand(op === "day");
+      return;
+    }
+    // 点搜索区以外的地方 → 收起结果面板（候选卡片留着，它要等一个明确的选择）
+    if(!e.target.closest(".msearch") && !e.target.closest("#msq-panel")) searchPanel("");
   });
 
   /* ---------- 入口 ---------- */
@@ -3846,6 +4101,7 @@ function boot(){
   if(vd !== null && vd > 30) sub += ` <span class="stale">数据核验于 ${vd} 天前，开放时间可能已变</span>`;
   $("#subtitle").innerHTML = sub;
 
+  const restoredAdded = loadAdded();   // 先于 loadItin：日程草稿可能引用粗胚的 id
   const restored = loadLocal();
   const restoredItin = loadItin();
   // 草稿里没有、文件里也没有时，按 trip.dates 自动建。放在 loadItin 之后，
@@ -3889,7 +4145,8 @@ function boot(){
   }
 
   const msg = [restored && `${restored} 个之前的选择`,
-               restoredItin && `${restoredItin} 项日程安排`].filter(Boolean);
+               restoredItin && `${restoredItin} 项日程安排`,
+               restoredAdded && `${restoredAdded} 个手动添加的地点`].filter(Boolean);
   if(msg.length) toast(`从浏览器缓存恢复了 ${msg.join("、")}`);
 
   layoutMapActions();

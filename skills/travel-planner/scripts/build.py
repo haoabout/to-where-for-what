@@ -329,8 +329,26 @@ def merge(incoming):
         p["choice"] = c[1] if len(c) > 1 else None
         p["choice_reason"] = (c[2] if len(c) > 2 else "") or ""
 
+    # 用户在地图上搜索添加的粗胚（origin=user）。页面每次保存都全量带上，
+    # 靠「磁盘已有同 id 则跳过」保证幂等——AI 补全过的版本在磁盘上，不能被
+    # 页面里那份未补全的旧粗胚盖掉。字段走白名单：补丁来自浏览器，
+    # 不能让它往数据集里塞任意键。
+    stub_fields = {"id", "name", "name_local", "area", "coord",
+                   "origin", "choice", "sources"}
+    have = {p.get("id") for p in base["places"]}
+    for a in incoming.get("added_places") or []:
+        if not (isinstance(a, dict) and isinstance(a.get("id"), str) and a["id"]):
+            continue
+        if a["id"] in have:
+            continue
+        stub = {k: v for k, v in a.items() if k in stub_fields}
+        stub["origin"] = "user"
+        base["places"].append(stub)
+        have.add(stub["id"])
+
     if "itinerary" in incoming:
-        # 日程里可能留着 AI 已经删掉的点，带着写回去会让校验器报 P0
+        # 日程里可能留着 AI 已经删掉的点，带着写回去会让校验器报 P0。
+        # alive 在粗胚追加之后取——刚添加的点要能出现在日程里
         alive = {p.get("id") for p in base["places"]}
         days = []
         for d in incoming.get("itinerary") or []:

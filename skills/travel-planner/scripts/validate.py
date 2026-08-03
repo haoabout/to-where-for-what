@@ -40,14 +40,21 @@ KNOWN_PLACE_FIELDS = {
     "closed", "ticket", "booking", "booking_url", "status", "status_note",
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
     "photo_note", "tags", "media", "museum", "images", "sources",
-    "verify", "choice", "choice_reason",
+    "verify", "choice", "choice_reason", "origin",
 }
 KINDS = {"attraction", "lodging"}
+ORIGINS = {"user"}
 
 # 住宿走一套精简的必填集：它不是"景点"，没有 tier / 门票 / 闭馆日 / 摄影机位这些概念，
 # 硬套景点的契约只会逼着人往里填假数据。
 LODGING_REQUIRED_STR = {"id", "name", "area"}
 LODGING_REQUIRED_ANY = {"coord"}
+
+# 用户在地图上搜索添加的粗胚（origin=user）：只有名称+坐标+OSM 来源，
+# 研究型字段（hours / tier / category …）等 AI 事后补全。逼着页面端造这些
+# 数据只会得到假数据，所以走最小必填集。
+STUB_REQUIRED_STR = {"id", "name"}
+STUB_REQUIRED_ANY = {"coord", "sources"}
 KNOWN_TRIP_FIELDS = {
     "destination", "destination_local", "destination_en", "country", "bbox",
     "timezone", "output_language", "local_language", "dates", "days", "party",
@@ -173,6 +180,13 @@ def check_place(p, idx, doc, rep: Report) -> None:
         rep.add("P0", where, f"kind={p.get('kind')!r} 非法，应为 {sorted(KINDS)}")
         kind = "attraction"
 
+    origin = p.get("origin")
+    if origin is not None and origin not in ORIGINS:
+        rep.add("P0", where, f"origin={origin!r} 非法，应为 {sorted(ORIGINS)}")
+    # 粗胚的判定是 origin=user 且还没有 tier——AI 一旦补全（填上 tier 等），
+    # 它就要按普通景点的完整必填集来验，不能一直躲在精简集后面。
+    is_stub = origin == "user" and p.get("tier") is None
+
     # 核实被拦截时，这几个字段允许为空——那正是「查不到」的含义。
     # 逼着填反而会让用户把猜测当成已核实的信息。
     vstate = (p.get("verify") or {}).get("state")
@@ -180,6 +194,9 @@ def check_place(p, idx, doc, rep: Report) -> None:
 
     if kind == "lodging":
         req_str, req_any = LODGING_REQUIRED_STR, LODGING_REQUIRED_ANY
+    elif is_stub:
+        req_str, req_any = STUB_REQUIRED_STR, STUB_REQUIRED_ANY
+        rep.add("P2", where, "用户添加的粗胚（origin=user 且无 tier），待 AI 研究补全")
     else:
         req_str, req_any = REQUIRED_STR, REQUIRED_ANY
 
@@ -226,9 +243,16 @@ def check_place(p, idx, doc, rep: Report) -> None:
             bbox = trip.get("bbox")
             if isinstance(bbox, list) and len(bbox) == 4:
                 if not (bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]):
-                    rep.add("P0", where,
-                            f"坐标 ({lon}, {lat}) 落在目的地 bbox 之外——"
-                            f"极可能是经纬度写反或搜错了同名地点")
+                    if origin == "user":
+                        # 临时起意的点常在 bbox 边缘外（大阪行程加奈良），
+                        # 坐标又来自 OSM 而非 AI 之手，写反/搜错的先验低得多
+                        rep.add("P1", where,
+                                f"用户添加的点坐标 ({lon}, {lat}) 在目的地 bbox 之外，"
+                                f"请确认不是搜错了同名地点")
+                    else:
+                        rep.add("P0", where,
+                                f"坐标 ({lon}, {lat}) 落在目的地 bbox 之外——"
+                                f"极可能是经纬度写反或搜错了同名地点")
 
     # 来源（防幻觉主闸门）
     srcs = p.get("sources")
@@ -266,7 +290,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
     # closed_days。住宿没有「闭馆日」这个概念，不参与。
     cd = p.get("closed_days")
     if cd is None:
-        if kind != "lodging":
+        if kind != "lodging" and not is_stub:
             rep.add("P1", where,
                     "closed_days 为 null（查不到或来源矛盾）——无法校验闭馆日与行程是否冲突，"
                     "请在 detail 里提醒用户出发前自行确认")
@@ -306,7 +330,8 @@ def check_place(p, idx, doc, rep: Report) -> None:
             rep.add("P0", where, f"{f} 必须是布尔值，实际 {p[f]!r}")
 
     # ---- P1
-    if (trip.get("local_language") and trip.get("output_language")
+    # 粗胚豁免：name_local 是研究产物，页面端只有 OSM namedetails 里碰巧有才填得上
+    if (not is_stub and trip.get("local_language") and trip.get("output_language")
             and trip["local_language"] != trip["output_language"]
             and _blank(p.get("name_local"))):
         rep.add("P1", where, "当地语言与输出语言不同，应提供 name_local（且需能在地图搜到）")
@@ -318,9 +343,9 @@ def check_place(p, idx, doc, rep: Report) -> None:
                 f"确需新字段请先改 data-schema.md 与 validate.py")
 
     # ---- P2
-    # 住宿不参与这几条：摄影机位、配图、长篇介绍都是景点的质量要求。
-    # 对着酒店提"缺少拍摄建议"只会制造噪声，把真正该看的提示淹掉。
-    if kind != "lodging":
+    # 住宿和粗胚不参与这几条：摄影机位、配图、长篇介绍都是研究后的质量要求。
+    # 对着酒店或刚钉下的粗胚提"缺少拍摄建议"只会制造噪声，把真正该看的提示淹掉。
+    if kind != "lodging" and not is_stub:
         if _blank(p.get("photo_note")):
             rep.add("P2", where, "缺少 photo_note（画面描述与拍摄建议）")
         if not p.get("images"):
