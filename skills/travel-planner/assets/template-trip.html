@@ -384,7 +384,20 @@ pre.code{
 .mi.drag-ghost{opacity:.35}
 .dlist.drag-over{background:color-mix(in srgb,var(--ink) 7%,transparent)}
 .ditem.lod .dnm{color:var(--ink-3)}
-.dempty{padding:9px 11px;font-size:11.5px;color:var(--ink-3)}
+.dempty{padding:11px;font-size:11.5px;line-height:1.7;color:var(--ink-3);text-align:center}
+.dempty b{color:var(--ink-2);font-weight:600}
+.addmenu{
+  padding:5px;border-bottom:1px solid var(--line);background:var(--paper-2);
+  display:flex;flex-direction:column;gap:3px;
+}
+.addmenu button{
+  background:var(--card);border:1px solid var(--line);border-radius:6px;
+  padding:5px 8px;font-size:11.5px;color:var(--ink-2);text-align:left;
+}
+.addmenu button:hover{border-color:var(--line-2);color:var(--ink)}
+.dhead .d-del-day{opacity:0;margin-left:4px}
+.dhead:hover .d-del-day{opacity:1}
+@media (hover:none){ .dhead .d-del-day{opacity:1} }
 .map-side{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
   display:flex;flex-direction:column;min-height:0;
@@ -1428,7 +1441,7 @@ const MAP = (() => {
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
                base:"gb", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
-               curDay:null, flat:null };
+               curDay:null, flat:null, addOpen:false };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
@@ -2021,6 +2034,70 @@ const MAP = (() => {
   const FLAT_MAX = 5;
   const WD = ["日", "一", "二", "三", "四", "五", "六"];
 
+  // 都在正午构造，避开时区把日期整体推前/推后一天
+  const parseISO = v => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ""));
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], 12) : null;
+  };
+  const toISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+                   + `-${String(d.getDate()).padStart(2, "0")}`;
+  const shiftISO = (v, k) => {
+    const d = parseISO(v);
+    if(!d) return null;
+    d.setDate(d.getDate() + k);
+    return toISO(d);
+  };
+
+  /* 要建几天、每天什么日期，trip.dates 里已经有了 —— 让用户点一下按钮去
+     生成一份我们已经知道的东西，纯粹是多一道手续。所以页面自动建，
+     用户什么都不用做，切过来就是就绪的空容器。
+     A 阶段的 AI 不该预填 itinerary，否则两处都在造同一份数据，迟早对不上。 */
+  function autoItinerary(){
+    if(ITIN.length) return false;
+    const start = parseISO((TRIP.dates || {}).start);
+    const end   = parseISO((TRIP.dates || {}).end);
+    if(start && end && end >= start){
+      let cur = start, n = 1;
+      while(cur <= end && n <= 60){
+        ITIN.push({ n, date:toISO(cur), label:`第 ${n} 天`, places:[] });
+        cur = new Date(cur); cur.setDate(cur.getDate() + 1); n++;
+      }
+    }else{
+      // 日期缺失或格式不对：退回按天数建，date 留空。
+      // 那时闭馆校验做不了，但容器仍然可用。
+      const k = Math.max(1, Math.min(30, parseInt(TRIP.days, 10) || 1));
+      for(let n = 1; n <= k; n++) ITIN.push({ n, date:null, label:`第 ${n} 天`, places:[] });
+    }
+    DATA.itinerary = ITIN;
+    buildSched();
+    return true;
+  }
+
+  function addDay(where){
+    if(where === "zero"){
+      if(ITIN.some(d => d.n === 0)) return;
+      const first = ITIN.find(d => d.date);
+      ITIN.unshift({ n:0, date:first ? shiftISO(first.date, -1) : null,
+                     label:"第 0 天（抵达当晚）", places:[] });
+    }else{
+      const maxN = ITIN.reduce((a, d) => Math.max(a, d.n), 0);
+      const last = [...ITIN].reverse().find(d => d.date);
+      ITIN.push({ n:maxN + 1, date:last ? shiftISO(last.date, 1) : null,
+                  label:`第 ${maxN + 1} 天`, places:[] });
+    }
+    st.curDay = where === "zero" ? 0 : ITIN[ITIN.length - 1].n;
+    commit();
+  }
+
+  function removeDay(n){
+    const i = ITIN.findIndex(d => d.n === n);
+    if(i < 0) return;
+    if((ITIN[i].places || []).length){ toast("这一天还有地点，先清空再删。"); return; }
+    ITIN.splice(i, 1);
+    if(st.curDay === n) st.curDay = ITIN.length ? ITIN[0].n : null;
+    commit();
+  }
+
   const dayLabel = d => d.label || (d.n === 0 ? "第 0 天" : `第 ${d.n} 天`);
   // 住宿不计入「几个景点」——每天首尾都有它，算进去这个数字就没意义了
   const dayCount = d => (d.places || []).filter(e => !isLodging(BY_ID[e.id])).length;
@@ -2029,6 +2106,15 @@ const MAP = (() => {
     if(!d.date) return "";
     const t = new Date(d.date + "T12:00:00");   // 正午构造，避开时区把日期推前一天
     return isNaN(t) ? d.date : `${d.date.slice(5)}(周${WD[t.getDay()]})`;
+  }
+
+  /* 空容器不该只说「还没放地点」—— 用户面对一个空框并不知道该怎么操作。
+     而且当前天和非当前天要说不同的话：点圆点只会加进「当前天」，
+     对非当前天说「点圆点」是错的。 */
+  function emptyHint(d){
+    return d.n === st.curDay
+      ? `把左边的景点<b>拖进来</b><br>或点它左边的<b>圆点</b>`
+      : `把左边的景点<b>拖进来</b><br>点标题可把这天设为当前天`;
   }
 
   function dayBox(d){
@@ -2054,8 +2140,10 @@ const MAP = (() => {
           <span class="swatch" style="background:${dayColor(d.n)}"></span>
           <b>${esc(dayLabel(d))}</b>
           <span class="sub">${esc(dayDateTxt(d))}${d.date ? " · " : ""}${dayCount(d)} 个</span>
+          ${(d.places || []).length ? "" :
+            `<button class="dop d-del-day" data-delday="${d.n}" title="删除这一天" aria-label="删除这一天">${ICON.del}</button>`}
         </div>
-        <div class="dlist">${rows || `<div class="dempty">还没放地点</div>`}</div>
+        <div class="dlist">${rows || `<div class="dempty">${emptyHint(d)}</div>`}</div>
       </div>`;
   }
 
@@ -2128,8 +2216,12 @@ const MAP = (() => {
   function renderDays(){
     const col = $("#day-col");
     if(!ITIN.length){
-      col.innerHTML = `<div class="dc-head">日程</div>
-        <div class="dempty">还没有分天。告诉 AI「按 ${TRIP.days || "N"} 天建日程」即可。</div>`;
+      // 正常流程里到不了这里（autoItinerary 会按 trip.dates 建好）。
+      // 只有 dates 和 days 都缺时才会落到这个兜底。
+      col.innerHTML = `<div class="dc-head">日程
+          <button id="day-add" class="lnk" title="加一天" aria-label="加一天">+</button></div>`
+        + (st.addOpen ? `<div class="addmenu"><button data-add="tail">＋ 加第一天</button></div>` : "")
+        + `<div class="dempty">行程没有日期信息，无法自动分天。<br>点右上角 <b>+</b> 手动加。</div>`;
       return;
     }
     if(st.curDay == null || !ITIN.some(d => d.n === st.curDay)) st.curDay = ITIN[0].n;
@@ -2144,7 +2236,12 @@ const MAP = (() => {
 
     col.innerHTML =
       `<div class="dc-head">日程<span class="sp">${ITIN.length} 天</span>
-         <button id="day-mode" class="lnk">${st.flat ? "收起" : "平铺"}</button></div>`
+         <button id="day-mode" class="lnk">${st.flat ? "收起" : "平铺"}</button>
+         <button id="day-add" class="lnk" title="加一天" aria-label="加一天">+</button></div>`
+      + (st.addOpen ? `<div class="addmenu">`
+          + (ITIN.some(d => d.n === 0) ? "" :
+             `<button data-add="zero">＋ 第 0 天（抵达当晚）</button>`)
+          + `<button data-add="tail">＋ 在末尾加一天</button></div>` : "")
       + caps
       + ITIN.filter(d => st.flat || d.n === st.curDay).map(dayBox).join("");
     wireSortable();
@@ -2613,6 +2710,10 @@ ${selected().map(p => `<Placemark>
       if(row) toggleInCurDay(row.dataset.card);
       return;
     }
+    // 删除整天。它复用了 .dop 的样式类，所以必须排在下面那个 .dop 分支之前 ——
+    // 否则会被它先匹配到，而那个分支找不到 .ditem 就直接 return，把事件吃掉。
+    const dd = e.target.closest("[data-delday]");
+    if(dd){ removeDay(+dd.dataset.delday); return; }
     // 日程条目上的 ↑ ↓ ×
     const dop = e.target.closest(".dop");
     if(dop){
@@ -2640,10 +2741,15 @@ ${selected().map(p => `<Placemark>
     }
     const dm = e.target.closest("#day-mode");
     if(dm){ st.flat = !st.flat; renderDays(); return; }
+    const da = e.target.closest("#day-add");
+    if(da){ st.addOpen = !st.addOpen; renderDays(); return; }
+    const am = e.target.closest(".addmenu button");
+    if(am){ st.addOpen = false; addDay(am.dataset.add); return; }
+    if(st.addOpen && !e.target.closest(".addmenu")){ st.addOpen = false; renderDays(); }
     const cap = e.target.closest(".caps button");
     if(cap){ setCurDay(+cap.dataset.day); return; }
     const dh = e.target.closest(".dhead");
-    if(dh){ setCurDay(+dh.parentElement.dataset.day); return; }
+    if(dh && !e.target.closest("[data-delday]")){ setCurDay(+dh.parentElement.dataset.day); return; }
     const mf = e.target.closest(".mfil");
     if(mf){
       const on = mf.getAttribute("aria-pressed") === "true";
@@ -2653,7 +2759,7 @@ ${selected().map(p => `<Placemark>
     }
   });
 
-  return { init, refresh, onShow, fitAll,
+  return { init, refresh, onShow, fitAll, ensureDays:autoItinerary,
            exportCSV:() => save(toCSV(), "places.csv", "text/csv;charset=utf-8"),
            exportKML:() => save(toKML(), "places.kml", "application/vnd.google-earth.kml+xml"),
            _st:st };
@@ -2932,6 +3038,9 @@ function boot(){
 
   const restored = loadLocal();
   const restoredItin = loadItin();
+  // 草稿里没有、文件里也没有时，按 trip.dates 自动建。放在 loadItin 之后，
+  // 免得把用户排了一半的草稿覆盖成空容器。
+  if(window.MAP) MAP.ensureDays();
 
   if(ROUTE_HTML){
     $("#guide-body").innerHTML = ROUTE_HTML;
