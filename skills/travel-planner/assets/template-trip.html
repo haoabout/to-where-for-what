@@ -68,7 +68,11 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:1px 8px;border-radius:20px;font-size:11.5px;
 }
 
-.tabs{display:flex;gap:2px;margin-top:12px}
+.tabs{display:flex;gap:2px;margin-top:12px;align-items:center}
+.tab-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.tab-actions .hint{font-size:11.5px;color:var(--ink-3)}
+.btn.sm{padding:5px 11px;font-size:12.5px}
+@media (max-width:760px){ .tab-actions .hint{display:none} }
 .tab{
   background:none;border:0;border-bottom:2px solid transparent;
   padding:9px 15px 11px;color:var(--ink-3);font-size:14px;font-weight:500;
@@ -288,8 +292,8 @@ pre.code{
 /* 筛选模式两栏，排程模式三栏：清单 | 日程 | 地图。
    清单与日程相邻，从池子拖进某一天是一次约 260px 的横移；
    把地图夹在中间的话这个距离会变成约 1160px，鼠标要划过整张地图，触屏基本没法用。 */
-.map-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;height:calc(100vh - 250px);min-height:460px}
-.map-wrap.sched{grid-template-columns:232px 212px 1fr}
+.map-wrap{display:grid;grid-template-columns:232px 212px 1fr;gap:14px;
+  height:calc(100vh - 210px);min-height:460px}
 
 .day-col{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
@@ -337,7 +341,7 @@ pre.code{
 /* 日程栏的条目只有一行：序号 + 名称。四五个点就要占满这一列，不能再多 */
 .ditem{
   display:flex;align-items:center;gap:7px;padding:5px 10px;cursor:pointer;
-  font-size:12.5px;color:var(--ink-2);transition:background .12s;
+  font:500 12.5px/1.4 var(--sans);color:var(--ink-2);transition:background .12s;
 }
 .ditem:hover,.ditem.on{background:var(--paper-2)}
 .ditem .n{
@@ -349,8 +353,17 @@ pre.code{
 .dempty{padding:9px 11px;font-size:11.5px;color:var(--ink-3)}
 .map-side{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
-  overflow-y:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;min-height:0;
 }
+.map-side>#map-list{overflow-y:auto;overscroll-behavior:contain;flex:1;min-height:0}
+/* 选择筛选并进清单栏顶部：它筛的就是下面这份列表，放在页面工具栏里等于把
+   控件和它作用的对象拆开了。 */
+.ms-head{
+  padding:7px;border-bottom:1px solid var(--line);background:var(--paper-2);
+  border-radius:var(--r) var(--r) 0 0;
+}
+.ms-head .seg{width:100%}
+.ms-head .seg button{flex:1;padding:5px 2px;font-size:11px;white-space:nowrap}
 .map-side .mi{
   display:flex;gap:9px;align-items:flex-start;padding:9px 12px;
   border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s;
@@ -364,8 +377,10 @@ pre.code{
 .map-side .mi .t{flex:1;min-width:0}
 /* 严格两行：名称一行、元信息一行。原来把整段票价文案铺进来，
    一个条目能占五六行，三栏布局下这一列只有 ~230px，根本放不下。 */
+/* 清单栏与日程栏的条目必须同字体同字号 —— 它们并排显示同一批地点，
+   字号不一致会让人以为是两种不同的东西。统一按小的来。 */
 .map-side .mi .t b{
-  display:block;font:500 13.5px/1.35 var(--sans);
+  display:block;font:500 12.5px/1.4 var(--sans);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .map-side .mi .t s{
@@ -472,16 +487,14 @@ pre.code{
 /* 窄屏降级。没做抽屉：抽屉会把两栏藏进隐藏状态，而排程时你恰恰要同时看见
    池子、日程和地图。改成往下堆，地图始终留足高度。 */
 @media (max-width:1180px){
-  .map-wrap.sched{grid-template-columns:1fr 1fr;grid-template-rows:minmax(180px,34vh) 1fr;height:auto}
-  .map-wrap.sched .map-main{grid-column:1 / -1;height:min(56vh,540px)}
+  .map-wrap{grid-template-columns:1fr 1fr;grid-template-rows:minmax(180px,34vh) 1fr;height:auto}
+  .map-wrap .map-main{grid-column:1 / -1;height:min(56vh,540px)}
 }
 @media (max-width:860px){
-  .map-wrap{grid-template-columns:1fr;height:auto}
-  .map-wrap.sched{grid-template-columns:1fr;grid-template-rows:none}
-  .map-side{max-height:230px}
+  .map-wrap{grid-template-columns:1fr;grid-template-rows:none;height:auto}
+  .map-side{max-height:250px}
   .day-col{max-height:260px}
-  .map-main{height:440px}
-  .map-wrap.sched .map-main{height:440px}
+  .map-wrap .map-main{height:440px}
 }
 
 /* ═══════════════════════════════════════════════ 攻略视图 */
@@ -599,6 +612,11 @@ pre.code{
       <button class="tab" role="tab" id="tab-list"  aria-selected="true"  data-view="list">景点清单 <span class="n" id="n-list">0</span></button>
       <button class="tab" role="tab" id="tab-map"   aria-selected="false" data-view="map">地图</button>
       <button class="tab" role="tab" id="tab-guide" aria-selected="false" data-view="guide" disabled>攻略</button>
+      <div class="tab-actions" id="map-actions" hidden>
+        <button class="btn sm" id="exp-csv">导出 CSV</button>
+        <button class="btn sm" id="exp-kml">导出 KML</button>
+        <span class="hint">CSV 可直接导入 Google My Maps</span>
+      </div>
     </nav>
   </div>
   <div class="prog-wrap">
@@ -631,24 +649,19 @@ pre.code{
 
   <!-- ══════════════ 视图② 地图 ══════════════ -->
   <section class="view" id="view-map" hidden>
-    <div class="toolbar">
-      <div class="seg" role="group" aria-label="显示哪些选择">
-        <button class="mfil" data-c="yes"   aria-pressed="true">想去</button>
-        <button class="mfil" data-c="maybe" aria-pressed="true">待定</button>
-        <button class="mfil" data-c="none"  aria-pressed="true">未表态</button>
-        <button class="mfil" data-c="no"    aria-pressed="true">不想去</button>
-      </div>
-      <div class="seg" role="group" aria-label="工作模式">
-        <button class="mode" data-mode="filter" aria-pressed="true">筛选</button>
-        <button class="mode" data-mode="sched"  aria-pressed="false">排程</button>
-      </div>
-      <button class="btn" id="exp-csv">导出 CSV</button>
-      <button class="btn" id="exp-kml">导出 KML</button>
-      <div class="hint" style="margin-left:auto">CSV 可直接导入 Google My Maps</div>
-    </div>
     <div class="map-wrap" id="map-wrap">
-      <div class="map-side" id="map-list"></div>
-      <div class="day-col" id="day-col" hidden></div>
+      <div class="map-side">
+        <div class="ms-head">
+          <div class="seg" role="group" aria-label="显示哪些选择">
+            <button class="mfil" data-c="yes"   aria-pressed="true">想去</button>
+            <button class="mfil" data-c="maybe" aria-pressed="true">待定</button>
+            <button class="mfil" data-c="none"  aria-pressed="true">未表态</button>
+            <button class="mfil" data-c="no"    aria-pressed="true">不想去</button>
+          </div>
+        </div>
+        <div id="map-list"></div>
+      </div>
+      <div class="day-col" id="day-col"></div>
       <div class="map-main">
         <div id="map-canvas"></div>
         <div class="map-bar">
@@ -1335,7 +1348,7 @@ const MAP = (() => {
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
                base:"gb", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
-               mode:"filter", curDay:null, flat:null };
+               curDay:null, flat:null };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
@@ -1623,8 +1636,11 @@ const MAP = (() => {
 
      几何全部在 JS 里算，CSS 只管形状和过渡。否则 `.no:not(.placed)`
      这类组合会散落在两处，改一个忘一个。 */
-  const HOUSE = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">'
-              + '<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>';
+  /* 住宿图标。emoji 在不同系统上字形、字重、基线都不一样，和旁边的序号数字
+     对不齐；而且它无法继承颜色。统一用同一段 SVG，尺寸按用处传。 */
+  const house = (n = 13) => `<svg viewBox="0 0 24 24" width="${n}" height="${n}" `
+    + `fill="currentColor" aria-hidden="true" style="display:block">`
+    + `<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>`;
 
   function dotSpec(p){
     const lod = isLodging(p);
@@ -1684,7 +1700,7 @@ const MAP = (() => {
 
     // 数字只在排进某一天之后才出现；住宿永不编号
     if(s.lod){
-      dot.innerHTML = HOUSE;
+      dot.innerHTML = house(13);
       dot.style.color = "#fff";
     }else{
       const seq = firstSeq(p.id);
@@ -1749,7 +1765,7 @@ const MAP = (() => {
   }
 
   function refresh(){
-    if(st.mode === "sched") renderDays();
+    renderDays();
     if(!st.ready) return;
     pts().forEach(p => {
       const m = st.markers.get(p.id);
@@ -1778,7 +1794,7 @@ const MAP = (() => {
     return `background:${bg};box-shadow:${ring}`;
   }
   function pinText(p){
-    if(isLodging(p)) return "🏨";
+    if(isLodging(p)) return house(11);
     const seq = firstSeq(p.id);
     return seq == null ? "" : String(seq);
   }
@@ -1808,7 +1824,7 @@ const MAP = (() => {
       const lod = isLodging(p);
       if(!lod) seq++;
       return `<div class="ditem${lod ? " lod" : ""}" data-card="${esc(p.id)}" data-day="${d.n}" data-i="${i}">
-          <span class="n" style="background:${lod ? "#4A4A4A" : dayColor(d.n)}">${lod ? "🏨" : seq}</span>
+          <span class="n" style="background:${lod ? "#4A4A4A" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
           <span class="nm" title="${esc(p.name)}">${esc(p.name)}</span>
         </div>`;
     }).join("");
@@ -1849,16 +1865,6 @@ const MAP = (() => {
   function setCurDay(n){
     st.curDay = n;
     renderDays();
-  }
-
-  function setMode(m){
-    st.mode = m;
-    $("#map-wrap").classList.toggle("sched", m === "sched");
-    $("#day-col").hidden = m !== "sched";
-    $$(".mode").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
-    if(m === "sched") renderDays();
-    // 栅格变了，地图容器宽度跟着变，必须让 MapLibre 重新量一次
-    if(st.map && st.map.resize) setTimeout(() => st.map.resize(), 60);
   }
 
   /* ---------- 侧栏 ---------- */
@@ -2178,6 +2184,7 @@ const MAP = (() => {
     setAttrib();
     addMarkers();
     renderSide();
+    renderDays();
     watchResize();
   }
 
@@ -2265,8 +2272,6 @@ ${selected().map(p => `<Placemark>
       if(hint) hint.textContent = open ? "点击收起" : "点击展开线路名";
       return;
     }
-    const md = e.target.closest(".mode");
-    if(md){ setMode(md.dataset.mode); return; }
     const dm = e.target.closest("#day-mode");
     if(dm){ st.flat = !st.flat; renderDays(); return; }
     const cap = e.target.closest(".caps button");
@@ -2530,6 +2535,9 @@ window.GUIDE = GUIDE;
 function switchView(v){
   $$(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === v));
   $$(".view").forEach(s => s.hidden = (s.id !== "view-" + v));
+  // 导出按钮挪到了顶部标签栏，但它导的是地图视图里筛出来的那批点，
+  // 所以只在地图视图出现。
+  $("#map-actions").hidden = v !== "map";
   try{ localStorage.setItem(LS_KEY + ":view", v); }catch(e){}
   if(v === "map" && window.MAP){
     MAP.init();      // 懒加载：MapLibre 275KB，不该拖慢首屏
