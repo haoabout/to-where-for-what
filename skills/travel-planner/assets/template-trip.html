@@ -228,7 +228,7 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;
 }
 .actionbar-in .btn{padding:5px 13px;font-size:12.5px}
-/* 状态文字占满剩余宽度，把折叠区和「其他方式…」一起推到最右。
+/* 状态文字占满剩余宽度，把折叠区和「手动保存…」一起推到最右。
    展开时按钮就落在同一行里，栏高不变——放在链接右边会换行，高度翻倍。 */
 .actionbar-in .hint{margin-left:0;text-align:left;flex:1 1 auto}
 .more-box{display:flex;gap:8px}
@@ -765,10 +765,10 @@ pre.code{
     <button class="btn primary" id="save">保存选择和日程</button>
     <div class="hint" id="hint"></div>
     <div class="more-box" id="more-box" hidden>
-      <button class="btn" id="download">下载 JSON</button>
-      <button class="btn" id="copy">复制短码</button>
+      <button class="btn" id="download">下载 places.json</button>
+      <button class="btn" id="copy">复制给 AI…</button>
     </div>
-    <button class="lnk" id="more" aria-expanded="false">其他方式…</button>
+    <button class="lnk" id="more" aria-expanded="false">手动保存…</button>
   </div>
 </div>
 
@@ -1311,7 +1311,9 @@ let autoTimer = null, autoBusy = false, autoDirty = false;
 function scheduleAuto(){
   if(!SERVED || STANDALONE) return;
   autoDirty = true;
-  setSaveState("dirty");
+  // 去抖这三秒里什么都没在进行，不报「有未保存的改动」——那个说法既否定了
+  // 旁边「会自动写回」的承诺，又为一个转瞬即逝的中间态制造焦虑。
+  // 保持上一条「已保存 · HH:MM」，真出问题时 err 会盖掉它。
   clearTimeout(autoTimer);
   autoTimer = setTimeout(runAuto, 3000);
 }
@@ -1323,7 +1325,7 @@ async function runAuto(){
   try{
     const r = await saveViaServer(false);
     if(r){ autoDirty = false; markSaved(); setSaveState("ok"); }
-    else  { setSaveState("err"); }
+    else  { setSaveState("err"); revealSaveBtn(); }
   }finally{ autoBusy = false; }
 }
 
@@ -1342,7 +1344,7 @@ addEventListener("pagehide", flushOnExit);
 addEventListener("visibilitychange", () => { if(document.hidden) flushOnExit(); });
 
 /* 本地服务下这三个按钮一个都用不到——改动会自动写回，`file://` 才需要它们。
-   把「立即保存」也收进「其他方式…」：留在外面等于常驻提示用户去做一件
+   把「立即保存」也收进「手动保存…」：留在外面等于常驻提示用户去做一件
    系统已经替他做了的事，反而让人怀疑到底存没存。用的是同一个 #save 节点，
    不是复制一份，省得标签和禁用状态两处不同步。 */
 function layoutActionbar(){
@@ -1351,11 +1353,23 @@ function layoutActionbar(){
     save.classList.remove("primary");
     box.prepend(save);
   }
-  more.onclick = () => {
-    const open = box.hidden;
-    box.hidden = !open;
-    more.setAttribute("aria-expanded", String(open));
-  };
+  more.onclick = () => setMoreOpen(box.hidden);
+}
+
+function setMoreOpen(open){
+  const box = $("#more-box"), more = $("#more");
+  if(!box || !more) return;
+  box.hidden = !open;
+  more.setAttribute("aria-expanded", String(open));
+}
+
+/* 自动保存失败时把按钮直接露出来。提示里教用户「点『手动保存…』→『立即保存』」
+   是在描述路径——正确做法是把要点的东西摆到他面前。 */
+function revealSaveBtn(){
+  if(!SERVED) return;
+  setMoreOpen(true);
+  const save = $("#save");
+  if(save) save.classList.add("primary");
 }
 
 /* 自动保存失败必须看得见：服务被停掉、端口被占，
@@ -1365,7 +1379,7 @@ function setSaveState(kind){
   if(!el) return;
   if(!SERVED){
     el.className = "hint";
-    el.textContent = "当前是本地文件方式打开，「保存」会尝试文件选择，不行则自动降级为下载。"
+    el.textContent = "以本地文件方式打开，改动不会自动保存。点「" + SAVE_LABEL + "」写回 places.json"
       + (BUILT_AT ? ` 页面数据生成于 ${BUILT_AT}。` : "");
     return;
   }
@@ -1373,10 +1387,9 @@ function setSaveState(kind){
   el.className = "hint" + (kind === "err" ? " bad" : "");
   el.textContent =
     kind === "saving" ? "保存中…" :
-    kind === "dirty"  ? "有未保存的改动…" :
-    kind === "err"    ? `⚠ 自动保存失败（本地服务没响应）。改动只在这个浏览器里，点右边「其他方式…」→「${SAVE_LABEL}」重试` :
-    kind === "ok"     ? `已自动保存到 places.json · ${t}` :
-                        "改动会自动写回 places.json，不用手动保存。";
+    kind === "err"    ? `自动保存失败。改动只在这个浏览器里，点「${SAVE_LABEL}」重试` :
+    kind === "ok"     ? `已保存 · ${t}` :
+                        "改动自动写回 places.json，不用手动保存";
 }
 
 /* 保存有三条路，按可靠性排序，任何一条失败都自动往下走——
@@ -1428,13 +1441,15 @@ async function saveViaPicker(){
 function markSaved(){
   SAVED_SIG = itinSig(DATA.itinerary);
   saveLocal();
+  // 出错时强调过的按钮，存成功了就撤掉强调（折叠区不替用户收起来，那太突兀）
+  if(SERVED) $("#save").classList.remove("primary");
 }
 
 function savedMsg(where){
   const done = PLACES.filter(p => p.choice).length;
   const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
   const items = days.reduce((a, d) => a + d.places.length, 0);
-  return `已写回 ${where}：${done} 个已表态`
+  return `已保存到 ${where}：${done} 个已表态`
     + (days.length ? ` · ${days.length} 天共 ${items} 项日程` : "，日程还没排")
     + "，可以让 AI 写攻略了";
 }
@@ -1485,8 +1500,8 @@ function showCode(){
   $("#dlg-inner").innerHTML = `
     <div class="dlg-h"><h3>把这段贴回对话</h3><button class="x" data-close aria-label="关闭">&times;</button></div>
     <div class="dlg-b">
-      <p style="font-size:13px">你的浏览器不支持直接写文件（Firefox / Safari 都不支持）。
-      复制下面这段发给 AI，效果一样。</p>
+      <p style="font-size:13px">Firefox 和 Safari 不允许网页直接写文件。
+      把下面这段复制给 AI，它能还原你的选择和日程。</p>
       <pre class="code" id="code">${esc(code)}</pre>
       <div class="dlg-f">
         <button class="btn" data-close>关闭</button>
