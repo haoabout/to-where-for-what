@@ -273,7 +273,9 @@ textarea{
   width:100%;border:1px solid var(--line);border-radius:8px;background:var(--paper);
   color:var(--ink);padding:9px 11px;font:14px var(--sans);resize:vertical;min-height:66px;
 }
-.dlg-f{display:flex;gap:9px;justify-content:flex-end;margin-top:15px}
+.dlg-f{display:flex;gap:9px;justify-content:flex-end;margin-top:15px;flex-wrap:wrap;align-items:center}
+/* 排程按钮推到左边：它和右边那组「想去/待定/不想去」是两件事 */
+.btn.sched{margin-right:auto}
 pre.code{
   background:var(--paper-2);border:1px solid var(--line);border-radius:8px;
   padding:12px;font:12.5px/1.7 var(--mono);white-space:pre-wrap;word-break:break-all;margin:0 0 12px;
@@ -468,7 +470,7 @@ pre.code{
 .map-main{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper-2)}
 #map-canvas{position:absolute;inset:0}
 .map-bar{
-  position:absolute;top:10px;left:10px;right:10px;z-index:5;
+  position:absolute;top:10px;left:10px;right:10px;z-index:20;
   display:flex;gap:7px;flex-wrap:wrap;pointer-events:none;
 }
 .map-bar>*{pointer-events:auto}
@@ -486,8 +488,22 @@ pre.code{
 /* 图例默认只显示线号色块（两行就够），点一下才展开全名。
    12 条线的完整列表要 210×340px，占掉地图 14% 的面积，而且正好压在
    左上角的点位上 —— 常驻显示是不合适的。 */
+/* POI 分类开关。跟图例同一列，开着 POI 时才出现 */
+.poi-panel{
+  position:absolute;top:52px;right:10px;z-index:20;max-width:196px;
+  background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:8px;padding:7px;box-shadow:var(--shadow);
+  display:flex;flex-wrap:wrap;gap:4px;
+}
+.poi-panel .poi-c{
+  background:none;border:1px solid var(--line);border-radius:6px;
+  padding:3px 8px;font-size:11px;color:var(--ink-3);white-space:nowrap;
+}
+.poi-panel .poi-c[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600;border-color:var(--ink)}
+.poi-panel .poi-c:disabled{opacity:.4;cursor:not-allowed}
+.poi-panel .poi-note{flex:1 0 100%;font-size:10px;color:var(--ink-3);line-height:1.45;margin-top:2px}
 #map-legend{
-  position:absolute;top:52px;left:10px;z-index:5;max-width:212px;cursor:pointer;
+  position:absolute;top:52px;left:10px;z-index:20;max-width:212px;cursor:pointer;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:8px;padding:7px 9px;
   box-shadow:var(--shadow);font-size:11.5px;line-height:1.5;
@@ -506,15 +522,18 @@ pre.code{
 #map-legend .lg-foot{margin-top:6px;padding-top:5px;border-top:1px solid var(--line);color:var(--ink-3);font-size:10.5px}
 #map-legend .lg-hint{color:var(--ink-3);font-size:10px;margin-top:5px}
 .map-note{
-  position:absolute;left:10px;bottom:10px;right:10px;z-index:5;
+  position:absolute;left:10px;bottom:10px;right:10px;z-index:20;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:11.5px;
   color:var(--ink-2);box-shadow:var(--shadow);display:none;
 }
 .map-note.on{display:block}
 .map-note b{color:var(--danger)}
+/* MapLibre 自带控件（缩放按钮）默认 z-index:2，marker 最高到 6，会盖住它 */
+.maplibregl-ctrl-top-left,.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right{z-index:20}
 .attrib{
-  position:absolute;right:8px;bottom:8px;z-index:4;font-size:10px;color:var(--ink-3);
+  position:absolute;right:8px;bottom:8px;z-index:18;font-size:10px;color:var(--ink-3);
   background:color-mix(in srgb,var(--paper) 78%,transparent);padding:2px 7px;border-radius:4px;
 }
 .attrib a{color:inherit}
@@ -729,6 +748,7 @@ pre.code{
             <button id="transit-btn" aria-pressed="false">地铁</button>
           </div>
         </div>
+        <div class="poi-panel" id="poi-panel" hidden></div>
         <div class="legend" id="map-legend" hidden></div>
         <div class="map-note" id="map-note"></div>
         <div class="attrib" id="attrib"></div>
@@ -1180,9 +1200,19 @@ function openDetail(id){
       <h4>信息来源</h4>
       <ul class="srcs">${(p.sources||[]).map(s =>
         `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("") || "<li>—</li>"}</ul>
-      <div class="dlg-f">${pickHTML(p)}</div>
+      <div class="dlg-f">${schedBtn(p)}${pickHTML(p)}</div>
     </div>`;
   $("#dlg").showModal();
+}
+
+/* 点地图 marker 改成弹这个窗之后，地图那一侧就没有排程入口了。
+   补在这里：看清楚是什么，当场就能决定排不排，不用再回清单里找一遍。 */
+function schedBtn(p){
+  const n = MAP.curDay();
+  if(n == null || isLodging(p)) return "";
+  const inDay = schedOf(p.id).some(s => s.n === n);
+  return `<button class="btn sched" data-sched="${esc(p.id)}">${
+    inDay ? `从第 ${n} 天移出` : `加进第 ${n} 天`}</button>`;
 }
 
 /* ─────────────────────────────────────────────── 不去的理由 */
@@ -1473,8 +1503,11 @@ function toast(msg){
    地图视图
 
    底图分层与降级链（每一级都实测过）：
-     ① 标准  graybeard style + OSM 官方 Shortbread 矢量瓦片。默认
-     ② 简约  OpenFreeMap positron。另一种观感，同时充当矢量源的备份
+     ① 简约  OpenFreeMap positron。默认——底图要让位给点位和连线，
+             graybeard 的路网/路牌/注记密度会把几十个 marker 淹掉
+     ② 标准  graybeard style + OSM 官方 Shortbread 矢量瓦片。
+             信息更全，同时充当矢量源的备份：另一家运营、另一套 schema，
+             不会跟 ① 一起挂。file:// 下也能出图（OSM 矢量端点不要 Referer）
      ③ 光栅  OSM 官方光栅，仅 http 下解锁 —— file:// 不发 Referer，
              OSM 会返回一张写着「Access blocked」的图片，
              且 HTTP 状态码是 200，onerror 抓不到
@@ -1512,6 +1545,9 @@ const MAP = (() => {
   let gbStyle = null;      // graybeard 的 style JSON 只抓一次，切回来不重复请求
 
   const BASEMAPS = [
+    { id:"ofm", label:"简约", kind:"vector", schema:"openmaptiles",
+      style:"https://tiles.openfreemap.org/styles/positron",
+      attrib:'OpenFreeMap © OpenMapTiles Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' },
     { id:"gb", label:"标准", kind:"vector", schema:"shortbread",
       style:() => (gbStyle ||= fetch(GRAYBEARD, { cache:"force-cache" })
         .then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -1524,9 +1560,6 @@ const MAP = (() => {
         })
         .catch(e => { gbStyle = null; throw e; })),   // 失败不要缓存，下次还能重试
       attrib: OSM_ATTRIB + ' · 矢量瓦片 <a href="https://vector.openstreetmap.org/" target="_blank" rel="noopener">vector.openstreetmap.org</a> · Style: VersaTiles graybeard' },
-    { id:"ofm", label:"简约", kind:"vector", schema:"openmaptiles",
-      style:"https://tiles.openfreemap.org/styles/positron",
-      attrib:'OpenFreeMap © OpenMapTiles Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' },
     { id:"osm", label:"光栅", kind:"raster", httpOnly:true,
       tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       attrib: OSM_ATTRIB },
@@ -1550,6 +1583,112 @@ const MAP = (() => {
     },
     openmaptiles: { "water":WATER, "waterway":WATER, "landcover_wood":"rgb(186,214,180)" },
   };
+
+  /* 底图上要藏掉的图层。
+     道路编号盾牌是白底黑字的数字方块——而我们的日程序号是白字圆点。
+     两种数字挤在一张图上，第一眼分不出哪个是「今天第几站」。
+     底图的职责是让人认出位置，认出之后要读的是我们画上去的东西。 */
+  const HIDE = {
+    openmaptiles: ["highway-shield-non-us", "highway-shield-us-interstate", "road_shield_us"],
+    shortbread:   ["label-motorway-shield"],
+  };
+
+  function applyHide(map, schema){
+    for(const id of HIDE[schema] || []){
+      if(map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+    }
+  }
+
+  /* POI 层。两套 style 情况完全不同：
+       简约（positron）一个 POI 图层都没有，但瓦片里有三万多个 POI 要素
+                        —— 数据在，只是没画，得自己加一层
+       标准（graybeard）自带 poi-amenity / poi-shop / poi-tourism 等 9 层，
+                        只要开关可见性
+     默认关：POI 密度是逐城市变的，大阪市中心开着就糊成一片。
+     不做类别白名单——交给 MapLibre 的标注避让去稀释，缩小时自然只剩几个。 */
+  const POI_LAYER = "x-poi";
+  const GB_POI = ["poi-amenity", "poi-leisure", "poi-tourism", "poi-shop",
+                  "poi-man_made", "poi-historic", "poi-emergency", "poi-office"];
+
+  /* 全开是没用的：实测道顿堀 z16 一屏 90 个标注，其中便利店（ファミリーマート
+     ×7、ローソン ×4）和连锁店占了大半，真正的 attraction 只有 4 个，
+     自家的序号点反而被挤掉。所以按类别分组，默认只开对排行程有用的三组。
+     class 取值来自 OpenMapTiles 的 poi 图层；没列到的归「其他」。 */
+  const POI_GROUPS = [
+    { id:"sight", label:"景点·文化", on:true,
+      cls:["attraction","museum","art_gallery","artwork","monument","castle",
+           "viewpoint","zoo","aquarium","theme_park","information","historic"] },
+    { id:"worship", label:"寺庙神社", on:true,
+      cls:["place_of_worship","cemetery"] },
+    { id:"transit", label:"车站·出入口", on:true,
+      cls:["railway","bus","subway","entrance","ferry_terminal","aerialway","harbor"] },
+    { id:"park", label:"公园·休闲", on:false,
+      cls:["park","playground","stadium","swimming","golf","picnic_site","campsite"] },
+    { id:"food", label:"餐饮", on:false,
+      cls:["restaurant","fast_food","cafe","bar","beer","pub","ice_cream"] },
+    { id:"shop", label:"购物", on:false,
+      cls:["shop","clothing_store","alcohol_shop","grocery","department_store","bakery"] },
+    { id:"stay", label:"住宿", on:false, cls:["lodging"] },
+    { id:"life", label:"生活服务", on:false,
+      cls:["pharmacy","hospital","police","post","atm","bank","toilets","parking",
+           "laundry","fire_station","school","college","library","town_hall"] },
+  ];
+  const poiClasses = () => POI_GROUPS.filter(g => st.poiOn.has(g.id)).flatMap(g => g.cls);
+
+  function addPoi(map, schema){
+    if(schema !== "openmaptiles" || map.getLayer(POI_LAYER)) return;
+    if(!map.getSource("openmaptiles")) return;
+    map.addLayer({
+      id: POI_LAYER, type:"symbol", source:"openmaptiles", "source-layer":"poi",
+      minzoom: 14,
+      filter: poiFilter(),
+      layout:{
+        "text-field": ["get", "name"],
+        "text-font": pickFont(map, false),   // 已经是数组，别再包一层
+        "text-size": 10.5,
+        "text-anchor": "top",
+        "text-offset": [0, 0.45],
+        "text-max-width": 7,
+        // rank 小的更重要，让它先占位置；剩下的被避让自然吃掉
+        "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
+        "text-optional": false,
+        visibility: "none",
+      },
+      paint:{ "text-color":"#6b6257", "text-halo-color":"rgba(255,255,255,.9)", "text-halo-width":1.1 },
+    });
+  }
+
+  const poiFilter = () =>
+    ["all", ["has", "name"], ["in", ["get", "class"], ["literal", poiClasses()]]];
+
+  /* 不做「地铁」那样的总开关：分类本身就是开关，全部取消勾选＝不显示。
+     多一个总开关意味着「开着总开关但一个分类都没选」这种自相矛盾的状态，
+     以及用户要点两次才看得到东西。
+
+     graybeard 那 9 层是按 OSM 大类切的（poi-shop / poi-tourism…），和
+     OpenMapTiles 的 class 值对不上，没法共用过滤器——那边只能整体开或关。 */
+  function applyPoi(){
+    renderPoiPanel();
+    const panel = $("#poi-panel");
+    if(panel) panel.hidden = st.engine !== "maplibre";
+    if(st.engine !== "maplibre" || !st.map) return;
+    const on = poiClasses().length > 0;
+    const ids = schemaOf(st.base) === "openmaptiles" ? [POI_LAYER] : GB_POI;
+    for(const id of ids){
+      if(st.map.getLayer(id)) st.map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    }
+    if(st.map.getLayer(POI_LAYER)) st.map.setFilter(POI_LAYER, poiFilter());
+  }
+
+  function renderPoiPanel(){
+    const box = $("#poi-panel");
+    if(!box) return;
+    const gb = schemaOf(st.base) !== "openmaptiles";
+    box.innerHTML = POI_GROUPS.map(g =>
+      `<button class="poi-c" data-poi="${g.id}" aria-pressed="${st.poiOn.has(g.id)}"
+        ${gb ? "disabled" : ""}>${g.label}</button>`).join("")
+      + (gb ? `<div class="poi-note">「标准」底图的 POI 按 OSM 大类切分，无法按上面的类别过滤</div>` : "");
+  }
 
   function applyTint(map, schema){
     for(const [id, color] of Object.entries(TINT[schema] || {})){
@@ -1575,7 +1714,8 @@ const MAP = (() => {
   }
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
-               base:"gb", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
+               base:"ofm", transit:false,
+               poiOn:new Set(POI_GROUPS.filter(g => g.on).map(g => g.id)), focus:null, show:new Set(["yes","maybe","none","no"]),
                curDay:null, flat:null, addOpen:false };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
@@ -2003,6 +2143,14 @@ const MAP = (() => {
     del:  stroke("M4.5 4.5l7 7M11.5 4.5l-7 7"),
   };
 
+  /* 未排入的一律 14px。以前想去/待定用 22px，结果是「还没决定的」比
+     「已经排进某天的」更抢眼——地图上真正要一眼找到的是今天要去的点。
+     现在只有排进日程才放大，尺寸本身就成了「定了没有」的信号。 */
+  /* 只用 1–6：marker 之间要分先后，但整体必须待在地图浮层（底图按钮、
+     图例、缩放控件、版权）**下面**。第一版用了 60–500，结果序号点直接
+     盖住了「店铺」按钮——marker 和那些浮层在同一个层叠上下文里。 */
+  const Z = { placed: 6, lodging: 5, yes: 4, maybe: 3, none: 2, no: 1 };
+
   function dotSpec(p){
     const lod = isLodging(p);
     const days = daysOf(p.id);
@@ -2011,9 +2159,12 @@ const MAP = (() => {
     return {
       lod, days, placed, k,
       // 已排入的放大到 26px：3px 描边要在这个尺寸上才分得出绿/琥珀/灰
-      dim: lod ? 24 : placed ? 26 : (k === "no" ? 14 : 22),
+      dim: lod ? 24 : placed ? 26 : 14,
       // 「不想去」且未排入时是个低调小点，3px 环会把它整个吃掉
       ring: (k === "no" && !placed && !lod) ? 1.5 : 3,
+      // 市中心几十个点会叠在一起，谁压在最下面就等于不存在。
+      // 排进日程的永远在最上，其余按 想去 > 待定 > 未表态 > 不想去。
+      z: placed ? Z.placed : lod ? Z.lodging : (Z[k] ?? Z.none),
     };
   }
 
@@ -2024,6 +2175,9 @@ const MAP = (() => {
 
     dot.style.width = dot.style.height = s.dim + "px";
     dot.style.borderRadius = s.lod ? "7px" : "50%";
+    // z-index 设在外层 marker 元素上——MapLibre 的 DOM marker 之间靠
+    // 文档顺序叠放，不设的话谁先创建谁在下面，跟重要性毫无关系。
+    el.style.zIndex = s.z;
 
     // 填充。
     // 未排入用白色而不是 var(--paper)：marker 画在地图上，而三个底图
@@ -2081,9 +2235,11 @@ const MAP = (() => {
     el.dataset.nm = p.name;
     el.innerHTML = "<i></i>";
     styleDot(el, p);
-    // 点地图图标＝放进/移出当前天。定位这件事已经交给 hover 联动了，
-    // 而在排程阶段，点一个点最想做的是「把它排进今天」。
-    el.onclick = e => { e.stopPropagation(); toggleInCurDay(p.id); };
+    /* 点地图图标＝看它是什么。曾经做成「放进/移出当前天」，实际用起来
+       不对：地图上认出一个点靠的是位置，而位置认出来之后第一反应是
+       「这是哪儿」，不是「把它排进今天」——后者是看清楚之后才做的决定。
+       排程仍然走清单栏的圆点、拖拽，以及详情弹窗底部的按钮。 */
+    el.onclick = e => { e.stopPropagation(); openDetail(p.id); };
     return el;
   }
 
@@ -2607,6 +2763,9 @@ const MAP = (() => {
     // 否则用户这时点底图按钮，操作的是一个可能马上要被拆掉的 map 实例。
     st.engine = "maplibre";
     applyTint(st.map, schemaOf(st.base));
+    applyHide(st.map, schemaOf(st.base));
+    addPoi(st.map, schemaOf(st.base));
+    applyPoi();   // 标准那套自带 POI 层，默认全可见，得按分类收一收
     // 地铁层是加分项，出问题不该把整张底图拖下水 ——
     // 实测就发生过：addTransit 抛错，异常一路冒到 init 的 catch，
     // 于是标准底图被判定为「不可用」并禁用，用户看到的是莫名其妙的降级。
@@ -2692,6 +2851,9 @@ const MAP = (() => {
     st.map.once("styledata", () => {
       if(seq !== switchSeq) return;
       applyTint(st.map, schemaOf(id));   // setStyle 会整份换掉，上色补丁和地铁层都得重挂
+      applyHide(st.map, schemaOf(id));
+      addPoi(st.map, schemaOf(id));
+      applyPoi();
       try{ addTransit(); }catch(e){ console.warn("地铁层重挂失败:", e); }
       try{ addRoute(); }catch(e){ console.warn("顺序线重挂失败:", e); }
       addMarkers();
@@ -2723,15 +2885,15 @@ const MAP = (() => {
       }catch(eGb){
         // 默认矢量源挂了不必直接跌到 Leaflet —— 还有第二个矢量源，
         // 而且它是另一家运营、另一套 schema，不会跟着一起挂。
-        if(st.base === "gb"){
-          problems.push("标准底图不可用（" + (eGb.message || eGb) + "），已改用简约");
+        if(st.base === "ofm"){
+          problems.push("简约底图不可用（" + (eGb.message || eGb) + "），已改用标准");
           if(st.map && st.map.remove){ try{ st.map.remove(); }catch(_){} }
           st.map = null;
           $("#map-canvas").innerHTML = "";
-          st.base = "ofm";
-          $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === "ofm"));
-          const gbBtn = document.querySelector('#basemaps [data-base="gb"]');
-          if(gbBtn){ gbBtn.disabled = true; gbBtn.title = "该底图当前不可用：" + (eGb.message || eGb); }
+          st.base = "gb";
+          $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === "gb"));
+          const dead = document.querySelector('#basemaps [data-base="ofm"]');
+          if(dead){ dead.disabled = true; dead.title = "该底图当前不可用：" + (eGb.message || eGb); }
           await startMapLibre();
           note(problems.join("；") + "。点位、联动、导出都不受影响。");
         }else throw eGb;
@@ -2868,6 +3030,14 @@ ${selected().map(p => `<Placemark>
     if(bm && !bm.disabled){ switchBase(bm.dataset.base); return; }
     const tb = e.target.closest("#transit-btn");
     if(tb && !tb.disabled){ setTransitVisible(tb.getAttribute("aria-pressed") !== "true"); return; }
+    const pc = e.target.closest("[data-poi]");
+    if(pc && !pc.disabled){
+      const id = pc.dataset.poi;
+      st.poiOn.has(id) ? st.poiOn.delete(id) : st.poiOn.add(id);
+      renderPoiPanel();
+      applyPoi();
+      return;
+    }
     const lg = e.target.closest("#map-legend");
     if(lg){
       const open = lg.classList.toggle("open");
@@ -2896,6 +3066,7 @@ ${selected().map(p => `<Placemark>
   });
 
   return { init, refresh, onShow, fitAll, ensureDays:autoItinerary,
+           curDay:() => st.curDay, toggleDay:toggleInCurDay,
            exportCSV:() => save(toCSV(), "places.csv", "text/csv;charset=utf-8"),
            exportKML:() => save(toKML(), "places.kml", "application/vnd.google-earth.kml+xml"),
            _st:st };
@@ -3222,6 +3393,13 @@ function boot(){
 document.addEventListener("click", e => {
   const detail = e.target.closest("[data-detail]");
   if(detail){ openDetail(detail.dataset.detail); return; }
+
+  const sb = e.target.closest("[data-sched]");
+  if(sb){
+    MAP.toggleDay(sb.dataset.sched);
+    openDetail(sb.dataset.sched);   // 重画按钮：加进去了就该变成「移出」
+    return;
+  }
 
   const pick = e.target.closest(".pick button");
   if(pick){
