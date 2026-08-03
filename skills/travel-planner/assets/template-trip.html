@@ -359,13 +359,15 @@ pre.code{
    .maplibregl-marker（position:absolute）并用 inline transform 定位。
    我们插手任何一个，marker 都会脱离地图坐标系。静态兜底图另有自己的定位规则。 */
 .mk{cursor:pointer}
+/* 尺寸、填充、描边、数字全部由 styleDot() 内联设置 —— 双层编码要在
+   一个地方决定完，散到 CSS 里就会出现「改了 JS 忘了改 .no:not(.placed)」。
+   这里只留与状态无关的形状和过渡。 */
 .mk i{
-  display:grid;place-items:center;width:22px;height:22px;border-radius:50%;
-  font:700 10px/1 var(--mono);color:#fff;font-style:normal;
-  box-shadow:0 0 0 2px var(--card),0 1px 5px rgba(0,0,0,.34);transition:transform .14s;
+  display:grid;place-items:center;border-radius:50%;
+  font:700 11px/1 var(--mono);color:#fff;font-style:normal;
+  transition:transform .14s,width .14s,height .14s;
 }
 .mk:hover i,.mk.on i{transform:scale(1.28)}
-.mk.no i{width:13px;height:13px;font-size:0;box-shadow:0 0 0 1.5px var(--card)}
 .mk.on::after{
   content:attr(data-nm);position:absolute;left:15px;top:-7px;white-space:nowrap;
   background:var(--ink);color:var(--paper);font-size:11px;padding:3px 8px;border-radius:5px;
@@ -599,6 +601,45 @@ const TRIP   = DATA.trip || {};
 const PLACES = DATA.places || [];
 const CATS   = DATA.categories || [];
 const CATMAP = Object.fromEntries(CATS.map(c => [c.id, c.label || c.id]));
+
+/* ═══════════════════════════════════════════════════════════════════
+   排程索引
+
+   itinerary 里只存「顺序即数组顺序」，序号和天色都在这里现算。
+   不把 day/seq 写回 place —— 两处存同一件事必然打架（删一个点就要
+   重排所有 seq）。契约见 references/data-schema.md。
+   ═══════════════════════════════════════════════════════════════════ */
+const ITIN = DATA.itinerary || [];
+const BY_ID = Object.fromEntries(PLACES.map(p => [p.id, p]));
+const isLodging = p => !!p && p.kind === "lodging";
+
+// 必须避开绿（想去）/琥珀（待定）/灰（不想去），否则填充与描边同色系；
+// 又要足够深，白色序号数字压得住。
+const DAY_COLORS = ["#546E7A", "#2E6FD9", "#7B3FB5", "#0F8A8A", "#C2185B", "#5D4037"];
+const dayColor = n => DAY_COLORS[((n % DAY_COLORS.length) + DAY_COLORS.length) % DAY_COLORS.length];
+
+let SCHED = new Map();          // placeId -> [{ n, seq, note }]，按出现先后
+function buildSched(){
+  SCHED = new Map();
+  for(const day of ITIN){
+    let seq = 0;
+    for(const ent of (day.places || [])){
+      const p = BY_ID[ent && ent.id];
+      if(!p) continue;
+      // 住宿不参与编号，景点才是 1、2、3 连续的
+      const lod = isLodging(p);
+      if(!lod) seq++;
+      const arr = SCHED.get(ent.id) || [];
+      arr.push({ n: day.n, seq: lod ? null : seq, note: ent.note || "" });
+      SCHED.set(ent.id, arr);
+    }
+  }
+}
+buildSched();
+
+const schedOf = id => SCHED.get(id) || [];
+const daysOf  = id => [...new Set(schedOf(id).map(s => s.n))].sort((a, b) => a - b);
+const firstSeq = id => (schedOf(id).find(s => s.seq != null) || {}).seq ?? null;
 
 /* 能力检测：保存能力取决于浏览器引擎，与 file:// / http:// 无关。
    实测 file:// 下 showSaveFilePicker 同样可用；真正不支持的是 Firefox / Safari。 */
@@ -1470,7 +1511,88 @@ const MAP = (() => {
   }
 
   /* ---------- marker ---------- */
-  function markerEl(p, idx){
+  /* ---------- 点位的双层编码 ----------
+     填充 = 哪一天，描边 = 想去/待定/不想去，数字 = 当天第几个。
+     「空心 = 还没安排，实心 = 已经安排」这个心理模型不用教。
+
+     不做 3 种选择 × N 天的完整叉乘：那是 12+ 种点状符号，超过人眼能
+     可靠分辨的上限。让两层不对等——色相给天（唯一能"一眼成簇"的通道），
+     选择退到描边。
+
+     几何全部在 JS 里算，CSS 只管形状和过渡。否则 `.no:not(.placed)`
+     这类组合会散落在两处，改一个忘一个。 */
+  const HOUSE = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">'
+              + '<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>';
+
+  function dotSpec(p){
+    const lod = isLodging(p);
+    const days = daysOf(p.id);
+    const placed = days.length > 0;
+    const k = kind(p);
+    return {
+      lod, days, placed, k,
+      // 已排入的放大到 26px：3px 描边要在这个尺寸上才分得出绿/琥珀/灰
+      dim: lod ? 24 : placed ? 26 : (k === "no" ? 14 : 22),
+      // 「不想去」且未排入时是个低调小点，3px 环会把它整个吃掉
+      ring: (k === "no" && !placed && !lod) ? 1.5 : 3,
+    };
+  }
+
+  function styleDot(el, p){
+    const dot = el.querySelector("i");
+    if(!dot) return;
+    const s = dotSpec(p);
+
+    dot.style.width = dot.style.height = s.dim + "px";
+    dot.style.borderRadius = s.lod ? "7px" : "50%";
+
+    // 填充。
+    // 未排入用白色而不是 var(--paper)：marker 画在地图上，而三个底图
+    // 全是浅色；页面本身是深色主题，--paper 是 #16130f 近黑，拿它当
+    // 「空心」会变成深色实心，跟想表达的意思正好相反。
+    // 侧栏的小圆点是另一回事——它坐在深色卡片上，那里 --paper 才是对的。
+    if(s.lod){
+      dot.style.background = "#4A4A4A";
+    }else if(!s.placed){
+      dot.style.background = "#fff";
+    }else if(s.days.length === 1){
+      dot.style.background = dayColor(s.days[0]);
+    }else{
+      // 多天：扇形分色。marker 是 DOM 元素而非 canvas 符号，
+      // conic-gradient 直接可用——这是 DOM marker 的实际优势。
+      const step = 100 / s.days.length;
+      dot.style.background = "conic-gradient("
+        + s.days.map((n, i) => `${dayColor(n)} ${i * step}% ${(i + 1) * step}%`).join(",") + ")";
+    }
+
+    // 描边。已排入时在填充与选择色之间夹一圈白——没有它，
+    // 深蓝填充配绿描边在复杂底图上会糊成一片。
+    //
+    // 住宿不套选择色：它没有「想去/待定/不想去」这个语义，
+    // 而它又必然 choice=null，套上去就成了满地的「未表态」橙圈，纯属误导。
+    const shadow = "0 1px 5px rgba(0,0,0,.34)";
+    if(s.lod){
+      dot.style.boxShadow = `0 0 0 2px var(--card), ${shadow}`;
+    }else{
+      const c = COLOR[s.k];
+      dot.style.boxShadow = s.placed
+        ? `0 0 0 1.5px #fff, 0 0 0 ${1.5 + s.ring}px ${c}, ${shadow}`
+        : `0 0 0 ${s.ring}px ${c}, ${shadow}`;
+    }
+
+    // 数字只在排进某一天之后才出现；住宿永不编号
+    if(s.lod){
+      dot.innerHTML = HOUSE;
+      dot.style.color = "#fff";
+    }else{
+      const seq = firstSeq(p.id);
+      dot.textContent = seq == null ? "" : String(seq);
+      dot.style.color = "#fff";
+      dot.style.fontSize = (seq == null ? 0 : 11) + "px";
+    }
+  }
+
+  function markerEl(p){
     const el = document.createElement("div");
     // 这里可以直接赋 className：元素刚创建、还没交给 MapLibre，
     // 它的 .maplibregl-marker 类是在 new Marker() 之后才加上的。
@@ -1478,7 +1600,8 @@ const MAP = (() => {
     el.className = "mk " + kind(p);
     el.dataset.id = p.id;
     el.dataset.nm = p.name;
-    el.innerHTML = `<i style="background:${COLOR[kind(p)]}">${idx}</i>`;
+    el.innerHTML = "<i></i>";
+    styleDot(el, p);
     el.onclick = e => { e.stopPropagation(); focus(p.id, true); };
     return el;
   }
@@ -1487,7 +1610,7 @@ const MAP = (() => {
     st.markers.forEach(m => m.remove && m.remove());
     st.markers.clear();
     pts().forEach((p, i) => {
-      const el = markerEl(p, i + 1);
+      const el = markerEl(p);
       if(st.engine === "maplibre"){
         const m = new maplibregl.Marker({ element:el }).setLngLat([p.coord.lon, p.coord.lat]).addTo(st.map);
         st.markers.set(p.id, m);
@@ -1519,8 +1642,7 @@ const MAP = (() => {
     el.classList.remove(...MK_STATE, "on");
     el.classList.add(kind(p));
     if(st.focus === p.id) el.classList.add("on");
-    const dot = el.querySelector("i");
-    if(dot) dot.style.background = COLOR[kind(p)];
+    styleDot(el, p);
     el.style.display = st.show.has(kind(p)) ? "" : "none";
   }
 
@@ -1536,6 +1658,28 @@ const MAP = (() => {
     renderSide();
   }
 
+  /* 侧栏小圆点走和地图 marker 同一套语义：填充=天、描边=选择、数字=当天序号。
+     两处显示同一份数据，规则不一致会让人以为是 bug。 */
+  function pinStyle(p){
+    const s = dotSpec(p);
+    const bg = s.lod ? "#4A4A4A"
+             : !s.placed ? "var(--paper)"
+             : s.days.length === 1 ? dayColor(s.days[0])
+             : "conic-gradient(" + s.days.map((n, i) => {
+                 const step = 100 / s.days.length;
+                 return `${dayColor(n)} ${i * step}% ${(i + 1) * step}%`;
+               }).join(",") + ")";
+    const ring = s.lod ? "0 0 0 1.5px var(--card)"
+               : s.placed ? `0 0 0 1.5px var(--card),0 0 0 3.5px ${COLOR[s.k]}`
+               : `0 0 0 2px ${COLOR[s.k]}`;
+    return `background:${bg};box-shadow:${ring}`;
+  }
+  function pinText(p){
+    if(isLodging(p)) return "🏨";
+    const seq = firstSeq(p.id);
+    return seq == null ? "" : String(seq);
+  }
+
   /* ---------- 侧栏 ---------- */
   function renderSide(){
     const box = $("#map-list");
@@ -1546,11 +1690,10 @@ const MAP = (() => {
       if(!byArea.has(k)) byArea.set(k, []);
       byArea.get(k).push(p);
     });
-    const order = new Map(pts().map((p, i) => [p.id, i + 1]));
     box.innerHTML = [...byArea.entries()].map(([area, ps]) =>
       `<div class="grp">${esc(area)} · ${ps.length}</div>` + ps.map(p =>
         `<div class="mi${st.focus === p.id ? " on" : ""}" data-goto="${esc(p.id)}">
-           <span class="pin" style="background:${COLOR[kind(p)]}">${order.get(p.id)}</span>
+           <span class="pin" style="${pinStyle(p)}">${pinText(p)}</span>
            <span class="t"><b>${esc(p.name)}</b><s>${esc(SCALE_TXT[p.scale] || p.scale)} · ${esc(p.ticket)}</s></span>
          </div>`).join("")).join("") ||
       `<div class="empty-state" style="padding:34px 16px"><div>当前筛选下没有可显示的地点</div></div>`;
@@ -1579,11 +1722,18 @@ const MAP = (() => {
     const y0 = Math.min(...lats), y1 = Math.max(...lats);
     const sx = v => 8 + (x1 === x0 ? 50 : (v - x0) / (x1 - x0) * 84);
     const sy = v => 92 - (y1 === y0 ? 50 : (v - y0) / (y1 - y0) * 84);
-    box.innerHTML = `<div class="static-map"><div class="sm-grid"></div>` +
-      list.map((p, i) => st.show.has(kind(p))
-        ? `<div class="mk ${kind(p)}" style="left:${sx(p.coord.lon)}%;top:${sy(p.coord.lat)}%"
-             data-nm="${esc(p.name)}" data-goto="${esc(p.id)}"><i style="background:${COLOR[kind(p)]}">${i+1}</i></div>`
-        : "").join("") + `</div>`;
+    // 用真实元素而不是拼字符串，好让 styleDot 是唯一决定外观的地方 ——
+    // 拼字符串就得把双层编码的逻辑再写一遍，两份必然走样。
+    box.innerHTML = `<div class="static-map"><div class="sm-grid"></div></div>`;
+    const wrap = box.querySelector(".static-map");
+    for(const p of list){
+      if(!st.show.has(kind(p))) continue;
+      const el = markerEl(p);
+      el.style.left = sx(p.coord.lon) + "%";
+      el.style.top  = sy(p.coord.lat) + "%";
+      el.dataset.goto = p.id;
+      wrap.appendChild(el);
+    }
   }
 
   /* ---------- 引擎启动 ---------- */
