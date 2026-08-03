@@ -1038,7 +1038,11 @@ function renderChips(){
    数字和它筛出来的那一类在同一个控件上，不用再对照图例。 */
 function updateProgress(){
   const n = { yes:0, maybe:0, no:0, none:0 };
-  for(const p of PLACES) n[p.choice || "none"]++;
+  // 住宿不算进这四类——它不是候选景点，算进去只会让「未表态」虚高一个
+  for(const p of PLACES){
+    if(p.kind === "lodging") continue;
+    n[p.choice || "none"]++;
+  }
   for(const b of $$(".mfil")){
     const c = b.querySelector(".c");
     if(c) c.textContent = n[b.dataset.c] ?? 0;
@@ -1425,6 +1429,12 @@ const MAP = (() => {
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
   const kind = p => p.choice || "none";
+
+  /* 住宿不参与「想去 / 待定 / 不想去」的筛选。
+     那三个词是对**候选景点**的取舍，而酒店是行程的锚点，不是候选项 ——
+     没人会「待定」自己已经订好的酒店。原来它 choice=null 就掉进「未表态」桶里，
+     语义上是错的，而且会让计数虚高。改成常显、且不计入任何一类。 */
+  const shown = p => isLodging(p) || st.show.has(kind(p));
   const COLOR = { yes:"var(--ok)", maybe:"var(--warn)", no:"var(--ink-3)", none:"var(--accent)" };
 
   function center(){
@@ -1716,8 +1726,9 @@ const MAP = (() => {
         .filter(p => geo(p))
         .map(p => [p.coord.lon, p.coord.lat]);
       if(pts.length < 2) continue;      // 一个点连不成线
+      const colour = dayColor(d.n);
       feats.push({ type:"Feature",
-        properties:{ n:d.n, colour:dayColor(d.n), cur:d.n === st.curDay ? 1 : 0 },
+        properties:{ n:d.n, colour, arrow:arrowId(colour), cur:d.n === st.curDay ? 1 : 0 },
         geometry:{ type:"LineString", coordinates:pts } });
     }
     return { type:"FeatureCollection", features:feats };
@@ -1726,6 +1737,9 @@ const MAP = (() => {
   function addRoute(){
     if(st.engine !== "maplibre" || !st.map) return;
     const m = st.map;
+    // 图先注册，再建源和图层 —— 顺序反了的话首屏一个箭头都不会出
+    let fresh = false;
+    for(const d of ITIN) fresh = ensureArrow(m, dayColor(d.n)) || fresh;
     if(!m.getSource(ROUTE_SRC)) m.addSource(ROUTE_SRC, { type:"geojson", data:routeData() });
 
     if(!m.getLayer("route-line")) m.addLayer({
@@ -1745,49 +1759,67 @@ const MAP = (() => {
     // 用自己画的图标而不是「▶」字符：实测那个字形在我们用的 Noto Sans 字体集里
     // 根本不存在，MapLibre 静默不渲染，一个箭头都出不来（和当初 emoji 那个坑同源，
     // 都是依赖了不受控的字形）。canvas 现画则不依赖任何字体。
-    ensureArrow(m);
     if(!m.getLayer("route-dir")) m.addLayer({
       id:"route-dir", type:"symbol", source:ROUTE_SRC, minzoom:11,
       layout:{
-        "symbol-placement":"line", "symbol-spacing":86,
-        "icon-image":"route-arrow", "icon-size":0.5,
+        "symbol-placement":"line", "symbol-spacing":78,
+        "icon-image":["get","arrow"],      // 每条线引用自己那张带天色的图
+        "icon-size":1,
         "icon-allow-overlap":false, "icon-rotation-alignment":"map",
         "icon-keep-upright":false, "icon-padding":2,
       },
       paint:{ "icon-opacity":["case",["==",["get","cur"],1], 0.95, 0.3] },
     });
+    if(fresh) relayoutArrows(m);
   }
 
-  /* 箭头图标：canvas 画一个带白描边的深色三角。
-     不做成 SDF（那样能跟着线上色），因为 SDF 需要真正的距离场，
-     拿纯 alpha 蒙版凑会在阈值处硬切、边缘很糙。线本身已经带着天的颜色了，
-     箭头只负责表达方向，中性色反而更清楚。
-     注意：setStyle 会清空已注册的图片，所以每次 addRoute 都要确认一次。 */
-  function ensureArrow(m){
-    if(m.hasImage && m.hasImage("route-arrow")) return;
-    const S = 24, c = document.createElement("canvas");
+  /* 箭头图标：canvas 画一个带白描边的三角，**每个天色各注册一张**。
+     不用 SDF（SDF 能用 icon-color 上色，但它要真正的距离场，拿纯 alpha
+     蒙版凑会在阈值处硬切、边缘很糙）。天色最多几种，逐色画一张更简单也更清楚。
+
+     尺寸算过一次错：canvas 28px 配 pixelRatio:2 等于 14px 的图，
+     再乘 icon-size 就是最终大小 —— 之前 24px/2×0.5 只有 6px，屏幕上几乎看不见。
+     注意 setStyle 会清空已注册的图片，所以每次 addRoute 都要重新确认。 */
+  const arrowId = colour => "route-arrow-" + colour.replace(/[^a-z0-9]/gi, "");
+
+  /* 返回 true 表示这次真的新注册了图 —— 调用方据此决定要不要触发重排。 */
+  function ensureArrow(m, colour){
+    const id = arrowId(colour);
+    if(m.hasImage && m.hasImage(id)) return false;
+    const S = 28, c = document.createElement("canvas");
     c.width = c.height = S;
     const g = c.getContext("2d");
     g.beginPath();
-    g.moveTo(S * 0.28, S * 0.16);
-    g.lineTo(S * 0.80, S * 0.50);
-    g.lineTo(S * 0.28, S * 0.84);
+    g.moveTo(S * 0.26, S * 0.14);
+    g.lineTo(S * 0.82, S * 0.50);
+    g.lineTo(S * 0.26, S * 0.86);
     g.closePath();
     g.lineJoin = "round";
-    g.lineWidth = S * 0.20;
-    g.strokeStyle = "rgba(255,255,255,.92)";
+    g.lineWidth = S * 0.22;
+    g.strokeStyle = "rgba(255,255,255,.95)";   // 白描边，压在深色底图上也认得出
     g.stroke();
-    g.fillStyle = "#3f3a33";
+    g.fillStyle = colour;
     g.fill();
-    try{ m.addImage("route-arrow", g.getImageData(0, 0, S, S), { pixelRatio:2 }); }
-    catch(e){ console.warn("方向箭头注册失败:", e); }
+    try{ m.addImage(id, g.getImageData(0, 0, S, S), { pixelRatio:2 }); }
+    catch(e){ console.warn("方向箭头注册失败:", e); return false; }
+    return true;
+  }
+
+  /* addImage 之后，已经排好版的 symbol 不会自动重排 —— 实测图片注册得比图层
+     布局晚一步，箭头一个都不出，直到重设一次 layout 属性才冒出来。
+     所以：新注册了图就把 icon-image 原样重设一遍，逼它重排。 */
+  function relayoutArrows(m){
+    if(m.getLayer("route-dir")) m.setLayoutProperty("route-dir", "icon-image", ["get", "arrow"]);
   }
 
   function refreshRoute(){
     if(st.engine !== "maplibre" || !st.map) return;
+    let fresh = false;
+    for(const d of ITIN) fresh = ensureArrow(st.map, dayColor(d.n)) || fresh;   // 天数可能变
     const src = st.map.getSource(ROUTE_SRC);
     if(src && src.setData) src.setData(routeData());
     else addRoute();
+    if(fresh) relayoutArrows(st.map);
   }
 
   /* ---------- marker ---------- */
@@ -1923,7 +1955,7 @@ const MAP = (() => {
   }
 
   function applyVis(p, el){
-    const on = st.show.has(kind(p));
+    const on = shown(p);
     const node = st.engine === "maplibre" ? (st.markers.get(p.id)?.getElement?.() || el) : el;
     if(node) node.style.display = on ? "" : "none";
   }
@@ -1940,7 +1972,7 @@ const MAP = (() => {
     el.classList.add(kind(p));
     if(st.focus === p.id) el.classList.add("on");
     styleDot(el, p);
-    el.style.display = st.show.has(kind(p)) ? "" : "none";
+    el.style.display = shown(p) ? "" : "none";
   }
 
   function refresh(){
@@ -2181,7 +2213,7 @@ const MAP = (() => {
   /* ---------- 侧栏 ---------- */
   function renderSide(){
     const box = $("#map-list");
-    const list = pts().filter(p => st.show.has(kind(p)));
+    const list = pts().filter(shown);
     const byArea = new Map();
     list.forEach(p => {
       const k = p.area || "其他";
@@ -2277,7 +2309,7 @@ const MAP = (() => {
     box.innerHTML = `<div class="static-map"><div class="sm-grid"></div></div>`;
     const wrap = box.querySelector(".static-map");
     for(const p of list){
-      if(!st.show.has(kind(p))) continue;
+      if(!shown(p)) continue;
       const el = markerEl(p);
       el.style.left = sx(p.coord.lon) + "%";
       el.style.top  = sy(p.coord.lat) + "%";
@@ -2505,7 +2537,7 @@ const MAP = (() => {
 
   /* ---------- 导出 ---------- */
   function selected(){
-    return pts().filter(p => st.show.has(kind(p)));
+    return pts().filter(shown);
   }
   function csvCell(v){
     const s = String(v ?? "").replace(/"/g, '""');
