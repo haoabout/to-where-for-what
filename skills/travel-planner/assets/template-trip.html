@@ -88,13 +88,11 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tab[aria-selected=true] .n{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 
 /* ═══════════════════════════════════════════════ 进度 */
-.prog-wrap{max-width:1180px;margin:0 auto;padding:0 20px}
-.prog{display:flex;align-items:center;gap:14px;padding:11px 0 13px;flex-wrap:wrap}
-.bar{flex:1;min-width:170px;height:5px;background:var(--paper-2);border-radius:9px;overflow:hidden;display:flex}
-.bar i{display:block;height:100%;transition:width .35s cubic-bezier(.4,0,.2,1)}
-.bar .b-yes{background:var(--ok)} .bar .b-maybe{background:var(--warn)} .bar .b-no{background:var(--line-2)}
-.legend{display:flex;gap:13px;font-size:12.5px;color:var(--ink-3);flex-wrap:wrap}
-.legend span{display:flex;align-items:center;gap:5px;white-space:nowrap}
+
+/* 视图①工具栏右侧的小计数。清单页是做选择的地方，实时看到四类各多少
+   最有用；地图视图那边则直接挂在筛选按钮上。 */
+.tally{display:flex;gap:11px;font-size:12px;color:var(--ink-3);margin-left:auto;white-space:nowrap}
+.tally span{display:flex;align-items:center;gap:4px}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .d-yes{background:var(--ok)} .d-maybe{background:var(--warn)} .d-no{background:var(--line-2)} .d-none{background:var(--line-2);opacity:.45}
 
@@ -366,7 +364,13 @@ pre.code{
   border-radius:var(--r) var(--r) 0 0;
 }
 .ms-head .seg{width:100%}
-.ms-head .seg button{flex:1;padding:5px 2px;font-size:11px;white-space:nowrap}
+.ms-head .seg button{flex:1;padding:5px 2px;font-size:11px;white-space:nowrap;
+  display:flex;align-items:center;justify-content:center;gap:3px}
+.ms-head .seg button .c{
+  font:600 9.5px/13px var(--mono);min-width:13px;padding:0 3px;border-radius:7px;
+  background:var(--line);color:var(--ink-3);
+}
+.ms-head .seg button[aria-pressed=true] .c{background:rgba(255,255,255,.24);color:inherit}
 .map-side .mi{
   display:flex;gap:9px;align-items:flex-start;padding:9px 12px;
   border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s;
@@ -623,14 +627,6 @@ pre.code{
       </div>
     </nav>
   </div>
-  <div class="prog-wrap">
-    <div class="prog">
-      <div class="bar" id="bar">
-        <i class="b-yes"  style="width:0"></i><i class="b-maybe" style="width:0"></i><i class="b-no" style="width:0"></i>
-      </div>
-      <div class="legend" id="legend"></div>
-    </div>
-  </div>
 </header>
 
 <main>
@@ -646,6 +642,7 @@ pre.code{
         <button id="f-all"  aria-pressed="true">全部</button>
         <button id="f-todo" aria-pressed="false">未表态</button>
       </div>
+      <div class="tally" id="tally"></div>
     </div>
     <div class="chips" id="chips"></div>
     <div id="groups"></div>
@@ -657,10 +654,10 @@ pre.code{
       <div class="map-side">
         <div class="ms-head">
           <div class="seg" role="group" aria-label="显示哪些选择">
-            <button class="mfil" data-c="yes"   aria-pressed="true">想去</button>
-            <button class="mfil" data-c="maybe" aria-pressed="true">待定</button>
-            <button class="mfil" data-c="none"  aria-pressed="true">未表态</button>
-            <button class="mfil" data-c="no"    aria-pressed="true">不想去</button>
+            <button class="mfil" data-c="yes"   aria-pressed="true">想去<span class="c">0</span></button>
+            <button class="mfil" data-c="maybe" aria-pressed="true">待定<span class="c">0</span></button>
+            <button class="mfil" data-c="none"  aria-pressed="true">未表态<span class="c">0</span></button>
+            <button class="mfil" data-c="no"    aria-pressed="true">不想去<span class="c">0</span></button>
           </div>
         </div>
         <div id="map-list"></div>
@@ -990,19 +987,22 @@ function renderChips(){
       `<button class="chip" data-tag="${esc(t)}" aria-pressed="false">#${esc(t)}<span class="c">${n}</span></button>`).join("");
 }
 
+/* 原来是页头一条横跨全宽的进度条 + 图例。它只在做选择时有意义，却常驻在
+   每个视图顶上占掉一行。改成把同一组数字挂到「筛选按钮」本身 ——
+   数字和它筛出来的那一类在同一个控件上，不用再对照图例。 */
 function updateProgress(){
   const n = { yes:0, maybe:0, no:0, none:0 };
   for(const p of PLACES) n[p.choice || "none"]++;
-  const total = PLACES.length || 1;
-  const bar = $("#bar").children;
-  bar[0].style.width = n.yes/total*100 + "%";
-  bar[1].style.width = n.maybe/total*100 + "%";
-  bar[2].style.width = n.no/total*100 + "%";
-  $("#legend").innerHTML =
-    `<span><i class="dot d-yes"></i>想去 ${n.yes}</span>
-     <span><i class="dot d-maybe"></i>待定 ${n.maybe}</span>
-     <span><i class="dot d-no"></i>不想去 ${n.no}</span>
-     <span><i class="dot d-none"></i>未表态 ${n.none}</span>`;
+  for(const b of $$(".mfil")){
+    const c = b.querySelector(".c");
+    if(c) c.textContent = n[b.dataset.c] ?? 0;
+  }
+  const t = $("#tally");
+  if(t) t.innerHTML =
+    `<span><i class="dot d-yes"></i>${n.yes}</span>
+     <span><i class="dot d-maybe"></i>${n.maybe}</span>
+     <span><i class="dot d-no"></i>${n.no}</span>
+     <span><i class="dot d-none"></i>${n.none}</span>`;
   $("#n-list").textContent = PLACES.length;
 }
 
@@ -2591,7 +2591,6 @@ function boot(){
   if(STANDALONE){
     // 独立攻略页：只保留攻略，去掉筛选相关的一切，方便分享/部署
     document.querySelector(".tabs").hidden = true;
-    document.querySelector(".prog-wrap").hidden = true;
     document.querySelector(".actionbar").hidden = true;
     document.querySelector("#view-list").remove();
     document.querySelector("#view-map").remove();
