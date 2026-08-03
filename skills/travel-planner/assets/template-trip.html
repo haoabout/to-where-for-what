@@ -349,7 +349,25 @@ pre.code{
 /* 名字用 .dnm 而不是 .nm —— 全局已有一个 .nm{font:500 17px/1.35 var(--serif)}
    是视图①的卡片标题。直接命中元素的规则永远压过从父元素继承来的字体，
    跟特异性无关，所以撞上之后 .ditem 里设的 12.5px sans 完全不起作用。 */
-.ditem .dnm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit}
+.ditem .dnm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit;flex:1;min-width:0}
+/* ↑↓× 平时藏起来（212px 的栏放不下三个常驻按钮），hover 才浮出。
+   触屏没有 hover，那里常驻显示。 */
+.ditem .dops{display:flex;gap:1px;flex:none;opacity:0;transition:opacity .12s}
+.ditem:hover .dops,.ditem:focus-within .dops{opacity:1}
+@media (hover:none){ .ditem .dops{opacity:1} }
+.dop{
+  background:none;border:0;color:var(--ink-3);width:17px;height:17px;line-height:1;
+  border-radius:4px;font-size:12px;display:grid;place-items:center;
+}
+.dop:hover{background:var(--line);color:var(--ink)}
+.dop:disabled{opacity:.25;cursor:default}
+.dop:disabled:hover{background:none;color:var(--ink-3)}
+
+/* 拖拽中的样子 */
+.ditem.drag-ghost{opacity:.35}
+.ditem.drag-chosen{background:var(--line)}
+.mi.drag-ghost{opacity:.35}
+.dlist.drag-over{background:color-mix(in srgb,var(--ink) 7%,transparent)}
 .ditem.lod .dnm{color:var(--ink-3)}
 .dempty{padding:9px 11px;font-size:11.5px;color:var(--ink-3)}
 .map-side{
@@ -378,10 +396,15 @@ pre.code{
 .map-side .mi:hover{background:var(--paper-2)}
 .map-side .mi.on{background:var(--accent-soft)}
 /* 与日程栏的序号圆圈同尺寸：两栏并排显示同一批地点，大小不一会显得是两套东西 */
+/* 与日程栏的序号圆圈同尺寸：两栏并排显示同一批地点，大小不一会显得是两套东西。
+   它同时是个按钮 —— 点圆点＝把这个地点放进/移出「当前天」，点卡片其余部分＝看详情。
+   状态控件和内容区分开，比再加一个 + 按钮省地方，也更符合「圆点就是状态」的直觉。 */
 .map-side .mi .pin{
   width:17px;height:17px;border-radius:50%;flex:none;margin-top:2px;
   display:grid;place-items:center;font:700 9.5px/1 var(--mono);color:#fff;
+  cursor:pointer;transition:transform .12s;
 }
+.map-side .mi .pin:hover{transform:scale(1.22)}
 .map-side .mi .t{flex:1;min-width:0}
 /* 严格两行：名称一行、元信息一行。原来把整段票价文案铺进来，
    一个条目能占五六行，三栏布局下这一列只有 ~230px，根本放不下。 */
@@ -700,6 +723,9 @@ pre.code{
 <dialog id="dlg"><div id="dlg-inner"></div></dialog>
 <dialog id="rdlg"><div id="rdlg-inner"></div></dialog>
 <div class="toast" id="toast"></div>
+
+<!-- SortableJS 1.15.7（MIT）由 build.py 内联注入。见 assets/vendor/README.md -->
+<script>/*__SORTABLE__*/</script>
 
 <script>
 "use strict";
@@ -1020,7 +1046,29 @@ function saveLocal(){
   try{
     localStorage.setItem(LS_KEY, JSON.stringify(
       PLACES.filter(p => p.choice).map(p => [p.id, p.choice, p.choice_reason || ""])));
+    // 排半小时的天，刷新一下没了会很崩溃。连同构建时间一起存 —— 见 loadItin。
+    localStorage.setItem(LS_KEY + ":itin",
+      JSON.stringify({ builtAt: BUILT_AT, itinerary: DATA.itinerary || [] }));
   }catch(e){ /* 隐私模式下 localStorage 不可用，忽略 */ }
+}
+
+/* 草稿和文件谁新？用构建时间判断：
+     builtAt 相同 → 这份草稿就是在当前这个 trip.html 上排的，比文件里的新，恢复它
+     builtAt 不同 → AI 重新生成过文件，文件更新，丢掉草稿
+   只比"文件里有没有 itinerary"是不够的：用户在浏览器里排完，文件里还留着
+   AI 早先写的那版，一刷新就把半小时的工作盖掉了。 */
+function loadItin(){
+  try{
+    const raw = localStorage.getItem(LS_KEY + ":itin");
+    if(!raw) return 0;
+    const d = JSON.parse(raw);
+    if(!d || d.builtAt !== BUILT_AT || !Array.isArray(d.itinerary)) return 0;
+    DATA.itinerary = d.itinerary;
+    ITIN.length = 0;
+    d.itinerary.forEach(x => ITIN.push(x));
+    buildSched();
+    return ITIN.reduce((n, day) => n + (day.places || []).length, 0);
+  }catch(e){ return 0; }
 }
 
 function loadLocal(){
@@ -1724,7 +1772,9 @@ const MAP = (() => {
     el.dataset.nm = p.name;
     el.innerHTML = "<i></i>";
     styleDot(el, p);
-    el.onclick = e => { e.stopPropagation(); focus(p.id, true); };
+    // 点地图图标＝放进/移出当前天。定位这件事已经交给 hover 联动了，
+    // 而在排程阶段，点一个点最想做的是「把它排进今天」。
+    el.onclick = e => { e.stopPropagation(); toggleInCurDay(p.id); };
     return el;
   }
 
@@ -1827,9 +1877,15 @@ const MAP = (() => {
       if(!p) return "";
       const lod = isLodging(p);
       if(!lod) seq++;
+      const note = (e.note || "").trim();
       return `<div class="ditem${lod ? " lod" : ""}" data-card="${esc(p.id)}" data-day="${d.n}" data-i="${i}">
           <span class="n" style="background:${lod ? "#4A4A4A" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
-          <span class="dnm" title="${esc(p.name)}">${esc(p.name)}</span>
+          <span class="dnm" title="${esc(p.name)}${note ? " — " + esc(note) : ""}">${esc(p.name)}</span>
+          <span class="dops">
+            <button class="dop" data-op="up"   title="上移" aria-label="上移">↑</button>
+            <button class="dop" data-op="down" title="下移" aria-label="下移">↓</button>
+            <button class="dop" data-op="del"  title="移出这一天" aria-label="移出">×</button>
+          </span>
         </div>`;
     }).join("");
     return `<div class="dbox${d.n === st.curDay ? " cur" : ""}" data-day="${d.n}">
@@ -1840,6 +1896,72 @@ const MAP = (() => {
         </div>
         <div class="dlist">${rows || `<div class="dempty">还没放地点</div>`}</div>
       </div>`;
+  }
+
+  /* ═══════════════ 拖拽 ═══════════════
+     用 SortableJS（内联，见 assets/vendor/README.md）。自己写 Pointer Events
+     要处理拖拽阈值、触屏 touch-action、占位符、命中测试、边缘自动滚动、
+     Escape 取消、跨容器 clone —— 这几样正好是它现成给的。
+
+     清单栏用 pull:"clone" + put:false：拖走后原卡留在池子里，这正是我们定的
+     「不移除、只标灰」语义。放进日程栏的是副本，不是搬移。
+
+     每次 renderDays() 都会重建 DOM，所以实例要跟着重建，否则绑在旧节点上。 */
+  const sortables = [];
+  function wireSortable(){
+    while(sortables.length){ try{ sortables.pop().destroy(); }catch(e){} }
+    if(typeof Sortable === "undefined") return;   // 没注入库时只剩 ↑↓ 按钮，功能不缺
+
+    const common = {
+      animation: 130,
+      // 卡片同时要能点击（弹详情/归入），阈值太小会把点击误判成拖拽
+      fallbackTolerance: 4,
+      delayOnTouchOnly: true, delay: 140,
+      scroll: true, scrollSensitivity: 60, scrollSpeed: 12,
+      ghostClass: "drag-ghost", chosenClass: "drag-chosen", dragClass: "drag-active",
+      filter: ".dop",           // ↑↓× 是按钮，不该拖起整行
+      preventOnFilter: false,
+    };
+
+    // 清单栏 → 只出不进
+    const pool = document.querySelector("#map-list");
+    if(pool) sortables.push(new Sortable(pool, Object.assign({}, common, {
+      group: { name: "trip", pull: "clone", put: false },
+      sort: false,
+      draggable: ".mi",
+      onEnd(){ /* 落点由目标容器的 onAdd 处理 */ },
+    })));
+
+    // 每一天
+    for(const list of document.querySelectorAll(".dlist")){
+      sortables.push(new Sortable(list, Object.assign({}, common, {
+        group: { name: "trip", pull: true, put: true },
+        draggable: ".ditem",
+        /* 两条都必须延到下一个 tick 再改数组。
+           applyDrop → commit → renderDays 会把整栏 innerHTML 重建，
+           而回调返回后 SortableJS 还要继续操作它刚搬过去的那个节点 ——
+           在回调里同步重建 DOM，它就会去碰一批已经不存在的元素。
+           这是"受控列表 + 拖拽库"的经典坑：库管 DOM，我们管数组，
+           两边都想当真相来源，就得让库先收完尾。 */
+        onAdd(evt){
+          const toBox = evt.to.closest(".dbox"), fromBox = evt.from.closest(".dbox");
+          if(!toBox) return;
+          const toDay = +toBox.dataset.day;
+          const fromDay = fromBox ? +fromBox.dataset.day : null;
+          const { oldIndex, newIndex, item } = evt;
+          const id = item.dataset.card;
+          item.remove();          // 数组才是真相，先把库插进来的节点撤掉
+          setTimeout(() => applyDrop({ fromDay, toDay, oldIndex, newIndex, id }), 0);
+        },
+        onUpdate(evt){
+          const box = evt.to.closest(".dbox");
+          if(!box) return;
+          const dayN = +box.dataset.day;
+          const { oldIndex, newIndex } = evt, id = evt.item.dataset.card;
+          setTimeout(() => applyDrop({ fromDay: dayN, toDay: dayN, oldIndex, newIndex, id }), 0);
+        },
+      })));
+    }
   }
 
   function renderDays(){
@@ -1864,11 +1986,69 @@ const MAP = (() => {
          <button id="day-mode" class="lnk">${st.flat ? "收起" : "平铺"}</button></div>`
       + caps
       + ITIN.filter(d => st.flat || d.n === st.curDay).map(dayBox).join("");
+    wireSortable();
   }
 
   function setCurDay(n){
     st.curDay = n;
     renderDays();
+  }
+
+  /* ═══════════════ 归入 / 移出 / 排序 ═══════════════
+     改完统一走 commit()：重建索引 → 重画三处（日程栏、清单栏、marker）→ 暂存。
+     少了任何一处，界面就会和数据对不上。 */
+  function commit(){
+    buildSched();     // 序号和天色都是现算的，数组一动就得重建
+    refresh();        // 重画 marker + 清单栏 + 日程栏
+    saveLocal();
+  }
+
+  const curDayObj = () => ITIN.find(d => d.n === st.curDay) || null;
+
+  /* 点清单栏的圆点：不在当前天就加进去，已在就移出（同一天出现多次时移出最后一次）。
+     点卡片其余部分仍然是弹详情 —— 状态控件和内容区各管各的。 */
+  function toggleInCurDay(id){
+    const d = curDayObj();
+    if(!d){ toast("还没有日程。先建立分天，再往里放地点。"); return; }
+    d.places = d.places || [];
+    const at = d.places.map(e => e.id).lastIndexOf(id);
+    if(at >= 0){
+      d.places.splice(at, 1);
+    }else{
+      d.places.push({ id });
+    }
+    commit();
+  }
+
+  function dayItemOp(dayN, idx, op){
+    const d = ITIN.find(x => x.n === dayN);
+    if(!d || !Array.isArray(d.places) || !d.places[idx]) return;
+    if(op === "del"){
+      d.places.splice(idx, 1);
+    }else{
+      const to = idx + (op === "up" ? -1 : 1);
+      if(to < 0 || to >= d.places.length) return;
+      const [it] = d.places.splice(idx, 1);
+      d.places.splice(to, 0, it);
+    }
+    commit();
+  }
+
+  /* SortableJS 的回调只给「第几个」，落回数组要自己搬。
+     from/to 可能是不同的天，也可能是从清单栏拖过来的（那是 clone，没有源要删）。 */
+  function applyDrop({ fromDay, toDay, oldIndex, newIndex, id }){
+    const to = ITIN.find(d => d.n === toDay);
+    if(!to) return;
+    to.places = to.places || [];
+    if(fromDay == null){                       // 来自清单栏：新增一项
+      to.places.splice(newIndex, 0, { id });
+    }else{
+      const from = ITIN.find(d => d.n === fromDay);
+      if(!from || !from.places || !from.places[oldIndex]) return;
+      const [it] = from.places.splice(oldIndex, 1);
+      to.places.splice(newIndex, 0, it);
+    }
+    commit();
   }
 
   /* ---------- 侧栏 ---------- */
@@ -1888,6 +2068,7 @@ const MAP = (() => {
            <span class="t"><b>${esc(p.name)}</b><s>${metaLine(p)}</s></span>
          </div>`).join("")).join("") ||
       `<div class="empty-state" style="padding:34px 16px"><div>当前筛选下没有可显示的地点</div></div>`;
+    wireSortable();
   }
 
   /* 元信息压到一行：时长 · 价格 · 最多一个警示。
@@ -2258,6 +2439,21 @@ ${selected().map(p => `<Placemark>
 
   /* ---------- 事件 ---------- */
   document.addEventListener("click", e => {
+    // 圆点是状态控件：点它＝把这个地点放进/移出「当前天」。
+    // 必须排在「点卡片弹详情」之前，否则永远走不到这里。
+    const pin = e.target.closest(".map-side .mi .pin");
+    if(pin){
+      const row = pin.closest("[data-card]");
+      if(row) toggleInCurDay(row.dataset.card);
+      return;
+    }
+    // 日程条目上的 ↑ ↓ ×
+    const dop = e.target.closest(".dop");
+    if(dop){
+      const row = dop.closest(".ditem");
+      if(row) dayItemOp(+row.dataset.day, +row.dataset.i, dop.dataset.op);
+      return;
+    }
     // 清单条目 → 弹详情。以前是把地图飞到该点，但 hover 已经能定位，
     // 而点开卡片想看的其实是「它到底是什么」。
     const card = e.target.closest("[data-card]");
@@ -2569,6 +2765,7 @@ function boot(){
   $("#subtitle").innerHTML = sub;
 
   const restored = loadLocal();
+  const restoredItin = loadItin();
 
   if(ROUTE_HTML){
     $("#guide-body").innerHTML = ROUTE_HTML;
@@ -2603,7 +2800,9 @@ function boot(){
     switchView(v);
   }
 
-  if(restored) toast(`从浏览器缓存恢复了 ${restored} 个之前的选择`);
+  const msg = [restored && `${restored} 个之前的选择`,
+               restoredItin && `${restoredItin} 项日程安排`].filter(Boolean);
+  if(msg.length) toast(`从浏览器缓存恢复了 ${msg.join("、")}`);
 }
 
 /* ─────────────────────────────────────────────── 事件 */

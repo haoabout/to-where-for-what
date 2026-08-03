@@ -36,6 +36,7 @@ TEMPLATE = SKILL_ROOT / "assets" / "template-trip.html"
 DATA_MARK = "/*__TRIP_DATA__*/null"
 ROUTE_MARK = "/*__ROUTE_HTML__*/null"
 TRANSIT_MARK = "/*__TRANSIT__*/null"
+SORTABLE_MARK = "/*__SORTABLE__*/"
 BUILT_MARK = "/*__BUILT_AT__*/null"
 PID_FILE = ".server.pid"
 
@@ -191,6 +192,14 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
             print(f"  ⚠ transit.geojson 解析失败，本次不含地铁层: {e}")
 
     html = TEMPLATE.read_text(encoding="utf-8")
+
+    # 第三方拖拽库内联进来。不走 CDN：地图挂了有降级链且本来就要联网，
+    # 而排序不需要网——因为 unpkg 挂掉就排不了序，是自找的故障点。
+    vendor = SKILL_ROOT / "assets" / "vendor" / "sortable.min.js"
+    sortable = vendor.read_text(encoding="utf-8") if vendor.exists() else ""
+    if not sortable:
+        print("  ⚠ 找不到 assets/vendor/sortable.min.js，拖拽排序将不可用（上下移按钮仍可用）")
+
     for mark in (DATA_MARK, BUILT_MARK):
         if mark not in html:
             sys.exit(f"模板缺少占位符 {mark}")
@@ -203,6 +212,7 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     html = html.replace(DATA_MARK, data_js)
     html = html.replace(ROUTE_MARK, route_js)
     html = html.replace(TRANSIT_MARK, transit_js)
+    html = html.replace(SORTABLE_MARK, sortable)
     html = html.replace(BUILT_MARK, json.dumps(time.strftime("%Y-%m-%d %H:%M")))
     if standalone:
         html = html.replace("__STANDALONE__", "true")
