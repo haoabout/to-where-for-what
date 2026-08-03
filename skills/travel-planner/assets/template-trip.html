@@ -1697,6 +1697,99 @@ const MAP = (() => {
     + `</div><div class="lg-hint">点击${feats.length > 0 ? "展开线路名" : ""}</div>`;
   }
 
+  /* ═══════════════ 顺序线 ═══════════════
+     把每天的点按数组顺序连起来，用当天的颜色。绕不绕路一眼可见 ——
+     「中之岛 → 南港 → 梅田 → 天保山」这种来回折返在清单里看不出来，
+     画成线立刻刺眼。这是「排完看一眼再调」的抓手。
+
+     住宿也串进去：一天从酒店出发、回到酒店，那才是真实路线。
+     缺坐标的点跳过（连过去会把线拉到 null 岛）。
+     同一地点一天出现两次时线会折回它 —— 那是对的，本来就要回去。 */
+  const ROUTE_SRC = "route-src";
+  const R_LAYERS = ["route-line", "route-dir"];
+
+  function routeData(){
+    const feats = [];
+    for(const d of ITIN){
+      const pts = (d.places || [])
+        .map(e => BY_ID[e && e.id])
+        .filter(p => geo(p))
+        .map(p => [p.coord.lon, p.coord.lat]);
+      if(pts.length < 2) continue;      // 一个点连不成线
+      feats.push({ type:"Feature",
+        properties:{ n:d.n, colour:dayColor(d.n), cur:d.n === st.curDay ? 1 : 0 },
+        geometry:{ type:"LineString", coordinates:pts } });
+    }
+    return { type:"FeatureCollection", features:feats };
+  }
+
+  function addRoute(){
+    if(st.engine !== "maplibre" || !st.map) return;
+    const m = st.map;
+    if(!m.getSource(ROUTE_SRC)) m.addSource(ROUTE_SRC, { type:"geojson", data:routeData() });
+
+    if(!m.getLayer("route-line")) m.addLayer({
+      id:"route-line", type:"line", source:ROUTE_SRC,
+      layout:{ "line-cap":"round", "line-join":"round" },
+      paint:{
+        "line-color":["get","colour"],
+        "line-width":["interpolate",["linear"],["zoom"], 10,2, 14,3.4, 17,4.6],
+        // 非当前天压到 30%，否则多天同屏会成一团面条
+        "line-opacity":["case",["==",["get","cur"],1], 0.85, 0.3],
+        "line-dasharray":[2.4, 1.4],   // 虚线：和地铁的实线区分开，这是"我的路线"不是"轨道"
+      },
+    });
+
+    // 方向箭头。只连线只能看出绕不绕，看不出先后 —— 而顺序正是这一步要定的东西。
+    //
+    // 用自己画的图标而不是「▶」字符：实测那个字形在我们用的 Noto Sans 字体集里
+    // 根本不存在，MapLibre 静默不渲染，一个箭头都出不来（和当初 emoji 那个坑同源，
+    // 都是依赖了不受控的字形）。canvas 现画则不依赖任何字体。
+    ensureArrow(m);
+    if(!m.getLayer("route-dir")) m.addLayer({
+      id:"route-dir", type:"symbol", source:ROUTE_SRC, minzoom:11,
+      layout:{
+        "symbol-placement":"line", "symbol-spacing":86,
+        "icon-image":"route-arrow", "icon-size":0.5,
+        "icon-allow-overlap":false, "icon-rotation-alignment":"map",
+        "icon-keep-upright":false, "icon-padding":2,
+      },
+      paint:{ "icon-opacity":["case",["==",["get","cur"],1], 0.95, 0.3] },
+    });
+  }
+
+  /* 箭头图标：canvas 画一个带白描边的深色三角。
+     不做成 SDF（那样能跟着线上色），因为 SDF 需要真正的距离场，
+     拿纯 alpha 蒙版凑会在阈值处硬切、边缘很糙。线本身已经带着天的颜色了，
+     箭头只负责表达方向，中性色反而更清楚。
+     注意：setStyle 会清空已注册的图片，所以每次 addRoute 都要确认一次。 */
+  function ensureArrow(m){
+    if(m.hasImage && m.hasImage("route-arrow")) return;
+    const S = 24, c = document.createElement("canvas");
+    c.width = c.height = S;
+    const g = c.getContext("2d");
+    g.beginPath();
+    g.moveTo(S * 0.28, S * 0.16);
+    g.lineTo(S * 0.80, S * 0.50);
+    g.lineTo(S * 0.28, S * 0.84);
+    g.closePath();
+    g.lineJoin = "round";
+    g.lineWidth = S * 0.20;
+    g.strokeStyle = "rgba(255,255,255,.92)";
+    g.stroke();
+    g.fillStyle = "#3f3a33";
+    g.fill();
+    try{ m.addImage("route-arrow", g.getImageData(0, 0, S, S), { pixelRatio:2 }); }
+    catch(e){ console.warn("方向箭头注册失败:", e); }
+  }
+
+  function refreshRoute(){
+    if(st.engine !== "maplibre" || !st.map) return;
+    const src = st.map.getSource(ROUTE_SRC);
+    if(src && src.setData) src.setData(routeData());
+    else addRoute();
+  }
+
   /* ---------- marker ---------- */
   /* ---------- 点位的双层编码 ----------
      填充 = 哪一天，描边 = 想去/待定/不想去，数字 = 当天第几个。
@@ -2024,6 +2117,7 @@ const MAP = (() => {
   function setCurDay(n){
     st.curDay = n;
     renderDays();
+    refreshRoute();   // 当前天决定哪条线是实的、哪些压到 30%
   }
 
   /* ═══════════════ 归入 / 移出 / 排序 ═══════════════
@@ -2032,6 +2126,7 @@ const MAP = (() => {
   function commit(){
     buildSched();     // 序号和天色都是现算的，数组一动就得重建
     refresh();        // 重画 marker + 清单栏 + 日程栏
+    refreshRoute();   // 顺序变了，地图上的连线也要跟着变
     saveLocal();
   }
 
@@ -2248,6 +2343,8 @@ const MAP = (() => {
     // 于是标准底图被判定为「不可用」并禁用，用户看到的是莫名其妙的降级。
     try{ addTransit(); }
     catch(e){ console.warn("地铁层加载失败（不影响底图）:", e); st.transitBroken = String(e.message || e); }
+    // 顺序线加在地铁层之后 → 画在它上面。这是用户自己的路线，比参考用的轨道图重要。
+    try{ addRoute(); }catch(e){ console.warn("顺序线加载失败（不影响底图）:", e); }
     st.map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "bottom-right");
     st.map.resize();          // 容器可能刚从 hidden 变可见，尺寸要重新量
     fitAll();
@@ -2327,6 +2424,7 @@ const MAP = (() => {
       if(seq !== switchSeq) return;
       applyTint(st.map, schemaOf(id));   // setStyle 会整份换掉，上色补丁和地铁层都得重挂
       try{ addTransit(); }catch(e){ console.warn("地铁层重挂失败:", e); }
+      try{ addRoute(); }catch(e){ console.warn("顺序线重挂失败:", e); }
       addMarkers();
       setAttrib();
     });
