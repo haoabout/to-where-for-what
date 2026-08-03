@@ -488,20 +488,6 @@ pre.code{
 /* 图例默认只显示线号色块（两行就够），点一下才展开全名。
    12 条线的完整列表要 210×340px，占掉地图 14% 的面积，而且正好压在
    左上角的点位上 —— 常驻显示是不合适的。 */
-/* POI 分类开关。跟图例同一列，开着 POI 时才出现 */
-.poi-panel{
-  position:absolute;top:52px;right:10px;z-index:20;max-width:196px;
-  background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
-  border:1px solid var(--line);border-radius:8px;padding:7px;box-shadow:var(--shadow);
-  display:flex;flex-wrap:wrap;gap:4px;
-}
-.poi-panel .poi-c{
-  background:none;border:1px solid var(--line);border-radius:6px;
-  padding:3px 8px;font-size:11px;color:var(--ink-3);white-space:nowrap;
-}
-.poi-panel .poi-c[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600;border-color:var(--ink)}
-.poi-panel .poi-c:disabled{opacity:.4;cursor:not-allowed}
-.poi-panel .poi-note{flex:1 0 100%;font-size:10px;color:var(--ink-3);line-height:1.45;margin-top:2px}
 #map-legend{
   position:absolute;top:52px;left:10px;z-index:20;max-width:212px;cursor:pointer;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
@@ -748,7 +734,6 @@ pre.code{
             <button id="transit-btn" aria-pressed="false">地铁</button>
           </div>
         </div>
-        <div class="poi-panel" id="poi-panel" hidden></div>
         <div class="legend" id="map-legend" hidden></div>
         <div class="map-note" id="map-note"></div>
         <div class="attrib" id="attrib"></div>
@@ -1633,7 +1618,7 @@ const MAP = (() => {
       cls:["pharmacy","hospital","police","post","atm","bank","toilets","parking",
            "laundry","fire_station","school","college","library","town_hall"] },
   ];
-  const poiClasses = () => POI_GROUPS.filter(g => st.poiOn.has(g.id)).flatMap(g => g.cls);
+  const poiClasses = () => POI_GROUPS.filter(g => g.on).flatMap(g => g.cls);
 
   function addPoi(map, schema){
     if(schema !== "openmaptiles" || map.getLayer(POI_LAYER)) return;
@@ -1661,16 +1646,13 @@ const MAP = (() => {
   const poiFilter = () =>
     ["all", ["has", "name"], ["in", ["get", "class"], ["literal", poiClasses()]]];
 
-  /* 不做「地铁」那样的总开关：分类本身就是开关，全部取消勾选＝不显示。
-     多一个总开关意味着「开着总开关但一个分类都没选」这种自相矛盾的状态，
-     以及用户要点两次才看得到东西。
+  /* 没有界面开关：分类固定为 POI_GROUPS 里 on:true 的那几组。
+     曾经做过一个分类面板，占掉地图右上角一大块，而这几组是否合适
+     并不是每次用图都要改的事——真要调就改上面那张表。
 
      graybeard 那 9 层是按 OSM 大类切的（poi-shop / poi-tourism…），和
      OpenMapTiles 的 class 值对不上，没法共用过滤器——那边只能整体开或关。 */
   function applyPoi(){
-    renderPoiPanel();
-    const panel = $("#poi-panel");
-    if(panel) panel.hidden = st.engine !== "maplibre";
     if(st.engine !== "maplibre" || !st.map) return;
     const on = poiClasses().length > 0;
     const ids = schemaOf(st.base) === "openmaptiles" ? [POI_LAYER] : GB_POI;
@@ -1678,16 +1660,6 @@ const MAP = (() => {
       if(st.map.getLayer(id)) st.map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
     }
     if(st.map.getLayer(POI_LAYER)) st.map.setFilter(POI_LAYER, poiFilter());
-  }
-
-  function renderPoiPanel(){
-    const box = $("#poi-panel");
-    if(!box) return;
-    const gb = schemaOf(st.base) !== "openmaptiles";
-    box.innerHTML = POI_GROUPS.map(g =>
-      `<button class="poi-c" data-poi="${g.id}" aria-pressed="${st.poiOn.has(g.id)}"
-        ${gb ? "disabled" : ""}>${g.label}</button>`).join("")
-      + (gb ? `<div class="poi-note">「标准」底图的 POI 按 OSM 大类切分，无法按上面的类别过滤</div>` : "");
   }
 
   function applyTint(map, schema){
@@ -1714,8 +1686,7 @@ const MAP = (() => {
   }
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
-               base:"ofm", transit:false,
-               poiOn:new Set(POI_GROUPS.filter(g => g.on).map(g => g.id)), focus:null, show:new Set(["yes","maybe","none","no"]),
+               base:"ofm", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
                curDay:null, flat:null, addOpen:false };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
@@ -3030,14 +3001,6 @@ ${selected().map(p => `<Placemark>
     if(bm && !bm.disabled){ switchBase(bm.dataset.base); return; }
     const tb = e.target.closest("#transit-btn");
     if(tb && !tb.disabled){ setTransitVisible(tb.getAttribute("aria-pressed") !== "true"); return; }
-    const pc = e.target.closest("[data-poi]");
-    if(pc && !pc.disabled){
-      const id = pc.dataset.poi;
-      st.poiOn.has(id) ? st.poiOn.delete(id) : st.poiOn.add(id);
-      renderPoiPanel();
-      applyPoi();
-      return;
-    }
     const lg = e.target.closest("#map-legend");
     if(lg){
       const open = lg.classList.toggle("open");
