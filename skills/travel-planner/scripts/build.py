@@ -84,14 +84,30 @@ def md_to_html(md: str) -> str:
             out.append("</tbody></table></div>"); in_table = False
 
     def inline(t: str) -> str:
-        t = (t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+        # 引号也要转义。route.md 的正文由 AI 写，而素材来自联网搜到的第三方网页 ——
+        # 等于把不可信文本喂进了一个 HTML 生成器。& < > 挡住了裸标签，但
+        # [x](a"onfocus=…) 这种不含空格和右括号的串能从 href 的引号里逸出去。
+        t = (t.replace("&", "&amp;").replace("<", "&lt;")
+              .replace(">", "&gt;").replace('"', "&quot;"))
         t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
         t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", t)
         t = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", t)
         t = re.sub(r"~~([^~]+)~~", r"<del>\1</del>", t)
-        t = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)",
-                   r'<a href="\2" target="_blank" rel="noopener">\1</a>', t)
+        t = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, t)
         return t
+
+    # 协议白名单。不在名单里的不给链接，但原样保留文字和地址 ——
+    # 悄悄吞掉一条来源，比渲染成纯文本更糟。
+    SAFE_URL = re.compile(r"(?:https?://|mailto:|#|\./|\.\./|/)", re.I)
+
+    def link(m: "re.Match[str]") -> str:
+        text, url = m.group(1), m.group(2)
+        if not SAFE_URL.match(url):
+            return f"{text}（{url}）"
+        # 页内锚点不开新标签页——那是同一篇攻略里的跳转，不是外链
+        if url.startswith("#"):
+            return f'<a href="{url}">{text}</a>'
+        return f'<a href="{url}" target="_blank" rel="noopener">{text}</a>'
 
     for raw in lines:
         line = raw.rstrip()
