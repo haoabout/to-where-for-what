@@ -71,7 +71,31 @@ def run(doc: dict) -> validate.Report:
     for i, p in enumerate(doc["places"]):
         validate.check_place(p, i, doc, rep)
     validate.check_cross(doc, rep)
+    validate.check_itinerary(doc, rep)
     return rep
+
+
+def with_itinerary(doc: dict, **kw) -> None:
+    """给基准文档加一份两天的排程。行程日期是 09-12(周六) 与 09-13(周日)。"""
+    doc["itinerary"] = [
+        {"n": 1, "date": "2026-09-12", "label": "第 1 天",
+         "places": [{"id": "os-001"}]},
+        {"n": 2, "date": "2026-09-13", "label": "第 2 天",
+         "places": [{"id": "os-002"}]},
+    ]
+    for k, v in kw.items():
+        doc["itinerary"][0][k] = v
+
+
+def hotel(doc: dict, **kw) -> dict:
+    """往 places 里加一个住宿条目，返回它。"""
+    h = {"id": "os-h1", "name": "梅田某酒店", "kind": "lodging",
+         "area": "梅田", "coord": {"lon": 135.4980, "lat": 34.7025},
+         # 住宿同样要过防幻觉闸门：AI 得真去查一下确认它存在、拿到地址
+         "sources": [{"title": "官网", "url": "https://example.org/hotel"}]}
+    h.update(kw)
+    doc["places"].append(h)
+    return h
 
 
 def messages(rep: validate.Report, level: str) -> str:
@@ -83,15 +107,19 @@ results: list[bool] = []
 
 
 def case(name: str, mutate, level: str, needle: str) -> None:
+    """needle 非空 → 断言该级别包含它；needle 为空 → 断言该级别一条都没有。
+
+    空串不能走 `needle in got`——`"" in s` 恒为真，那样的用例永远通过、
+    等于没写。"""
     doc = base_doc()
     mutate(doc)
     rep = run(doc)
     got = messages(rep, level)
-    ok = needle in got
+    ok = (not got) if needle == "" else (needle in got)
     results.append(ok)
     print(f"  {PASS if ok else FAIL} {name}")
     if not ok:
-        print(f"      期望 {level} 含 {needle!r}")
+        print(f"      期望 {level} {'一条都没有' if needle == '' else repr(needle)}")
         print(f"      实际 {level}: {got or '(无)'}")
 
 
@@ -180,6 +208,57 @@ def main() -> int:
     case("verified 时不豁免必填",
          lambda d: d["places"][1].update(verify={"state": "verified"}, hours=None),
          "P0", "缺少必填字段 hours")
+
+    print("\nitinerary · 排程结果")
+    case("排程干净时不该有 P0",
+         lambda d: with_itinerary(d), "P0", "")     # needle 为空串 → 只要不崩就算过
+    case("排到不存在的 id",
+         lambda d: (with_itinerary(d),
+                    d["itinerary"][0]["places"].append({"id": "os-999"})),
+         "P0", "在 places 里不存在")
+    case("排到当天闭馆的日子（中之岛美术馆周一休，排进周一）",
+         lambda d: (with_itinerary(d),
+                    d["itinerary"][0].update(date="2026-09-14"),   # 周一
+                    d["itinerary"][0]["places"].append({"id": "os-002"})),
+         "P0", "但它当天闭馆")
+    case("n 重复",
+         lambda d: (with_itinerary(d), d["itinerary"][1].update(n=1)),
+         "P0", "与 itinerary[0] 重复")
+    case("某一天空着",
+         lambda d: (with_itinerary(d), d["itinerary"][1].update(places=[])),
+         "P1", "一个地点都没有")
+    case("条目不是对象（写成了裸 id）",
+         lambda d: (with_itinerary(d), d["itinerary"][0].update(places=["os-001"])),
+         "P0", "形式的对象")
+    case("date 格式非法",
+         lambda d: (with_itinerary(d), d["itinerary"][0].update(date="2026/09/12")),
+         "P0", "date 格式应为")
+    case("永久关闭的地点被排进行程",
+         lambda d: (with_itinerary(d),
+                    d["places"][0].update(status="permanently_closed",
+                                          status_note="2025 年拆除")),
+         "P0", "已永久关闭")
+    case("同一地点排进两天却没写 note",
+         lambda d: (with_itinerary(d),
+                    d["itinerary"][1]["places"].append({"id": "os-001"})),
+         "P2", "却没写 note")
+    case("住宿没被排进任何一天",
+         lambda d: (hotel(d), with_itinerary(d)),
+         "P1", "没有出现在任何一天")
+    case("itinerary 不是数组",
+         lambda d: d.update(itinerary={"n": 1}), "P0", "必须是数组")
+
+    print("\nkind · 住宿走精简必填集")
+    case("住宿缺 tier/门票/闭馆日等不该报错",
+         lambda d: (hotel(d), with_itinerary(d),
+                    d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),
+         "P0", "")
+    case("住宿仍然要有坐标",
+         lambda d: (hotel(d, coord=None), with_itinerary(d),
+                    d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),
+         "P0", "缺少必填字段 coord")
+    case("kind 非法值",
+         lambda d: d["places"][1].update(kind="hostel"), "P0", "kind='hostel' 非法")
 
     ok, total = sum(results), len(results)
     print(f"\n{'\033[92m' if ok == total else '\033[91m'}{ok}/{total} 通过\033[0m")

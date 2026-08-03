@@ -35,13 +35,19 @@ VERIFY_STATES = {"verified", "partial", "blocked"}
 # 契约允许的全部字段。多出来的字段说明 AI 自己发明了 schema，
 # 而模板不会渲染它们——静默丢失比报错更糟，所以要提示。
 KNOWN_PLACE_FIELDS = {
-    "id", "name", "name_local", "name_en", "category", "tier", "scale",
+    "id", "name", "name_local", "name_en", "kind", "category", "tier", "scale",
     "parent_id", "area", "coord", "hours", "last_entry", "closed_days",
     "closed", "ticket", "booking", "booking_url", "status", "status_note",
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
     "photo_note", "tags", "media", "museum", "images", "sources",
     "verify", "choice", "choice_reason",
 }
+KINDS = {"attraction", "lodging"}
+
+# 住宿走一套精简的必填集：它不是"景点"，没有 tier / 门票 / 闭馆日 / 摄影机位这些概念，
+# 硬套景点的契约只会逼着人往里填假数据。
+LODGING_REQUIRED_STR = {"id", "name", "area"}
+LODGING_REQUIRED_ANY = {"coord"}
 KNOWN_TRIP_FIELDS = {
     "destination", "destination_local", "destination_en", "country", "bbox",
     "timezone", "output_language", "local_language", "dates", "days", "party",
@@ -162,17 +168,27 @@ def check_place(p, idx, doc, rep: Report) -> None:
     where = f"places[{idx}] {pid}"
     trip = doc.get("trip") or {}
 
+    kind = p.get("kind") or "attraction"
+    if kind not in KINDS:
+        rep.add("P0", where, f"kind={p.get('kind')!r} 非法，应为 {sorted(KINDS)}")
+        kind = "attraction"
+
     # 核实被拦截时，这几个字段允许为空——那正是「查不到」的含义。
     # 逼着填反而会让用户把猜测当成已核实的信息。
     vstate = (p.get("verify") or {}).get("state")
     excused = {"hours", "ticket", "status", "closed", "last_entry"} if vstate in ("blocked", "partial") else set()
 
-    for f in REQUIRED_STR:
+    if kind == "lodging":
+        req_str, req_any = LODGING_REQUIRED_STR, LODGING_REQUIRED_ANY
+    else:
+        req_str, req_any = REQUIRED_STR, REQUIRED_ANY
+
+    for f in req_str:
         if f in excused:
             continue
         if _blank(p.get(f)):
             rep.add("P0", where, f"缺少必填字段 {f}")
-    for f in REQUIRED_ANY:
+    for f in req_any:
         if f in excused:
             continue
         if p.get(f) is None:
@@ -192,8 +208,9 @@ def check_place(p, idx, doc, rep: Report) -> None:
     if "choice" in p and p["choice"] not in CHOICES:
         rep.add("P0", where, f"choice={p['choice']!r} 非法")
 
+    # 住宿不属于任何景点分类，不参与配额，也就不必落在 categories 里
     cat_ids = {c.get("id") for c in doc.get("categories") or []}
-    if p.get("category") and p["category"] not in cat_ids:
+    if kind != "lodging" and p.get("category") and p["category"] not in cat_ids:
         rep.add("P0", where, f"category={p['category']!r} 未在 categories 中定义")
 
     # 坐标
@@ -216,7 +233,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
     # 来源（防幻觉主闸门）
     srcs = p.get("sources")
     if not isinstance(srcs, list) or not srcs:
-        rep.add("P0", where, "sources 为空——未经联网核验的景点不许进入数据集")
+        rep.add("P0", where, "sources 为空——未经联网核验的条目不许进入数据集")
     else:
         for i, s in enumerate(srcs):
             if not isinstance(s, dict) or not _is_url(s.get("url")):
@@ -354,11 +371,109 @@ def check_cross(doc, rep: Report) -> None:
                 rep.add("P1", f"places[{ia}] / places[{ib}]",
                         f"{pa.get('name')} 与 {pb.get('name')} 坐标相距仅 {d:.0f} 米，疑似重复录入")
 
-    total = len(places)
+    total = len([p for p in places if (p.get("kind") or "attraction") != "lodging"])
     if total < 15:
         rep.add("P1", "places", f"总共只有 {total} 个景点，可能搜得不够充分（目标 35–50）")
     elif total > 60:
         rep.add("P1", "places", f"总共 {total} 个景点，超出建议上限，用户筛选负担过重")
+
+
+WEEK_CN = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+
+
+def check_itinerary(doc, rep: Report) -> None:
+    """校验排程结果 itinerary。
+
+    顶层叫 itinerary 而不是 days，是为了避开 trip.days（天数，整数）——
+    同名不同层不同类型，写 JSON 的人和读代码的人都会搞混。
+
+    没有 itinerary 就整段跳过：排程是可选阶段，老文件必须继续能用。
+    """
+    it = doc.get("itinerary")
+    if it is None:
+        return
+    if not isinstance(it, list):
+        rep.add("P0", "itinerary", "itinerary 必须是数组")
+        return
+
+    places = doc.get("places") or []
+    by_id = {p.get("id"): p for p in places if p.get("id")}
+
+    seen_n: dict[int, int] = {}
+    assigned: dict[str, list[int]] = {}      # place id -> 出现在哪几天
+
+    for di, day in enumerate(it):
+        dwhere = f"itinerary[{di}]"
+        if not isinstance(day, dict):
+            rep.add("P0", dwhere, "每一天必须是对象")
+            continue
+
+        n = day.get("n")
+        label = day.get("label") or (f"第 {n} 天" if isinstance(n, int) else dwhere)
+        if not isinstance(n, int):
+            rep.add("P0", dwhere, f"n 必须是整数（0 表示抵达当晚），实际 {n!r}")
+        elif n in seen_n:
+            rep.add("P0", dwhere, f"n={n} 与 itinerary[{seen_n[n]}] 重复")
+        else:
+            seen_n[n] = di
+
+        # 日期用来做闭馆冲突判断；第 0 天可以没有独立日期
+        d = _parse_date(day.get("date")) if day.get("date") else None
+        if day.get("date") and not d:
+            rep.add("P0", dwhere, f"date 格式应为 YYYY-MM-DD，实际 {day.get('date')!r}")
+
+        entries = day.get("places")
+        if not isinstance(entries, list):
+            rep.add("P0", dwhere, "places 必须是数组（顺序即游览顺序）")
+            continue
+        if not entries:
+            rep.add("P1", dwhere, f"{label} 一个地点都没有")
+
+        for ei, ent in enumerate(entries):
+            ewhere = f"{dwhere}.places[{ei}]"
+            if not isinstance(ent, dict) or not ent.get("id"):
+                rep.add("P0", ewhere, '每一项必须是 {"id": "..."} 形式的对象')
+                continue
+            pid = ent["id"]
+            p = by_id.get(pid)
+            if p is None:
+                rep.add("P0", ewhere, f"id {pid!r} 在 places 里不存在")
+                continue
+
+            assigned.setdefault(pid, []).append(n if isinstance(n, int) else di)
+
+            # ---- 闭馆冲突：这不是判断题，是那天去不了 ----
+            if d is not None:
+                wd = d.isoweekday()
+                cds = p.get("closed_days")
+                if isinstance(cds, list) and wd in cds:
+                    rep.add("P0", ewhere,
+                            f"{p.get('name')} 排在 {day.get('date')}（{WEEK_CN[wd]}），"
+                            f"但它当天闭馆（closed_days={cds}）")
+            if p.get("status") == "permanently_closed":
+                rep.add("P0", ewhere, f"{p.get('name')} 已永久关闭，不能排进行程")
+
+    # ---- 跨天的检查 ----
+    for pid, days_in in assigned.items():
+        if len(days_in) > 1:
+            p = by_id.get(pid) or {}
+            # 同一地点去两次通常是有意的（白天夜景各一次、世博会连着两天），
+            # 但也可能是拖拽误操作。写了 note 就当是有意的。
+            has_note = any(
+                (ent.get("note") or "").strip()
+                for day in it if isinstance(day, dict)
+                for ent in (day.get("places") or [])
+                if isinstance(ent, dict) and ent.get("id") == pid)
+            if not has_note:
+                rep.add("P2", f"itinerary/{pid}",
+                        f"{p.get('name')} 被排进 {len(days_in)} 天（第 {days_in} 天）却没写 note，"
+                        f"确认是有意重复访问而非误操作")
+
+    for p in places:
+        if (p.get("kind") or "attraction") == "lodging" and p.get("id") not in assigned:
+            rep.add("P1", "itinerary",
+                    f"住宿「{p.get('name')}」没有出现在任何一天——"
+                    f"住宿要放进当天的行程里，起点终点才说得清")
 
 
 # ---------------------------------------------------------------- links
@@ -467,6 +582,7 @@ def main() -> int:
             else:
                 rep.add("P0", f"places[{i}]", "元素不是对象")
         check_cross(doc, rep)
+        check_itinerary(doc, rep)
     if args.check_links:
         check_links(doc, rep)
 
