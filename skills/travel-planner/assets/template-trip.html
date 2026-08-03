@@ -5,33 +5,86 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>行程</title>
 <style>
-/* ═══════════════════════════════════════════════ 设计令牌 */
+/* ═══════════════════════════════════════════════ 设计令牌
+   两套配色写在一处。light-dark() 按「已采用的 color-scheme」取值，
+   于是「跟随系统 / 强制浅色 / 强制深色」三态只要改 color-scheme 一个属性，
+   不用把整块令牌抄三遍（抄三遍的写法迟早会漏掉其中一处）。
+   默认值仍由系统偏好决定 —— 即使 JS 没跑起来，配色也是对的，不会闪一下。 */
 :root{
-  --paper:#faf8f4; --paper-2:#f2eee7; --card:#fffefc;
-  --ink:#1f1b16; --ink-2:#5c544a; --ink-3:#918879;
-  --line:#e3ddd2; --line-2:#d0c8ba;
-  --accent:#b5442a; --accent-soft:#f6e7e2;
-  --ok:#2f6b4f; --ok-soft:#e6f0ea;
-  --warn:#9a6414; --warn-soft:#fbf0dc;
-  --danger:#a8322b; --danger-soft:#fae9e7;
-  --mute:#8d8577;
+  color-scheme:light dark;
+
+  --paper:light-dark(#faf8f4,#16130f);
+  --paper-2:light-dark(#f2eee7,#1d1915);
+  --card:light-dark(#fffefc,#211c17);
+  /* --ink-3 承载了全站的 11.5–12.5px 小字（.hint/.facts/.sub/.caveat…）。
+     原来浅色 #918879 在 --paper-2 上只有 3.03:1、深色 #877d6d 在 --card 上 4.17
+     —— 最小的字配最低的对比，两个不利因素叠在一起。
+     现在浅色三档 5.16/5.43/4.73，深色三档 5.23/4.77/4.93。 */
+  --ink:light-dark(#1f1b16,#ece6dc);
+  --ink-2:light-dark(#5c544a,#b3a999);
+  --ink-3:light-dark(#726859,#918776);
+  --line:light-dark(#e3ddd2,#332c24);
+  --line-2:light-dark(#d0c8ba,#443b31);
+  --accent:light-dark(#b5442a,#e0765a);
+  --accent-soft:light-dark(#f6e7e2,#3a221c);
+  --ok:light-dark(#2f6b4f,#7fbd9c);
+  --ok-soft:light-dark(#e6f0ea,#1c2b23);
+  --warn:light-dark(#9a6414,#d9a95c);
+  --warn-soft:light-dark(#fbf0dc,#2e2617);
+  --danger:light-dark(#a8322b,#e08079);
+  --danger-soft:light-dark(#fae9e7,#33201e);
+  --mute:light-dark(#8d8577,#7d7466);
+
+  /* 填色控件上的前景。背景走令牌会跟着主题翻、前景写死 #fff 不会 ——
+     深色下「想去」选中态曾经是白字压 #7fbd9c，2.17:1。凡是把某个语义色
+     当背景用的地方，前景一律取这里对应的 --on-*。
+     修好之后：--on-ok 8.52、--on-warn 8.62、--on-accent 6.09。 */
+  --on-accent:light-dark(#fff,#16130f);
+  --on-ok:light-dark(#fff,#16130f);
+  --on-warn:light-dark(#fff,#16130f);
+  --on-ink:var(--paper);
+  /* --on-day 刻意不翻。日程色是一套两种主题通用的值（见 DAY_COLORS），
+     底色两边一样，压在上面的字自然也该一样。 */
+  --on-day:#fff;
+  /* 住宿圆点。它没有「第几天」，所以用中性色和日程色区分开。
+     地图上的那一枚不走这里 —— 它坐在底图上，跟着底图明暗翻（见 MAP_INK）。 */
+  --lodging:light-dark(#4A4A4A,#8b8272);
+
   --serif:Georgia,"Songti SC","Hiragino Mincho ProN","Noto Serif CJK SC",serif;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --r:10px; --shadow:0 1px 2px rgba(31,27,22,.05),0 4px 14px rgba(31,27,22,.05);
+  --r:10px;
+  /* light-dark() 只接色值，接不了整条阴影，所以把两层的颜色各自拆成令牌 */
+  --sh-1:light-dark(rgba(31,27,22,.05),rgba(0,0,0,.3));
+  --sh-2:light-dark(rgba(31,27,22,.05),rgba(0,0,0,.25));
+  --shadow:0 1px 2px var(--sh-1),0 4px 14px var(--sh-2);
 }
-@media (prefers-color-scheme:dark){
+/* 用户在右上角明确选了某一套时，只改 color-scheme —— 上面所有 light-dark()
+   会一起跟过去，包括表单控件和滚动条这些浏览器自己画的部件。 */
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+
+/* 老浏览器的地板。自定义属性没法参与层叠回退 —— 它的值在解析期永远合法，
+   要到 var() 取用时才失效，那时整套令牌会一起塌掉，页面变成没有样式的黑字白底。
+   这比少一层毛玻璃严重得多，而这个页面是要发给同行的人的，浏览器不由我们决定。
+   所以留一份浅色兜底；只有不支持 light-dark() 的浏览器会读到它，
+   真漂移了也只是老浏览器上的颜色略旧，不影响功能。
+   （light-dark() 的门槛：Chrome 123 / Safari 17.5 / Firefox 120。） */
+@supports not (color: light-dark(#000,#fff)){
   :root{
-    --paper:#16130f; --paper-2:#1d1915; --card:#211c17;
-    --ink:#ece6dc; --ink-2:#b3a999; --ink-3:#877d6d;
-    --line:#332c24; --line-2:#443b31;
-    --accent:#e0765a; --accent-soft:#3a221c;
-    --ok:#7fbd9c; --ok-soft:#1c2b23;
-    --warn:#d9a95c; --warn-soft:#2e2617;
-    --danger:#e08079; --danger-soft:#33201e;
-    --mute:#7d7466;
-    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+    --paper:#faf8f4; --paper-2:#f2eee7; --card:#fffefc;
+    --ink:#1f1b16; --ink-2:#5c544a; --ink-3:#726859;
+    --line:#e3ddd2; --line-2:#d0c8ba;
+    --accent:#b5442a; --accent-soft:#f6e7e2;
+    --ok:#2f6b4f; --ok-soft:#e6f0ea;
+    --warn:#9a6414; --warn-soft:#fbf0dc;
+    --danger:#a8322b; --danger-soft:#fae9e7;
+    --mute:#8d8577;
+    --on-accent:#fff; --on-ok:#fff; --on-warn:#fff;
+    --lodging:#4A4A4A;
+    --sh-1:rgba(31,27,22,.05); --sh-2:rgba(31,27,22,.05);
   }
+  .theme-btn{display:none}          /* 切了也没用，不如不给 */
 }
 *{box-sizing:border-box}
 /* 任何显式 display 规则都会压过 [hidden] 的浏览器默认样式。
@@ -47,6 +100,18 @@ body{
 a{color:var(--accent)}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* 「看起来不像按钮的按钮」。
+   这些位置（景点名、清单条目、日程条目、日期标题、圆点）本来是 span/div 加
+   cursor:pointer —— 视觉没问题，但键盘完全够不着：实测 47 个景点在地图视图里
+   一个可聚焦元素都没有，也就没有任何键盘路径能把地点排进某一天。
+   改成 <button> 是最小的修法：事件全部走 closest() 委托，一行 JS 都不用动。
+   这条只负责把浏览器的按钮默认外观清干净，让它们长回原来的样子。 */
+.bare{
+  background:none;border:0;padding:0;margin:0;
+  font:inherit;color:inherit;text-align:left;
+  -webkit-appearance:none;appearance:none;
+}
 
 /* ═══════════════════════════════════════════════ 头部 */
 .top{
@@ -68,13 +133,40 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:1px 8px;border-radius:20px;font-size:11.5px;
 }
 
+/* 主题开关。三态循环：跟随系统 → 浅色 → 深色 → 跟随系统。
+   图标画的是「当前是哪一套」，可访问名同时说明按下去会变成什么 ——
+   循环按钮最容易出的问题就是不说下一步。 */
+.theme-btn{
+  margin-left:auto;align-self:center;flex:none;
+  width:32px;height:32px;display:grid;place-items:center;
+  border:1px solid var(--line);border-radius:9px;
+  background:var(--card);color:var(--ink-2);transition:.15s;
+}
+.theme-btn:hover{border-color:var(--line-2);color:var(--ink);background:var(--paper-2)}
+/* 窄屏：副标题会折成两行，按 DOM 顺序排的话开关被挤到第三行，页头白白高一截
+   （实测 375px 下 173 → 194px，占掉视口的 24%）。让开关跟标题同行、副标题
+   整行下沉，页头反而比加开关之前还矮。 */
+@media (max-width:640px){
+  .brand{gap:8px 12px}
+  .theme-btn{order:1}
+  .brand .sub{order:2;flex-basis:100%}
+}
+.theme-btn svg{display:block}
+/* 「跟随系统」用同一个圆的左右半边表示两套配色，不另画第三种符号 */
+.theme-btn .half{fill:currentColor;stroke:none}
+
 .tabs{display:flex;gap:2px;margin-top:12px;align-items:center}
 .tab-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+/* 窄屏时这一组从标签栏挪到地图视图里（见 layoutMapActions）。
+   留在标签栏的话，两个导出按钮会把三个标签挤成竖排断字：
+   实测 375px 下「景点清单」断成两行、「地图」断成「地/图」，标签栏 68px 高。 */
+.map-actions-slot:empty{display:none}
+.map-actions-slot .tab-actions{margin-left:0;margin-bottom:12px}
 .tab-actions .hint{font-size:11.5px;color:var(--ink-3)}
 .btn.sm{padding:5px 11px;font-size:12.5px}
 @media (max-width:760px){ .tab-actions .hint{display:none} }
 .tab{
-  background:none;border:0;border-bottom:2px solid transparent;
+  background:none;border:0;border-bottom:2px solid transparent;white-space:nowrap;
   padding:9px 15px 11px;color:var(--ink-3);font-size:14px;font-weight:500;
   display:flex;align-items:center;gap:7px;transition:color .15s;
 }
@@ -98,6 +190,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* ═══════════════════════════════════════════════ 主体 */
 main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
+/* 地图视图是一屏工作台，不该滚。底部只需让开固定的操作栏，
+   不需要清单视图那 130px（那是留给最后一张卡片的呼吸位）。 */
+main.tight{padding-bottom:var(--ab-h,64px)}
 .view[hidden]{display:none}
 
 /* 工具栏 */
@@ -152,14 +247,14 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
 }
 .body{flex:1;min-width:0}
 .hd{display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap}
-.nm{font:500 17px/1.35 var(--serif);cursor:pointer;letter-spacing:.2px}
+.nm{font:500 17px/1.35 var(--serif);cursor:pointer;letter-spacing:.2px;display:block}
 .nm:hover{color:var(--accent)}
 .loc{font-size:12.5px;color:var(--ink-3);align-self:center}
 .tier{
   font:700 10.5px/1 var(--mono);padding:3.5px 6px;border-radius:4px;align-self:center;
   border:1px solid transparent;letter-spacing:.5px;
 }
-.t-S{background:var(--accent);color:#fff} .t-A{background:var(--accent-soft);color:var(--accent)}
+.t-S{background:var(--accent);color:var(--on-accent)} .t-A{background:var(--accent-soft);color:var(--accent)}
 .t-B{background:var(--paper-2);color:var(--ink-2);border-color:var(--line)}
 .t-C{background:transparent;color:var(--ink-3);border-color:var(--line)}
 .stars{color:var(--accent);font-size:12px;letter-spacing:1px;align-self:center}
@@ -200,8 +295,8 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
 .pick button:last-child{border-right:0}
 .pick button:hover{background:var(--paper-2);color:var(--ink-2)}
 .pick button[aria-pressed=true]{font-weight:600}
-.pick button.y[aria-pressed=true]{background:var(--ok);color:#fff}
-.pick button.m[aria-pressed=true]{background:var(--warn);color:#fff}
+.pick button.y[aria-pressed=true]{background:var(--ok);color:var(--on-ok)}
+.pick button.m[aria-pressed=true]{background:var(--warn);color:var(--on-warn)}
 .pick button.n[aria-pressed=true]{background:var(--ink-3);color:var(--paper)}
 .why{font-size:12px;color:var(--ink-3);margin-top:7px;font-style:italic}
 
@@ -210,6 +305,7 @@ main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
 .spots-h{font-size:11.5px;color:var(--ink-3);margin-bottom:7px;display:flex;align-items:center;gap:5px}
 .spot{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;flex-wrap:wrap}
 .spot .sn{cursor:pointer;font-weight:500}
+.spot .sn:focus-visible{outline-offset:1px}
 .spot .sn:hover{color:var(--accent)}
 .spot .sd{color:var(--ink-3);font-size:11.5px}
 .spot .pick{margin:0 0 0 auto;transform:scale(.88);transform-origin:right center}
@@ -255,7 +351,10 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
   padding:17px 20px 13px;display:flex;align-items:flex-start;gap:12px;z-index:2;
 }
 .dlg-h h3{font:500 21px/1.3 var(--serif);margin:0;flex:1}
-.dlg-h .x{background:none;border:0;font-size:22px;color:var(--ink-3);line-height:1;padding:2px 6px;border-radius:6px}
+.dlg-h .x{
+  background:none;border:0;font-size:22px;color:var(--ink-3);line-height:1;border-radius:6px;
+  width:32px;height:32px;flex:none;display:grid;place-items:center;padding:0;
+}
 .dlg-h .x:hover{background:var(--paper-2);color:var(--ink)}
 .dlg-b{padding:17px 20px 22px;overflow-y:auto}
 .dlg-b h4{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.9px;color:var(--ink-3);margin:20px 0 8px}
@@ -302,7 +401,7 @@ pre.code{
    清单与日程相邻，从池子拖进某一天是一次约 260px 的横移；
    把地图夹在中间的话这个距离会变成约 1160px，鼠标要划过整张地图，触屏基本没法用。 */
 .map-wrap{display:grid;grid-template-columns:232px 212px 1fr;gap:14px;
-  height:calc(100vh - 210px);min-height:460px}
+  height:var(--map-h,calc(100dvh - 260px));min-height:460px}
 
 .day-col{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
@@ -315,7 +414,10 @@ pre.code{
   display:flex;align-items:center;gap:6px;
 }
 .day-col .dc-head .sp{margin-left:auto;font-weight:400;letter-spacing:0}
-.lnk{background:none;border:0;color:var(--ink-3);font-size:11px;padding:2px 4px;border-radius:4px;letter-spacing:0}
+.lnk{
+  background:none;border:0;color:var(--ink-3);font-size:11px;padding:2px 6px;border-radius:4px;letter-spacing:0;
+  min-height:24px;min-width:24px;display:inline-flex;align-items:center;justify-content:center;
+}
 .lnk:hover{background:var(--line);color:var(--ink-2)}
 
 /* 日期胶囊：长线行程用，平铺到第三天就开始无限滚动 */
@@ -323,23 +425,29 @@ pre.code{
 .caps button{
   border:1px solid var(--line);background:var(--paper-2);color:var(--ink-2);
   padding:3px 8px;border-radius:6px;font:600 11.5px/1.5 var(--mono);
-  display:flex;align-items:center;gap:4px;
+  display:flex;align-items:center;gap:4px;min-height:24px;
 }
 /* 计数要有自己的底色，否则「D1」加「7」会被连读成「第 17 天」 */
 .caps button .c{
   font-weight:600;font-size:9.5px;line-height:13px;min-width:13px;text-align:center;
   padding:0 3px;border-radius:7px;background:var(--line);color:var(--ink-3);
 }
-.caps button[aria-pressed=true]{color:var(--paper)}
-.caps button[aria-pressed=true] .c{background:rgba(255,255,255,.28);color:#fff}
+.caps button[aria-pressed=true]{color:var(--on-day)}
+.caps button[aria-pressed=true] .c{background:color-mix(in srgb,var(--on-day) 26%,transparent);color:var(--on-day)}
 
 /* 每一天：标题栏 + 条目。点标题栏把它设为「当前天」 */
 .dbox{border-bottom:1px solid var(--line)}
 .dbox:last-child{border-bottom:0}
 .dhead{
-  display:flex;align-items:center;gap:7px;padding:8px 10px;cursor:pointer;
+  display:flex;align-items:center;gap:7px;padding:8px 10px;
   background:var(--paper-2);transition:background .12s;
 }
+/* 标题栏整条是「把这天设为当前天」的按钮；删除那一天是另一件事，
+   所以它是兄弟节点而不是嵌在里面（按钮不能嵌按钮）。 */
+.dh-btn{
+  flex:1;min-width:0;display:flex;align-items:center;gap:7px;cursor:pointer;position:relative;
+}
+.dh-btn::after{content:"";position:absolute;inset:-8px 0}   /* 吃掉 .dhead 的上下内边距 */
 .dhead:hover{background:var(--line)}
 .dbox.cur .dhead{background:color-mix(in srgb,var(--ink) 12%,var(--paper-2))}
 .dhead .swatch{width:9px;height:9px;border-radius:50%;flex:none}
@@ -355,21 +463,29 @@ pre.code{
 .ditem:hover,.ditem.on{background:var(--paper-2)}
 .ditem .n{
   flex:none;min-width:17px;height:17px;border-radius:50%;display:grid;place-items:center;
-  font:700 9.5px/1 var(--mono);color:#fff;
+  font:700 9.5px/1 var(--mono);color:var(--on-day);
 }
 /* 名字用 .dnm 而不是 .nm —— 全局已有一个 .nm{font:500 17px/1.35 var(--serif)}
    是视图①的卡片标题。直接命中元素的规则永远压过从父元素继承来的字体，
    跟特异性无关，所以撞上之后 .ditem 里设的 12.5px sans 完全不起作用。 */
-.ditem .dnm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit;flex:1;min-width:0}
+.ditem .dnm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:inherit;flex:1;min-width:0;
+  display:block;cursor:pointer;position:relative}
+/* 只往上下撑命中区，不往左右 —— 右边紧挨着 ↑↓× 三个按钮，横向撑开会互相盖住。
+   行高本来就有 5px 上下内边距是死区，正好收进来，排版一点不动。 */
+.ditem .dnm::after{content:"";position:absolute;inset:-5px 0}
 /* ↑↓× 平时藏起来（212px 的栏放不下三个常驻按钮），hover 才浮出。
    触屏没有 hover，那里常驻显示。 */
 .ditem .dops{display:flex;gap:1px;flex:none;opacity:0;transition:opacity .12s}
 .ditem:hover .dops,.ditem:focus-within .dops{opacity:1}
 @media (hover:none){ .ditem .dops{opacity:1} }
+/* 视觉尺寸保持 17px —— 212px 宽的日程栏放不下更大的按钮，而这一栏的
+   密度本身就是设计的一部分。用伪元素把命中区撑到 25px，只影响指头，不影响排版。
+   WCAG 2.2 的 2.5.8 要 24×24。 */
 .dop{
   background:none;border:0;color:var(--ink-3);width:17px;height:17px;
-  border-radius:4px;display:grid;place-items:center;padding:0;
+  border-radius:4px;display:grid;place-items:center;padding:0;position:relative;
 }
+.dop::after{content:"";position:absolute;inset:-4px}
 .dop:hover{background:var(--line);color:var(--ink)}
 .dop:disabled{opacity:.25;cursor:default}
 .dop:disabled:hover{background:none;color:var(--ink-3)}
@@ -445,11 +561,15 @@ pre.code{
    状态控件和内容区分开，比再加一个 + 按钮省地方，也更符合「圆点就是状态」的直觉。 */
 .mi .pin{
   width:17px;height:17px;border-radius:50%;flex:none;margin-top:2px;
-  display:grid;place-items:center;font:700 9.5px/1 var(--mono);color:#fff;
-  cursor:pointer;transition:transform .12s;
+  display:grid;place-items:center;font:700 9.5px/1 var(--mono);color:var(--on-day);
+  cursor:pointer;transition:transform .12s;position:relative;
 }
+/* 同上：圆点必须小（它要和日程栏的序号圈一样大），但它是这个视图里
+   最常按的控件，命中区撑到 27px。往右只吃掉 .mi 那 9px 间隙的一半。 */
+.mi .pin::after{content:"";position:absolute;inset:-5px}
 .mi .pin:hover{transform:scale(1.22)}
-.mi .t{flex:1;min-width:0}
+.mi .t{flex:1;min-width:0;display:block;cursor:pointer;position:relative}
+.mi .t::after{content:"";position:absolute;inset:-9px -12px -9px 0}  /* 补满 .mi 的内边距 */
 /* 严格两行：名称一行、元信息一行。原来把整段票价文案铺进来，
    一个条目能占五六行，三栏布局下这一列只有 ~230px，根本放不下。 */
 /* 清单栏与日程栏的条目必须同字体同字号 —— 它们并排显示同一批地点，
@@ -496,11 +616,14 @@ pre.code{
    12 条线的完整列表要 210×340px，占掉地图 14% 的面积，而且正好压在
    左上角的点位上 —— 常驻显示是不合适的。 */
 #map-legend{
-  position:absolute;top:52px;left:10px;z-index:20;max-width:212px;cursor:pointer;
+  position:absolute;top:52px;left:10px;z-index:20;max-width:212px;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:8px;padding:7px 9px;
   box-shadow:var(--shadow);font-size:11.5px;line-height:1.5;
 }
+/* 展开/收起是一个按钮：整块图例可点，但可点的那块得是键盘够得着的东西。
+   线路名列表留在按钮外面 —— 它自己会滚动，而在按钮里滚动很别扭。 */
+.lg-toggle{display:block;width:100%;cursor:pointer}
 #map-legend .lg-chips{display:flex;flex-wrap:wrap;gap:4px}
 #map-legend .lg-ref{
   min-width:16px;text-align:center;font-weight:700;font-size:10.5px;line-height:16px;
@@ -541,7 +664,7 @@ pre.code{
    这里只留与状态无关的形状和过渡。 */
 .mk i{
   display:grid;place-items:center;border-radius:50%;
-  font:700 11px/1 var(--mono);color:#fff;font-style:normal;
+  font:700 11px/1 var(--mono);color:var(--on-day);font-style:normal;
   /* 只过渡 transform。尺寸随「是否已排入」变化，是一次数据驱动的离散跳变，
      不需要补间；而 47 个绝对定位的 marker 同时做 width/height 过渡会在每次
      refresh 时引发成片的布局重算。 */
@@ -696,11 +819,12 @@ pre.code{
     <div class="brand">
       <h1 id="title">行程</h1>
       <div class="sub" id="subtitle"></div>
+      <button class="theme-btn" id="theme"></button>
     </div>
     <nav class="tabs" role="tablist">
-      <button class="tab" role="tab" id="tab-list"  aria-selected="true"  data-view="list">景点清单 <span class="n" id="n-list">0</span></button>
-      <button class="tab" role="tab" id="tab-map"   aria-selected="false" data-view="map">地图</button>
-      <button class="tab" role="tab" id="tab-guide" aria-selected="false" data-view="guide" disabled>攻略</button>
+      <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list">景点清单 <span class="n" id="n-list">0</span></button>
+      <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">地图</button>
+      <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="生成攻略后可用">攻略</button>
       <div class="tab-actions" id="map-actions" hidden>
         <button class="btn sm" id="exp-csv">导出 CSV</button>
         <button class="btn sm" id="exp-kml">导出 KML</button>
@@ -712,7 +836,7 @@ pre.code{
 
 <main>
   <!-- ══════════════ 视图① 景点清单 ══════════════ -->
-  <section class="view" id="view-list">
+  <section class="view" id="view-list" role="tabpanel" aria-labelledby="tab-list">
     <div class="toolbar">
       <input class="search" id="q" type="search" placeholder="搜索名称、亮点、标签…" autocomplete="off">
       <div class="seg" role="group" aria-label="分组方式">
@@ -730,7 +854,9 @@ pre.code{
   </section>
 
   <!-- ══════════════ 视图② 地图 ══════════════ -->
-  <section class="view" id="view-map" hidden>
+  <section class="view" id="view-map" role="tabpanel" aria-labelledby="tab-map" hidden>
+    <!-- 窄屏时导出按钮从标签栏挪到这里，见 layoutMapActions -->
+    <div class="map-actions-slot" id="map-actions-slot"></div>
     <div class="map-wrap" id="map-wrap">
       <div class="map-side">
         <div class="ms-head">
@@ -760,7 +886,7 @@ pre.code{
   </section>
 
   <!-- ══════════════ 视图③ 攻略 ══════════════ -->
-  <section class="view" id="view-guide" hidden>
+  <section class="view" id="view-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
     <div class="guide">
       <div id="wx-box"></div>
       <div id="guide-body"></div>
@@ -774,7 +900,7 @@ pre.code{
 <div class="actionbar">
   <div class="actionbar-in">
     <button class="btn primary" id="save">保存选择和日程</button>
-    <div class="hint" id="hint"></div>
+    <div class="hint" id="hint" aria-live="polite"></div>
     <div class="more-box" id="more-box" hidden>
       <button class="btn" id="download">下载 places.json</button>
       <button class="btn" id="copy">复制给 AI…</button>
@@ -785,7 +911,7 @@ pre.code{
 
 <dialog id="dlg"><div id="dlg-inner"></div></dialog>
 <dialog id="rdlg"><div id="rdlg-inner"></div></dialog>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- SortableJS 1.15.7（MIT）由 build.py 内联注入。见 assets/vendor/README.md -->
 <script>/*__SORTABLE__*/</script>
@@ -817,9 +943,16 @@ const ITIN = DATA.itinerary || [];
 const BY_ID = Object.fromEntries(PLACES.map(p => [p.id, p]));
 const isLodging = p => !!p && p.kind === "lodging";
 
-// 必须避开绿（想去）/琥珀（待定）/灰（不想去），否则填充与描边同色系；
-// 又要足够深，白色序号数字压得住。
-const DAY_COLORS = ["#546E7A", "#2E6FD9", "#7B3FB5", "#0F8A8A", "#C2185B", "#5D4037"];
+/* 必须避开绿（想去）/琥珀（待定）/灰（不想去），否则填充与描边同色系。
+   亮度还要同时满足三件事，窗口很窄（相对亮度 L 落在 0.150–0.178）：
+     · 白色序号数字压得住          → L ≤ 0.179（白字 4.5:1）
+     · 深色主题的卡片上认得出       → L ≥ 0.144（对 --card 3:1，WCAG 1.4.11）
+     · 浅色主题的卡片上认得出       → L ≤ 0.30
+   原来的六个色只按第一条挑，深色下 #5D4037 对卡片只有 1.81:1、#C2185B 2.88
+   —— 而「这是第几天」全靠这个颜色编码，看不见就等于信息丢了。
+   现在保留原来的六个色相，只把亮度归一到 L≈0.162，实测四项全过（最低 3.38）。
+   一套值通吃两种主题，是为了守住「地图与侧栏显示同一份数据、规则必须一致」。 */
+const DAY_COLORS = ["#597481", "#2A6DD8", "#8E55C4", "#0E7C7D", "#D81B65", "#936657"];
 const dayColor = n => DAY_COLORS[((n % DAY_COLORS.length) + DAY_COLORS.length) % DAY_COLORS.length];
 
 let SCHED = new Map();          // placeId -> [{ n, seq, note }]，按出现先后
@@ -857,6 +990,14 @@ let  SAVED_SIG = null;                      // 最近一次**真的写进文件*
    实测 file:// 下 showSaveFilePicker 同样可用；真正不支持的是 Firefox / Safari。 */
 const CAN_WRITE = typeof window.showSaveFilePicker === "function";
 const LS_KEY = `tp:${TRIP.destination || "trip"}:${TRIP.generated_at || ""}`;
+
+/* ↑ ↓ × 这类小图标一律用 SVG，不用字符。实测三个字形在同一个 17px 盒子里
+   宽度就不一样（↑↓ 9.5px、× 7.7px），箭头在多数字体里还偏上 —— 视觉重量
+   不一致，而且随系统字体变。SVG 的几何是固定的。 */
+const stroke = (d, n = 11, extra = "") =>
+  `<svg viewBox="0 0 16 16" width="${n}" height="${n}" fill="none" `
+  + `stroke="currentColor" stroke-width="1.7" stroke-linecap="round" `
+  + `stroke-linejoin="round" aria-hidden="true" style="display:block">${extra}<path d="${d}"/></svg>`;
 
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -933,7 +1074,80 @@ function verifyBox(p){
   </div>`;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   明暗主题
+
+   三态而不是两态：原来的行为就是「跟随系统」，很多人（尤其设了日落自动
+   切换的）想要的正是它，直接换成二选一等于把这个能力拿掉。所以循环是
+   跟随系统 → 浅色 → 深色 → 跟随系统，默认停在跟随系统。
+
+   CSS 那边只认 :root[data-theme]，没有这个属性就落回 color-scheme:light dark
+   —— 也就是说 JS 挂了或者 localStorage 不可用，配色照样是对的。
+   ═══════════════════════════════════════════════════════════════════ */
+const DARK_MQ = matchMedia("(prefers-color-scheme: dark)");
+const THEMES = ["auto", "light", "dark"];
+const THEME_TXT = { auto:"跟随系统", light:"浅色", dark:"深色" };
+const THEME_ICON = {
+  // 太阳：一圈短射线
+  light: stroke("M8 2.6V1M8 15v-1.6M13.2 8H15M1 8h1.8M11.8 4.2 12.9 3.1M3.1 12.9l1.1-1.1"
+              + "M11.8 11.8l1.1 1.1M3.1 3.1l1.1 1.1", 15,
+              '<circle cx="8" cy="8" r="3.1"/>'),
+  // 月亮：同一个圆被咬掉一口，和太阳共用半径，视觉重量才一致
+  dark:  stroke("M13 9.6A5.6 5.6 0 1 1 6.4 3a4.4 4.4 0 0 0 6.6 6.6Z", 15),
+  // 跟随系统：一个圆，左半浅右半深
+  auto:  stroke("", 15,
+              '<circle cx="8" cy="8" r="5.4"/>'
+              + '<path class="half" d="M8 2.6a5.4 5.4 0 0 1 0 10.8Z"/>'),
+};
+
+function themePref(){
+  try{
+    const v = localStorage.getItem(LS_KEY + ":theme");
+    return THEMES.includes(v) ? v : "auto";
+  }catch(e){ return "auto"; }
+}
+const themeIsDark = () => {
+  const p = themePref();
+  return p === "auto" ? DARK_MQ.matches : p === "dark";
+};
+
+function applyTheme(pref){
+  const root = document.documentElement;
+  if(pref === "auto") root.removeAttribute("data-theme");
+  else root.dataset.theme = pref;
+  try{ localStorage.setItem(LS_KEY + ":theme", pref); }catch(e){}
+
+  const btn = $("#theme");
+  if(btn){
+    const next = THEMES[(THEMES.indexOf(pref) + 1) % THEMES.length];
+    btn.innerHTML = THEME_ICON[pref];
+    btn.title = `配色：${THEME_TXT[pref]}（点击切换到${THEME_TXT[next]}）`;
+    btn.setAttribute("aria-label", btn.title);
+  }
+  // 底图不是 CSS 管得到的东西，得单独通知
+  window.dispatchEvent(new CustomEvent("themechange", { detail:{ dark:themeIsDark() } }));
+}
+
+function initTheme(){
+  applyTheme(themePref());
+  $("#theme").addEventListener("click", () => {
+    const cur = themePref();
+    applyTheme(THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length]);
+  });
+  // 停在「跟随系统」时，系统切换要当场生效
+  DARK_MQ.addEventListener?.("change", () => {
+    if(themePref() === "auto") applyTheme("auto");
+  });
+}
+
 /* ─────────────────────────────────────────────── 渲染辅助 */
+/* 当地语言名要带 lang。整页 lang 是正文语言（zh-CN），而 name_local 是日文 ——
+   不标的话中文读屏会用普通话念日文汉字，CJK 字体栈也会给「図書館」这类
+   日中字形有别的字挑简体形。而这个页面存在的意义，恰恰是让你认出路牌上的那几个字。
+   语言从数据里来（trip.local_language），不写死某一国。 */
+const LOCAL_LANG = (TRIP.local_language && TRIP.local_language !== TRIP.output_language)
+  ? TRIP.local_language : "";
+const langAttr = LOCAL_LANG ? ` lang="${esc(LOCAL_LANG)}"` : "";
 const SCALE_TXT = { spot:"打卡点 5-15 分钟", "30min":"约 30 分钟", "1-2h":"1-2 小时",
                     "2-3h":"2-3 小时", "half-day":"半天", "full-day":"一整天" };
 const stars = n => "★".repeat(n||0) + `<i>${"★".repeat(Math.max(0,5-(n||0)))}</i>`;
@@ -956,14 +1170,14 @@ function pickHTML(p){
 
 function cardHTML(p, children){
   const fl = flags(p);
-  const loc = p.name_local && p.name_local !== p.name ? `<span class="loc">${esc(p.name_local)}</span>` : "";
+  const loc = p.name_local && p.name_local !== p.name ? `<span class="loc"${langAttr}>${esc(p.name_local)}</span>` : "";
   const unv = p.verify && p.verify.state && p.verify.state !== "verified" ? ` data-verify="${esc(p.verify.state)}"` : "";
   return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
     <div class="card-in">
       ${thumb(p)}
       <div class="body">
         <div class="hd">
-          <span class="nm" data-detail="${esc(p.id)}">${esc(p.name)}</span>${loc}
+          <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
           <span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
           <span class="stars" title="出片指数 ${p.photo_index||0}/5">${stars(p.photo_index)}</span>
         </div>
@@ -978,7 +1192,7 @@ function cardHTML(p, children){
         ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
         ${verifyBox(p)}
         ${pickHTML(p)}
-        ${p.choice === "no" && p.choice_reason ? `<div class="why">不去的理由：${esc(p.choice_reason)}</div>` : ""}
+        <div class="why"${p.choice === "no" && p.choice_reason ? "" : " hidden"}>不去的理由：<span class="why-t">${esc(p.choice_reason || "")}</span></div>
         ${children.length ? spotsHTML(children) : ""}
       </div>
     </div>
@@ -990,7 +1204,7 @@ function spotsHTML(kids){
   return `<div class="spots">
     <div class="spots-h">顺路打卡点 · ${kids.length} 个</div>
     ${kids.map(k => `<div class="spot" data-id="${esc(k.id)}">
-      <span class="sn" data-detail="${esc(k.id)}">${esc(k.name)}</span>
+      <button class="bare sn" type="button" data-detail="${esc(k.id)}">${esc(k.name)}</button>
       <span class="sd">${rich(k.pitch)}</span>
       ${pickHTML(k)}
     </div>`).join("")}
@@ -1108,6 +1322,26 @@ function updateProgress(){
 }
 
 /* ─────────────────────────────────────────────── 选择与暂存 */
+/* 就地同步一个地点在页面上的所有表态痕迹。
+   一个地点可能出现两次：主卡片一处，作为别人的顺路打卡点又一处，
+   两处的三态按钮都要跟着变，所以按 [data-id] 全量取而不是只改点中的那一组。 */
+function syncChoice(p){
+  const sel = `[data-id="${CSS.escape(p.id)}"]`;
+  for(const card of $$(`.card${sel}`)) card.dataset.choice = p.choice || "";
+  for(const g of $$(`.pick${sel}`)){
+    for(const b of g.querySelectorAll("button"))
+      b.setAttribute("aria-pressed", String(p.choice === b.dataset.v));
+  }
+  for(const card of $$(`.card${sel}`)){
+    const why = card.querySelector(".why");
+    if(!why) continue;
+    const show = p.choice === "no" && !!p.choice_reason;
+    why.hidden = !show;
+    const t = why.querySelector(".why-t");
+    if(t) t.textContent = p.choice_reason || "";
+  }
+}
+
 function setChoice(id, v, reason){
   const p = PLACES.find(x => x.id === id);
   if(!p) return;
@@ -1115,7 +1349,13 @@ function setChoice(id, v, reason){
   p.choice_reason = (p.choice === "no") ? (reason || p.choice_reason || "") : "";
   saveLocal();
   scheduleAuto();
-  render();
+  // 「未表态」筛选下，表完态这张卡就该从列表里消失 —— 那是结构变化，只能整体重画。
+  // 其余情况一律就地改：整体 innerHTML 重建会把刚按下的那个按钮从 DOM 里摘掉，
+  // 焦点掉回 <body>。实测表第 40 个景点时，键盘用户要从文档顶部重新 Tab 约 200 次。
+  if(ui.scope === "todo"){ render(); return; }
+  syncChoice(p);
+  updateProgress();
+  if(window.MAP) MAP.refresh();
 }
 
 function saveLocal(){
@@ -1192,7 +1432,7 @@ function openDetail(id){
 
   $("#dlg-inner").innerHTML = `
     <div class="dlg-h">
-      <h3>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc">${esc(p.name_local)}</span>` : ""}</h3>
+      <h3>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc"${langAttr}>${esc(p.name_local)}</span>` : ""}</h3>
       <button class="x" data-close aria-label="关闭">&times;</button>
     </div>
     <div class="dlg-b">
@@ -1584,9 +1824,22 @@ const MAP = (() => {
                         "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"];
   let gbStyle = null;      // graybeard 的 style JSON 只抓一次，切回来不重复请求
 
+  /* 深色主题下的底图。
+     地图是视图②面积最大的一块，浅色底图嵌在近黑的页面里是一大块亮斑。
+     OpenFreeMap 的 dark 与 positron 出自同一套 openmaptiles schema，
+     图层 id 完全一致，所以上色补丁、隐藏规则、POI 层全都不用动，只换 URL。
+     另外两个底图没有深色版：graybeard 是固定 style，光栅瓦片更是烤死的图片。
+     所以「底图是不是深的」不能问主题，只能问当前用的是哪张底图 —— 见 MI。
+
+     跟的是 themeIsDark()（解析后的主题）而不是系统偏好：用户在右上角把
+     配色钉死成浅色时，界面翻了地图也得跟着翻，否则又是一块对不上的亮斑。 */
+  const ofmStyle = dark =>
+    "https://tiles.openfreemap.org/styles/" + (dark ? "dark" : "positron");
+
   const BASEMAPS = [
     { id:"ofm", label:"简约", kind:"vector", schema:"openmaptiles",
-      style:"https://tiles.openfreemap.org/styles/positron",
+      style:ofmStyle(themeIsDark()),
+      dark:themeIsDark(),
       attrib:'OpenFreeMap © OpenMapTiles Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' },
     { id:"gb", label:"标准", kind:"vector", schema:"shortbread",
       style:() => (gbStyle ||= fetch(GRAYBEARD, { cache:"force-cache" })
@@ -1605,24 +1858,58 @@ const MAP = (() => {
       attrib: OSM_ATTRIB },
   ];
 
+  /* ---------- 画在底图上的墨色 ----------
+     （marker 空心、白描边、地铁站点与注记的光晕…）
+     原来一律写死浅色，理由是「三个底图全是浅色」—— 这条前提现在只对
+     两个底图成立了。所以把它们收进一处，跟着当前底图翻，而不是跟着主题翻：
+     深色主题下手动切回「光栅」，底图还是浅的，这些墨色就也得跟着回来。 */
+  const MAP_INK = {
+    light:{ hollow:"#fff", ring:"#fff", halo:"#fff",
+            lodging:"#4A4A4A", onLodging:"#fff",
+            station:"#fff", stationEdge:"#5b5b5b", stationLabel:"#4a4a4a",
+            poi:"#6b6257", poiHalo:"rgba(255,255,255,.9)",
+            water:"rgb(190,221,243)", grass:"rgb(211,228,186)", wood:"rgb(186,214,180)" },
+    // 注意是「按角色翻」而不是「按颜色翻」。空心点在浅色底图上是白的，
+    // 因为白＝底图上最不起眼的那一档，说的是「还没排」；深色底图上最不起眼的
+    // 是近黑，翻成浅色反而会让未排入的点比排好的还抢眼，主次正好反过来。
+    // 车站圆点同理：真正的图形是描边，填充要退到底图里去。
+    dark: { hollow:"#1b1815", ring:"#14110e", halo:"#14110e",
+            lodging:"#d8d2c6", onLodging:"#14110e",
+            station:"#14110e", stationEdge:"#cfc7b8", stationLabel:"#cfc7b8",
+            poi:"#b0a695", poiHalo:"rgba(12,10,8,.9)",
+            water:"rgb(28,46,66)", grass:"rgb(38,50,34)", wood:"rgb(34,52,38)" },
+  };
+  /* 刻意算出来而不是存一份。存的话每个改 st.base 的地方都得记得同步，
+     而 init() 的降级路径就直接写 st.base = "gb"，不走 switchBase ——
+     实测漏过一次：主题切成浅色后首次进地图，底图是浅的、墨色还是深的那套。
+     引擎降级到 Leaflet 时用的是 CARTO 浅色光栅，永远算浅底。
+     静态兜底图画在 --paper-2 上，那是界面表面，跟着「简约」底图的明暗即可。 */
+  const baseIsDark = () => {
+    if(st.engine === "leaflet") return false;
+    const b = BASEMAPS.find(x => x.id === st.base);
+    return !!(b && b.dark);
+  };
+  const MI = () => MAP_INK[baseIsDark() ? "dark" : "light"];
+
   /* ---------- 水体与绿地上色 ----------
      两套 style 都把水和绿地画成了灰（graybeard 是 colorful 把饱和度压成 0，
      色相其实还留着；positron 本来就是浅灰）。这里只把这两类还原成彩色，
      道路建筑注记一律保持灰 —— 让画面里的彩色只剩三样：
-     点位、地铁线、水与绿地。 */
-  const WATER = "rgb(190,221,243)";
-  const TINT = {
-    shortbread: {
-      "water-ocean":WATER, "water-area":WATER, "water-area-river":WATER,
-      "water-area-small":WATER, "water-river":WATER, "water-canal":WATER,
-      "water-stream":WATER, "water-ditch":WATER, "water-dam":WATER,
+     点位、地铁线、水与绿地。
+
+     shortbread 的值写死不跟着翻：graybeard 只有浅色一版，这几条永远画在浅底上。 */
+  const SB_WATER = "rgb(190,221,243)";
+  const tintFor = schema => schema === "shortbread" ? {
+      "water-ocean":SB_WATER, "water-area":SB_WATER, "water-area-river":SB_WATER,
+      "water-area-small":SB_WATER, "water-river":SB_WATER, "water-canal":SB_WATER,
+      "water-stream":SB_WATER, "water-ditch":SB_WATER, "water-dam":SB_WATER,
       "land-park":"rgb(217,217,165)", "land-garden":"rgb(217,217,165)",
       "land-vegetation":"rgb(217,217,165)", "land-forest":"rgb(150,196,124)",
       "land-grass":"rgb(216,232,200)", "land-leisure":"rgb(231,237,222)",
       "land-wetland":"rgb(211,230,219)",
-    },
-    openmaptiles: { "water":WATER, "waterway":WATER, "landcover_wood":"rgb(186,214,180)" },
-  };
+    } : schema === "openmaptiles" ? {
+      "water":MI().water, "waterway":MI().water, "landcover_wood":MI().wood,
+    } : {};
 
   /* 底图上要藏掉的图层。
      道路编号盾牌是白底黑字的数字方块——而我们的日程序号是白字圆点。
@@ -1694,7 +1981,7 @@ const MAP = (() => {
         "text-optional": false,
         visibility: "none",
       },
-      paint:{ "text-color":"#6b6257", "text-halo-color":"rgba(255,255,255,.9)", "text-halo-width":1.1 },
+      paint:{ "text-color":MI().poi, "text-halo-color":MI().poiHalo, "text-halo-width":1.1 },
     });
   }
 
@@ -1718,7 +2005,7 @@ const MAP = (() => {
   }
 
   function applyTint(map, schema){
-    for(const [id, color] of Object.entries(TINT[schema] || {})){
+    for(const [id, color] of Object.entries(tintFor(schema))){
       const l = map.getLayer(id);
       if(l) map.setPaintProperty(id, l.type === "line" ? "line-color" : "fill-color", color);
     }
@@ -1729,7 +2016,7 @@ const MAP = (() => {
       map.addLayer({
         id:"x-grass", type:"fill", source:"openmaptiles", "source-layer":"landcover",
         filter:["in", ["get","class"], ["literal",["grass","farmland","wetland"]]],
-        paint:{ "fill-color":"rgb(211,228,186)",
+        paint:{ "fill-color":MI().grass,
                 "fill-opacity":["interpolate",["linear"],["zoom"], 9,0, 12,1] },
       }, "water");
     }
@@ -1742,7 +2029,7 @@ const MAP = (() => {
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
                base:"ofm", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
-               curDay:null, flat:null, addOpen:false };
+               curDay:null, flat:null, addOpen:false, legendOpen:false };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
   const pts = () => PLACES.filter(geo);
@@ -1967,13 +2254,13 @@ const MAP = (() => {
         "text-field":["get","ref"], "text-size":11, "text-font":FONT_B,
         "text-allow-overlap":false, "text-padding":3,
       },
-      paint:{ "text-color":["get","colour"], "text-halo-color":"#fff", "text-halo-width":1.8 },
+      paint:{ "text-color":["get","colour"], "text-halo-color":MI().halo, "text-halo-width":1.8 },
     });
     if(!m.getLayer("transit-station")) m.addLayer({
       id:"transit-station", type:"circle", source:STATION_SRC, minzoom:12,
       paint:{
         "circle-radius":["interpolate",["linear"],["zoom"], 12,1.8, 15,3.4, 17,4.6],
-        "circle-color":"#fff", "circle-stroke-color":"#5b5b5b", "circle-stroke-width":1.2,
+        "circle-color":MI().station, "circle-stroke-color":MI().stationEdge, "circle-stroke-width":1.2,
       },
     });
     // 站名从 z13 起才出 —— 129 个站在缩小时会糊成一片
@@ -1989,7 +2276,7 @@ const MAP = (() => {
         "text-font":FONT_R, "text-offset":[0,0.95],
         "text-anchor":"top", "text-optional":true, "text-padding":2,
       },
-      paint:{ "text-color":"#4a4a4a", "text-halo-color":"#fff", "text-halo-width":1.6 },
+      paint:{ "text-color":MI().stationLabel, "text-halo-color":MI().halo, "text-halo-width":1.6 },
     });
     setTransitVisible(st.transit);
   }
@@ -2013,7 +2300,10 @@ const MAP = (() => {
     const chip = p => `<span class="lg-ref" style="background:${esc(p.colour)}" `
                     + `title="${esc(p.name || p.ref)}">${esc(p.ref)}</span>`;
     $("#map-legend").innerHTML =
-      `<div class="lg-chips">${feats.map(f => chip(f.properties)).join("")}</div>`
+      `<button class="bare lg-toggle" type="button" aria-expanded="${st.legendOpen ? "true" : "false"}">`
+    + `<span class="lg-chips">${feats.map(f => chip(f.properties)).join("")}</span>`
+    + `<span class="lg-hint">点击${st.legendOpen ? "收起" : (feats.length > 0 ? "展开线路名" : "")}</span>`
+    + `</button>`
     + `<div class="lg-list">`
     + feats.map(f => {
         const p = f.properties, nm = p.name || p.ref;
@@ -2022,7 +2312,7 @@ const MAP = (() => {
     + (guessed
         ? `<div class="lg-foot">其中 ${guessed} 条 OSM 未标注官方配色，颜色为自动分配</div>`
         : `<div class="lg-foot">配色取自 OSM 的 colour 标签，即官方线路色</div>`)
-    + `</div><div class="lg-hint">点击${feats.length > 0 ? "展开线路名" : ""}</div>`;
+    + `</div>`;
   }
 
   /* ═══════════════ 顺序线 ═══════════════
@@ -2157,12 +2447,6 @@ const MAP = (() => {
     + `fill="currentColor" aria-hidden="true" style="display:block">`
     + `<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>`;
 
-  /* ↑ ↓ × 也用 SVG，不用字符。实测三个字形在同一个 17px 盒子里宽度就不一样
-     （↑↓ 9.5px、× 7.7px，乘号本来就比箭头小一圈），箭头在多数字体里还偏上 ——
-     视觉重量不一致，而且随系统字体变。SVG 的几何是固定的。 */
-  const stroke = d => `<svg viewBox="0 0 16 16" width="11" height="11" fill="none" `
-    + `stroke="currentColor" stroke-width="1.7" stroke-linecap="round" `
-    + `stroke-linejoin="round" aria-hidden="true" style="display:block"><path d="${d}"/></svg>`;
   const ICON = {
     up:   stroke("M8 12.5V4M4.2 7.8 8 4l3.8 3.8"),
     down: stroke("M8 3.5V12M4.2 8.2 8 12l3.8-3.8"),
@@ -2211,9 +2495,9 @@ const MAP = (() => {
     // 「空心」会变成深色实心，跟想表达的意思正好相反。
     // 侧栏的小圆点是另一回事——它坐在深色卡片上，那里 --paper 才是对的。
     if(s.lod){
-      dot.style.background = "#4A4A4A";
+      dot.style.background = MI().lodging;
     }else if(!s.placed){
-      dot.style.background = "#fff";
+      dot.style.background = MI().hollow;
     }else if(s.days.length === 1){
       dot.style.background = dayColor(s.days[0]);
     }else{
@@ -2231,22 +2515,22 @@ const MAP = (() => {
     // 而它又必然 choice=null，套上去就成了满地的「未表态」橙圈，纯属误导。
     const shadow = "0 1px 5px rgba(0,0,0,.34)";
     if(s.lod){
-      dot.style.boxShadow = `0 0 0 2px var(--card), ${shadow}`;
+      dot.style.boxShadow = `0 0 0 2px ${MI().ring}, ${shadow}`;
     }else{
       const c = COLOR[s.k];
       dot.style.boxShadow = s.placed
-        ? `0 0 0 1.5px #fff, 0 0 0 ${1.5 + s.ring}px ${c}, ${shadow}`
+        ? `0 0 0 1.5px ${MI().ring}, 0 0 0 ${1.5 + s.ring}px ${c}, ${shadow}`
         : `0 0 0 ${s.ring}px ${c}, ${shadow}`;
     }
 
     // 数字只在排进某一天之后才出现；住宿永不编号
     if(s.lod){
       dot.innerHTML = house(13);
-      dot.style.color = "#fff";
+      dot.style.color = MI().onLodging;
     }else{
       const seq = firstSeq(p.id);
       dot.textContent = seq == null ? "" : String(seq);
-      dot.style.color = "#fff";
+      dot.style.color = "var(--on-day)";
       dot.style.fontSize = (seq == null ? 0 : 11) + "px";
     }
   }
@@ -2326,7 +2610,7 @@ const MAP = (() => {
      两处显示同一份数据，规则不一致会让人以为是 bug。 */
   function pinStyle(p){
     const s = dotSpec(p);
-    const bg = s.lod ? "#4A4A4A"
+    const bg = s.lod ? "var(--lodging)"
              : !s.placed ? "var(--paper)"
              : s.days.length === 1 ? dayColor(s.days[0])
              : "conic-gradient(" + s.days.map((n, i) => {
@@ -2443,8 +2727,8 @@ const MAP = (() => {
       if(!lod) seq++;
       const note = (e.note || "").trim();
       return `<div class="ditem${lod ? " lod" : ""}" data-card="${esc(p.id)}" data-day="${d.n}" data-i="${i}">
-          <span class="n" style="background:${lod ? "#4A4A4A" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
-          <span class="dnm" title="${esc(p.name)}${note ? " — " + esc(note) : ""}">${esc(p.name)}</span>
+          <span class="n" style="background:${lod ? "var(--lodging)" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
+          <button class="bare dnm" type="button" title="${esc(p.name)}${note ? " — " + esc(note) : ""}">${esc(p.name)}</button>
           <span class="dops">
             <button class="dop" data-op="up"   title="上移" aria-label="上移">${ICON.up}</button>
             <button class="dop" data-op="down" title="下移" aria-label="下移">${ICON.down}</button>
@@ -2454,9 +2738,12 @@ const MAP = (() => {
     }).join("");
     return `<div class="dbox${d.n === st.curDay ? " cur" : ""}" data-day="${d.n}">
         <div class="dhead">
-          <span class="swatch" style="background:${dayColor(d.n)}"></span>
-          <b>${esc(dayLabel(d))}</b>
-          <span class="sub">${esc(dayDateTxt(d))}${d.date ? " · " : ""}${dayCount(d)} 个</span>
+          <button class="bare dh-btn" type="button" aria-pressed="${d.n === st.curDay}"
+            aria-label="${esc(dayLabel(d))}${d.date ? "，" + esc(dayDateTxt(d)) : ""}，${dayCount(d)} 个地点。设为当前天">
+            <span class="swatch" style="background:${dayColor(d.n)}"></span>
+            <b>${esc(dayLabel(d))}</b>
+            <span class="sub">${esc(dayDateTxt(d))}${d.date ? " · " : ""}${dayCount(d)} 个</span>
+          </button>
           ${(d.places || []).length ? "" :
             `<button class="dop d-del-day" data-delday="${d.n}" title="删除这一天" aria-label="删除这一天">${ICON.del}</button>`}
         </div>
@@ -2585,6 +2872,19 @@ const MAP = (() => {
 
   /* 点清单栏的圆点：不在当前天就加进去，已在就移出（同一天出现多次时移出最后一次）。
      点卡片其余部分仍然是弹详情 —— 状态控件和内容区各管各的。 */
+  /* 圆点是个开关，所以要能播报「按下了没有」和「按下会发生什么」。
+     两者都跟着「当前天」变：同一个圆点，在第 1 天是「加入」，切到第 2 天
+     可能就成了「移出」—— 标签写死成「排入日程」会是句假话。 */
+  const inCurDay = id => {
+    const d = curDayObj();
+    return !!d && (d.places || []).some(e => e && e.id === id);
+  };
+  function pinLabel(p){
+    const d = curDayObj();
+    if(!d) return `${p.name}：还没有日程可排`;
+    return `${inCurDay(p.id) ? "移出" : "加入"}${dayLabel(d)}：${p.name}`;
+  }
+
   function toggleInCurDay(id){
     const d = curDayObj();
     if(!d){ toast("还没有日程。先建立分天，再往里放地点。"); return; }
@@ -2642,8 +2942,9 @@ const MAP = (() => {
     box.innerHTML = [...byArea.entries()].map(([area, ps]) =>
       `<div class="grp">${esc(area)} · ${ps.length}</div>` + ps.map(p =>
         `<div class="mi${st.focus === p.id ? " on" : ""}" data-card="${esc(p.id)}">
-           <span class="pin" style="${pinStyle(p)}">${pinText(p)}</span>
-           <span class="t"><b>${esc(p.name)}</b><span class="sub">${metaLine(p)}</span></span>
+           <button class="bare pin" type="button" style="${pinStyle(p)}"
+             aria-pressed="${inCurDay(p.id)}" aria-label="${esc(pinLabel(p))}">${pinText(p)}</button>
+           <button class="bare t" type="button"><b>${esc(p.name)}</b><span class="sub">${metaLine(p)}</span></button>
          </div>`).join("")).join("") ||
       `<div class="empty-state" style="padding:34px 16px"><div>当前筛选下没有可显示的地点</div></div>`;
     wireSortable();
@@ -2887,6 +3188,20 @@ const MAP = (() => {
     });
   }
 
+  /* 主题变了（用户点了右上角，或者停在「跟随系统」而系统自己翻了）：
+     CSS 当场就跟上了，底图不会 —— 它是 init 时按当时的主题选定的，
+     不管就又回到「深色界面配浅色地图」。
+     只在当前正用着「简约」时才重挂：手动切去标准/光栅是明确的选择，不该被覆盖。 */
+  window.addEventListener("themechange", e => {
+    const dark = e.detail.dark, ofm = BASEMAPS[0];
+    if(ofm.dark === dark) return;
+    ofm.style = ofmStyle(dark);
+    ofm.dark = dark;
+    if(st.engine !== "maplibre" || st.base !== ofm.id) return;
+    st.base = null;                 // 绕开 switchBase 的「同一张底图就不动」
+    switchBase(ofm.id);
+  });
+
   /* ---------- 入口 ---------- */
   async function init(){
     if(st.ready) return;
@@ -3059,6 +3374,9 @@ ${selected().map(p => `<Placemark>
     const lg = e.target.closest("#map-legend");
     if(lg){
       const open = lg.classList.toggle("open");
+      st.legendOpen = open;
+      const btn = lg.querySelector(".lg-toggle");
+      if(btn) btn.setAttribute("aria-expanded", String(open));
       const hint = lg.querySelector(".lg-hint");
       if(hint) hint.textContent = open ? "点击收起" : "点击展开线路名";
       return;
@@ -3419,8 +3737,41 @@ const GUIDE = (() => {
 window.GUIDE = GUIDE;
 
 /* ─────────────────────────────────────────────── 视图切换 */
+/* 地图视图的高度原来写死 calc(100vh - 210px)。那个常数对不上任何一种情况：
+   实测桌面 1440×900 下真实开销是 250px（页头 100 + main 上下留白 20/130），
+   页面因此多滚 40px，滚完三栏的列头正好被半透明页头盖住 20px。
+   而页头本身是会变的 —— 375px 下副标题折行，它有 150px 高。
+   常数注定错，所以量。 */
+function layoutMap(){
+  const top = $(".top"), bar = $(".actionbar"), main = document.querySelector("main");
+  const topH = top && !top.hidden ? top.offsetHeight : 0;
+  const barH = bar && !bar.hidden ? bar.offsetHeight : 0;
+  document.documentElement.style.setProperty("--ab-h", (barH + 14) + "px");
+  const h = innerHeight - topH - 20 - (barH + 14);
+  document.documentElement.style.setProperty("--map-h", Math.max(360, Math.round(h)) + "px");
+  const mapView = $("#view-map");            // standalone 模式下这个视图被整个移除了
+  if(main) main.classList.toggle("tight", !!mapView && !mapView.hidden);
+}
+
+/* 窄屏把导出按钮从标签栏挪进地图视图。搬节点而不是渲染两份 ——
+   两份就要处理 id 冲突，而 #exp-csv / #exp-kml 上挂的是直接的 onclick，
+   搬家不影响它们。 */
+const NARROW = matchMedia("(max-width: 760px)");
+function layoutMapActions(){
+  const act = $("#map-actions"), slot = $("#map-actions-slot"), tabs = $(".tabs");
+  if(!act || !slot || !tabs) return;
+  const to = NARROW.matches ? slot : tabs;
+  if(act.parentElement !== to) to.appendChild(act);
+}
+
 function switchView(v){
-  $$(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.view === v));
+  // roving tabindex：一组 tab 在 Tab 键序里只占一个位置，组内用 ←→ 走。
+  // 三个都留 tabindex=0 的话，键盘用户要按三次 Tab 才能穿过标签栏。
+  $$(".tab").forEach(t => {
+    const on = t.dataset.view === v;
+    t.setAttribute("aria-selected", on);
+    t.tabIndex = on ? 0 : -1;
+  });
   $$(".view").forEach(s => s.hidden = (s.id !== "view-" + v));
   // 导出按钮挪到了顶部标签栏，但它导的是地图视图里筛出来的那批点，
   // 所以只在地图视图出现。
@@ -3434,12 +3785,18 @@ function switchView(v){
     GUIDE.render();                                  // 对照表要反映最新选择
     if(!switchView._wx){ switchView._wx = true; GUIDE.renderWeather(); }
   }
+  layoutMapActions();
+  layoutMap();
 }
 
 /* ─────────────────────────────────────────────── 启动 */
 function boot(){
   document.title = `${TRIP.destination || "行程"} · 行程规划`;
-  $("#title").textContent = `${TRIP.destination || "行程"}${TRIP.destination_local && TRIP.destination_local !== TRIP.destination ? `（${TRIP.destination_local}）` : ""}`;
+  if(TRIP.output_language) document.documentElement.lang = TRIP.output_language;
+  initTheme();
+  $("#title").innerHTML = esc(TRIP.destination || "行程")
+    + (TRIP.destination_local && TRIP.destination_local !== TRIP.destination
+        ? `（<span${langAttr}>${esc(TRIP.destination_local)}</span>）` : "");
 
   const bits = [];
   if(TRIP.dates && TRIP.dates.start) bits.push(`<b>${TRIP.dates.start} → ${TRIP.dates.end}</b>`);
@@ -3496,7 +3853,14 @@ function boot(){
   const msg = [restored && `${restored} 个之前的选择`,
                restoredItin && `${restoredItin} 项日程安排`].filter(Boolean);
   if(msg.length) toast(`从浏览器缓存恢复了 ${msg.join("、")}`);
+
+  layoutMapActions();
+  layoutMap();
 }
+
+// 页头高度随宽度变（副标题折行），操作栏高度随「手动保存…」展开变，两者都得重量
+addEventListener("resize", layoutMap);
+NARROW.addEventListener?.("change", () => { layoutMapActions(); layoutMap(); });
 
 /* ─────────────────────────────────────────────── 事件 */
 document.addEventListener("click", e => {
@@ -3549,6 +3913,21 @@ $("#copy").onclick     = showCode;
 
 document.addEventListener("keydown", e => {
   if(e.key === "/" && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)){ e.preventDefault(); $("#q").focus(); }
+
+  // 标签栏内的 ←→ / Home / End。WAI-ARIA 的 tab 模式要求方向键切换，
+  // 禁用的「攻略」跳过 —— 它不可聚焦，停在上面就成了死胡同。
+  const tab = e.target.closest?.(".tab");
+  if(tab && ["ArrowLeft","ArrowRight","Home","End"].includes(e.key)){
+    const tabs = $$(".tab").filter(t => !t.disabled);
+    if(!tabs.length) return;
+    e.preventDefault();
+    const i = tabs.indexOf(tab);
+    const to = e.key === "Home" ? 0
+             : e.key === "End"  ? tabs.length - 1
+             : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    switchView(tabs[to].dataset.view);
+    tabs[to].focus();
+  }
 });
 
 boot();
