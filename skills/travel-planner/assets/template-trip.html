@@ -1087,7 +1087,11 @@ function loadItin(){
     if(!raw) return 0;
     const d = JSON.parse(raw);
     if(!d || d.builtAt !== BUILT_AT || !Array.isArray(d.itinerary)) return 0;
-    DATA.itinerary = d.itinerary;
+    // 必须让 DATA.itinerary 和 ITIN 始终是**同一个数组**。
+    // 写成 DATA.itinerary = d.itinerary 会让两者分叉：日内改动因为共享
+    // day 对象还能同步，但「增加一天」这种改数组本身的操作就只进其中一个，
+    // 保存时写回去的天数会和界面上看到的对不上。
+    DATA.itinerary = ITIN;
     ITIN.length = 0;
     d.itinerary.forEach(x => ITIN.push(x));
     buildSched();
