@@ -89,7 +89,8 @@ def with_itinerary(doc: dict, **kw) -> None:
 
 def hotel(doc: dict, **kw) -> dict:
     """往 places 里加一个住宿条目，返回它。"""
-    h = {"id": "os-h1", "name": "梅田某酒店", "kind": "lodging",
+    h = {"id": "os-h1", "name": "梅田某酒店", "name_local": "梅田のホテル",
+         "kind": "lodging",
          "area": "梅田", "coord": {"lon": 135.4980, "lat": 34.7025},
          # 住宿同样要过防幻觉闸门：AI 得真去查一下确认它存在、拿到地址
          "sources": [{"title": "官网", "url": "https://example.org/hotel"}]}
@@ -107,19 +108,29 @@ results: list[bool] = []
 
 
 def case(name: str, mutate, level: str, needle: str) -> None:
-    """needle 非空 → 断言该级别包含它；needle 为空 → 断言该级别一条都没有。
+    """断言方式由 needle 决定：
+
+        "文字"    该级别必须包含这段文字
+        ""        该级别一条都不能有
+        "!文字"   该级别必须**不**包含这段文字（其他告警可以有）
 
     空串不能走 `needle in got`——`"" in s` 恒为真，那样的用例永远通过、
-    等于没写。"""
+    等于没写。而只想验证"某条误报消失了"时，往往不能要求整级为空——
+    基准文档本身就带着「样本量太小」这类预期内的告警。"""
     doc = base_doc()
     mutate(doc)
     rep = run(doc)
     got = messages(rep, level)
-    ok = (not got) if needle == "" else (needle in got)
+    if needle == "":
+        ok, expect = (not got), "一条都没有"
+    elif needle.startswith("!"):
+        ok, expect = (needle[1:] not in got), f"不含 {needle[1:]!r}"
+    else:
+        ok, expect = (needle in got), repr(needle)
     results.append(ok)
     print(f"  {PASS if ok else FAIL} {name}")
     if not ok:
-        print(f"      期望 {level} {'一条都没有' if needle == '' else repr(needle)}")
+        print(f"      期望 {level} {expect}")
         print(f"      实际 {level}: {got or '(无)'}")
 
 
@@ -242,6 +253,18 @@ def main() -> int:
          lambda d: (with_itinerary(d),
                     d["itinerary"][1]["places"].append({"id": "os-001"})),
          "P2", "却没写 note")
+    case("写了 note 就不再提示",
+         lambda d: (with_itinerary(d),
+                    d["itinerary"][1]["places"].append({"id": "os-001", "note": "夜景"})),
+         "P2", "")
+    # 酒店一天出现两次（早上出发、晚上回来）、两天共四次是常态，不该被当成误操作
+    case("住宿天天出现不该被当成重复误操作",
+         lambda d: (hotel(d), with_itinerary(d),
+                    d["itinerary"][0]["places"].insert(0, {"id": "os-h1"}),
+                    d["itinerary"][0]["places"].append({"id": "os-h1"}),
+                    d["itinerary"][1]["places"].insert(0, {"id": "os-h1"}),
+                    d["itinerary"][1]["places"].append({"id": "os-h1"})),
+         "P2", "")
     case("住宿没被排进任何一天",
          lambda d: (hotel(d), with_itinerary(d)),
          "P1", "没有出现在任何一天")
@@ -253,6 +276,10 @@ def main() -> int:
          lambda d: (hotel(d), with_itinerary(d),
                     d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),
          "P0", "")
+    case("住宿不该被问「闭馆日为什么是 null」",
+         lambda d: (hotel(d), with_itinerary(d),
+                    d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),
+         "P1", "!closed_days 为 null")
     case("住宿仍然要有坐标",
          lambda d: (hotel(d, coord=None), with_itinerary(d),
                     d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),

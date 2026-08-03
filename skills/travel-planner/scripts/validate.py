@@ -263,12 +263,13 @@ def check_place(p, idx, doc, rep: Report) -> None:
                         f"核实被拦截或不完整（{st}）：{str(v.get('note'))[:60]}…"
                         f" —— 页面会标注提醒用户自行确认")
 
-    # closed_days
+    # closed_days。住宿没有「闭馆日」这个概念，不参与。
     cd = p.get("closed_days")
     if cd is None:
-        rep.add("P1", where,
-                "closed_days 为 null（查不到或来源矛盾）——无法校验闭馆日与行程是否冲突，"
-                "请在 detail 里提醒用户出发前自行确认")
+        if kind != "lodging":
+            rep.add("P1", where,
+                    "closed_days 为 null（查不到或来源矛盾）——无法校验闭馆日与行程是否冲突，"
+                    "请在 detail 里提醒用户出发前自行确认")
     else:
         if not isinstance(cd, list) or any(not isinstance(d, int) or not 1 <= d <= 7 for d in cd):
             rep.add("P0", where, "closed_days 必须是 1–7 的整数数组（1=周一），全年无休填 []")
@@ -317,14 +318,17 @@ def check_place(p, idx, doc, rep: Report) -> None:
                 f"确需新字段请先改 data-schema.md 与 validate.py")
 
     # ---- P2
-    if _blank(p.get("photo_note")):
-        rep.add("P2", where, "缺少 photo_note（画面描述与拍摄建议）")
+    # 住宿不参与这几条：摄影机位、配图、长篇介绍都是景点的质量要求。
+    # 对着酒店提"缺少拍摄建议"只会制造噪声，把真正该看的提示淹掉。
+    if kind != "lodging":
+        if _blank(p.get("photo_note")):
+            rep.add("P2", where, "缺少 photo_note（画面描述与拍摄建议）")
+        if not p.get("images"):
+            rep.add("P2", where, "没有配图")
+        if isinstance(p.get("detail"), str) and 0 < len(p["detail"].strip()) < 60:
+            rep.add("P2", where, f"detail 仅 {len(p['detail'].strip())} 字，偏薄")
     if p.get("booking") in ("required", "recommended") and _blank(p.get("booking_url")):
         rep.add("P2", where, f"booking={p['booking']} 但缺少 booking_url")
-    if not p.get("images"):
-        rep.add("P2", where, "没有配图")
-    if isinstance(p.get("detail"), str) and 0 < len(p["detail"].strip()) < 60:
-        rep.add("P2", where, f"detail 仅 {len(p['detail'].strip())} 字，偏薄")
 
 
 def check_cross(doc, rep: Report) -> None:
@@ -455,8 +459,13 @@ def check_itinerary(doc, rep: Report) -> None:
 
     # ---- 跨天的检查 ----
     for pid, days_in in assigned.items():
-        if len(days_in) > 1:
-            p = by_id.get(pid) or {}
+        p = by_id.get(pid) or {}
+        # 住宿每天都出现是常态，不是可疑的重复 —— 实测样本里酒店一天出现两次
+        # （早上出发、晚上回来）、两天共四次，被误报成「确认不是误操作」。
+        if (p.get("kind") or "attraction") == "lodging":
+            continue
+        distinct = sorted(set(days_in))
+        if len(distinct) > 1:
             # 同一地点去两次通常是有意的（白天夜景各一次、世博会连着两天），
             # 但也可能是拖拽误操作。写了 note 就当是有意的。
             has_note = any(
@@ -466,7 +475,7 @@ def check_itinerary(doc, rep: Report) -> None:
                 if isinstance(ent, dict) and ent.get("id") == pid)
             if not has_note:
                 rep.add("P2", f"itinerary/{pid}",
-                        f"{p.get('name')} 被排进 {len(days_in)} 天（第 {days_in} 天）却没写 note，"
+                        f"{p.get('name')} 被排进第 {distinct} 天却没写 note，"
                         f"确认是有意重复访问而非误操作")
 
     for p in places:
