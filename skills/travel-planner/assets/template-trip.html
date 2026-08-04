@@ -113,6 +113,13 @@ button{font:inherit;color:inherit;cursor:pointer}
   -webkit-appearance:none;appearance:none;
 }
 
+/* 只给读屏的常驻文本（地点搜索的结果播报走这里）。
+   display:none 会把它从可访问树里一起删掉，所以用裁剪的方式藏。 */
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
+}
+
 /* ═══════════════════════════════════════════════ 头部 */
 .top{
   position:sticky;top:0;z-index:50;
@@ -186,7 +193,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tally{display:flex;gap:11px;font-size:12px;color:var(--ink-3);margin-left:auto;white-space:nowrap}
 .tally span{display:flex;align-items:center;gap:4px}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
-.d-yes{background:var(--ok)} .d-maybe{background:var(--warn)} .d-no{background:var(--line-2)} .d-none{background:var(--line-2);opacity:.45}
+/* 未表态用空心：和「不想去」原来共用 --line-2、只差 45% 透明度，浅色主题下
+   两个灰点根本分不开。空心＝还没表态，恰好和地图 marker 的「空心＝未排入」同一套直觉。 */
+.d-yes{background:var(--ok)} .d-maybe{background:var(--warn)} .d-no{background:var(--line-2)} .d-none{background:transparent;border:1.5px solid var(--line-2)}
 
 /* ═══════════════════════════════════════════════ 主体 */
 main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
@@ -672,9 +681,12 @@ pre.code{
    线路名列表留在按钮外面 —— 它自己会滚动，而在按钮里滚动很别扭。 */
 .lg-toggle{display:block;width:100%;cursor:pointer}
 #map-legend .lg-chips{display:flex;flex-wrap:wrap;gap:4px}
+/* 墨色不写死白色：线路色来自 OSM 的官方配色，浅色线（长堀鹤见绿地线 #A9CC51）
+   压白字实测只有 1.8:1，text-shadow 也救不回来。由 lineInk() 按背景亮度
+   逐个选黑/白，内联在 style 里；这里的 #fff 只是 colour 解析失败时的兜底。 */
 #map-legend .lg-ref{
   min-width:16px;text-align:center;font-weight:700;font-size:10.5px;line-height:16px;
-  color:#fff;border-radius:3px;padding:0 4px;text-shadow:0 0 2px rgba(0,0,0,.45);
+  color:#fff;border-radius:3px;padding:0 4px;
 }
 #map-legend .lg-list{display:none;margin-top:6px;max-height:min(40vh,300px);overflow:auto}
 #map-legend.open .lg-list{display:block}
@@ -865,6 +877,13 @@ pre.code{
   .hint{margin-left:0;text-align:left;max-width:none}
   main{padding-bottom:150px}
 }
+/* iOS Safari 聚焦 <16px 的输入框会把整页放大，之后还得手动捏回去。
+   不用 maximum-scale 去堵（那会连真正的缩放一起禁掉，违反 WCAG）——
+   把触屏设备上的输入字号提到 16px 这个不触发缩放的门槛就够了。
+   按 hover:none 而不是宽度判断：iPad 视口宽过任何手机断点，照样会缩放。 */
+@media (hover:none){
+  .search,.msearch input,textarea{font-size:16px}
+}
 /* ═══════════════════════════════════════════════ 降低动效
    刻意不写 *{transition:none!important}。这个页面里的过渡大多是状态反馈 ——
    哪个被选中、哪一天是当前天、拖到哪儿了 —— 一刀切等于把信息也砍掉，
@@ -911,7 +930,8 @@ pre.code{
   <!-- ══════════════ 视图① 景点清单 ══════════════ -->
   <section class="view" id="view-list" role="tabpanel" aria-labelledby="tab-list">
     <div class="toolbar">
-      <input class="search" id="q" type="search" placeholder="搜索名称、亮点、标签…" autocomplete="off">
+      <input class="search" id="q" type="search" placeholder="搜索名称、亮点、标签…" autocomplete="off"
+        aria-label="搜索景点">
       <div class="seg" role="group" aria-label="分组方式">
         <button id="by-area" aria-pressed="true">按区域</button>
         <button id="by-tier" aria-pressed="false">按推荐度</button>
@@ -957,6 +977,9 @@ pre.code{
           </div>
         </div>
         <div id="msq-panel" hidden></div>
+        <!-- 搜索结果面板是瞬时插拔的 DOM，读屏不会主动播报它的出现。
+             播报走这个常驻的 status 区：先有空区、再改文字，才能被稳定读出。 -->
+        <span class="sr-only" id="msq-status" role="status"></span>
         <div class="legend" id="map-legend" hidden></div>
         <div class="map-note" id="map-note"></div>
         <div class="attrib" id="attrib"></div>
@@ -1282,7 +1305,8 @@ function cardHTML(p, children){
           <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
           ${stub ? `<span class="tier t-stub">待补全</span>`
                  : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
-          <span class="stars" title="出片指数 ${p.photo_index||0}/5">${stars(p.photo_index)}</span>`}
+          <span class="stars" role="img" aria-label="出片指数 ${p.photo_index||0}/5"
+            title="出片指数 ${p.photo_index||0}/5"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
         </div>
         ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
         <div class="facts">
@@ -1413,11 +1437,13 @@ function updateProgress(){
     if(c) c.textContent = n[b.dataset.c] ?? 0;
   }
   const t = $("#tally");
+  // 数字必须带词。只放色点的话，含义全靠颜色承载——读屏听到的是四个裸数字，
+  // 色觉障碍者看到的是四个点；而地图视图的同一组筛选按钮本来就带着这几个词。
   if(t) t.innerHTML =
-    `<span><i class="dot d-yes"></i>${n.yes}</span>
-     <span><i class="dot d-maybe"></i>${n.maybe}</span>
-     <span><i class="dot d-no"></i>${n.no}</span>
-     <span><i class="dot d-none"></i>${n.none}</span>`;
+    `<span><i class="dot d-yes"></i>想去 ${n.yes}</span>
+     <span><i class="dot d-maybe"></i>待定 ${n.maybe}</span>
+     <span><i class="dot d-no"></i>不想去 ${n.no}</span>
+     <span><i class="dot d-none"></i>未表态 ${n.none}</span>`;
   $("#n-list").textContent = PLACES.length;
 }
 
@@ -2423,12 +2449,26 @@ const MAP = (() => {
     }
   }
 
+  /* 线号徽章的墨色。线路色是 OSM 的官方配色，不受我们控制——大阪的
+     长堀鹤见绿地线是 #A9CC51，白字压上去只有 1.8:1。
+     和 DAY_COLORS 同一条判据：按 WCAG 相对亮度选黑/白，
+     阈值 0.179 正是「白字够 4.5:1」的分界。解析不了的值退回白字（CSS 兜底）。 */
+  function lineInk(colour){
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(colour || "").trim());
+    if(!m) return "#fff";
+    const [r, g, b] = [0, 2, 4].map(i => {
+      const v = parseInt(m[1].slice(i, i + 2), 16) / 255;
+      return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
+    });
+    return (.2126 * r + .7152 * g + .0722 * b) > .179 ? "#1a1a1a" : "#fff";
+  }
+
   function paintLegend(){
     if(!hasTransit()) return;
     const feats = [...TRANSIT.lines.features].sort((a, b) =>
       String(a.properties.ref).localeCompare(String(b.properties.ref), "en"));
     const guessed = feats.filter(f => f.properties.guessed).length;
-    const chip = p => `<span class="lg-ref" style="background:${esc(p.colour)}" `
+    const chip = p => `<span class="lg-ref" style="background:${esc(p.colour)};color:${lineInk(p.colour)}" `
                     + `title="${esc(p.name || p.ref)}">${esc(p.ref)}</span>`;
     $("#map-legend").innerHTML =
       `<button class="bare lg-toggle" type="button" aria-expanded="${st.legendOpen ? "true" : "false"}">`
@@ -2674,6 +2714,10 @@ const MAP = (() => {
     el.className = "mk " + kind(p) + (isStubP(p) ? " stub" : "");
     el.dataset.id = p.id;
     el.dataset.nm = p.name;
+    // MapLibre 会给 marker 元素盖上 role="button" + aria-label="Map marker"，
+    // 47 个点在读屏里就是 47 个同名按钮。先写上真名（Leaflet 的 outerHTML 和
+    // 静态兜底直接用它）；MapLibre 在 addTo 时会覆盖，那边还要再设一次。
+    el.setAttribute("aria-label", p.name);
     el.innerHTML = "<i></i>";
     styleDot(el, p);
     /* 点地图图标＝看它是什么。曾经做成「放进/移出当前天」，实际用起来
@@ -2691,6 +2735,7 @@ const MAP = (() => {
       const el = markerEl(p);
       if(st.engine === "maplibre"){
         const m = new maplibregl.Marker({ element:el }).setLngLat([p.coord.lon, p.coord.lat]).addTo(st.map);
+        el.setAttribute("aria-label", p.name);   // addTo 会盖成 "Map marker"，盖回来
         st.markers.set(p.id, m);
       }else if(st.engine === "leaflet"){
         const m = L.marker([p.coord.lat, p.coord.lon],
@@ -3357,6 +3402,13 @@ const MAP = (() => {
     el.innerHTML = html || "";
   }
 
+  // 面板对读屏是静默的（异步插进来的 DOM 不会被主动播报），
+  // 每个阶段同步喊一声到常驻的 #msq-status。
+  const msqSay = txt => {
+    const el = $("#msq-status");
+    if(el) el.textContent = txt;
+  };
+
   async function doSearch(){
     const q = $("#msq").value.trim();
     if(!q || searching) return;
@@ -3366,6 +3418,7 @@ const MAP = (() => {
     if(wait > 0) await new Promise(r => setTimeout(r, wait));
     lastSearch = Date.now();
     searchPanel(`<div class="sr-note">搜索中…</div>`);
+    msqSay("搜索中…");
     try{
       const u = new URL(NOMINATIM);
       u.search = new URLSearchParams({
@@ -3382,9 +3435,11 @@ const MAP = (() => {
       if(!Array.isArray(list) || !list.length){
         searchPanel(`<div class="sr-note">没找到「${esc(q)}」。<br>
           中文俗名偶尔对不上地图数据，试试英文或当地语言名称。</div>`);
+        msqSay(`没找到「${q}」，试试英文或当地语言名称`);
         return;
       }
       results = list;
+      msqSay(`找到 ${list.length} 个结果，就在搜索框下方`);
       searchPanel(list.map((x, i) =>
         `<button class="sr" type="button" data-sr="${i}">
            <b>${esc(x.name || (x.display_name || "").split(",")[0])}</b>
@@ -3392,6 +3447,7 @@ const MAP = (() => {
          </button>`).join(""));
     }catch(e){
       searchPanel(`<div class="sr-note">搜索失败（${esc(e.message || e)}）。搜索需要联网，稍后再试。</div>`);
+      msqSay("搜索失败，稍后再试");
     }finally{ searching = false; }
   }
 
@@ -3424,6 +3480,7 @@ const MAP = (() => {
     if(st.map){
       const el = document.createElement("div");
       el.className = "mk cand";
+      el.setAttribute("aria-hidden", "true");   // 纯视觉的落点标记，信息都在候选卡片里
       el.innerHTML = "<i></i>";
       if(st.engine === "maplibre"){
         candMk = new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(st.map);
@@ -3499,6 +3556,14 @@ const MAP = (() => {
   async function init(){
     if(st.ready) return;
     st.ready = true;
+
+    /* 清单栏和日程栏只依赖数据，不依赖底图 —— 先画出来。
+       原来它们排在 await startMapLibre() 之后，而矢量瓦片是无 SLA 的免费服务，
+       慢网络下这两栏会跟着底图白屏最多 20 秒，看起来就是「坏了」。
+       顺序有讲究：renderDays 先跑（它把 st.curDay 落定），renderSide 的
+       圆点标签要用当前天。marker 仍然等地图就绪。 */
+    renderDays();
+    renderSide();
 
     if(!pts().length){
       $("#map-canvas").innerHTML = `<div class="empty-state"><div class="big">没有可定位的地点</div>
