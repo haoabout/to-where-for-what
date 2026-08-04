@@ -1237,7 +1237,7 @@ en: {
   tilesDeadNote:"<b>“{label}” basemap tiles failed to load</b>; switched back to Standard. Console error: <code>{msg}</code>",
   legendCollapse:"Click to collapse", legendExpand:"Click to show line names",
   legendGuessed:"Auto-assigned colors: ",
-  transitFade:"Transparency", transitFadeAria:"Transit layer transparency",
+  transitOpacity:"Opacity", transitOpacityAria:"Transit layer opacity",
   legendOfficial:"Colors come from OSM's colour tag, i.e. the official line colors",
   day0Label:"Day 0 (arrival evening)", dayN:"Day {n}",
   removeDayBlocked:"This day still has places — empty it first.",
@@ -1399,7 +1399,9 @@ zh: {
   tilesDeadNote:"<b>「{label}」底图的瓦片加载失败</b>，已自动切回标准底图。控制台原始错误：<code>{msg}</code>",
   legendCollapse:"点击收起", legendExpand:"点击展开线路名",
   legendGuessed:"自动配色：",
-  transitFade:"透明度", transitFadeAria:"地铁图层透明度",
+  // 英文用 Opacity 而不是 Transparency：滑杆往右是更实，英文里叫
+  // Transparency 方向就反了。中文的「透明度」在界面里是通用叫法，不改。
+  transitOpacity:"透明度", transitOpacityAria:"地铁图层透明度",
   legendOfficial:"配色取自 OSM 的 colour 标签，即官方线路色",
   day0Label:"第 0 天（抵达当晚）", dayN:"第 {n} 天",
   removeDayBlocked:"这一天还有地点，先清空再删。",
@@ -2644,7 +2646,7 @@ const MAP = (() => {
   const st = { ready:false, engine:null, map:null, markers:new Map(),
                base:"ofm", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
                grp:"area",   // 侧栏分组：area | choice。与清单视图的 ui.group 各记各的
-               fade:0,       // 地铁层透明度 0–0.85。和 st.transit 一样只活在本次会话里
+               opacity:1,    // 地铁层不透明度 0.15–1。和 st.transit 一样只活在本次会话里
                curDay:null, flat:null, addOpen:false, legendOpen:false };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
@@ -2837,15 +2839,14 @@ const MAP = (() => {
     "transit-station-label": ["text-opacity"],
   };
   /* 线本身的基准就是 0.9（见 addTransit 里的 line-opacity），滑杆在基准上乘，
-     不是直接赋值 —— 否则透明度拉到 0 会比默认状态更实，和「本来的样子」对不上。 */
+     不是直接赋值 —— 否则拉到最右会比默认状态更实，和「本来的样子」对不上。 */
   const T_OPACITY_BASE = { "transit-line": 0.9 };
 
   function applyTransitOpacity(){
     if(st.engine !== "maplibre" || !st.map) return;
-    const alpha = 1 - st.fade;          // 滑杆量的是透明度，画图要的是不透明度
     for(const id of T_LAYERS){
       if(!st.map.getLayer(id)) continue;
-      const v = alpha * (T_OPACITY_BASE[id] ?? 1);
+      const v = st.opacity * (T_OPACITY_BASE[id] ?? 1);
       for(const prop of T_OPACITY[id]) st.map.setPaintProperty(id, prop, v);
     }
   }
@@ -2959,13 +2960,13 @@ const MAP = (() => {
     /* 滑杆常驻，不藏进展开区：调淡地铁层是为了看清自己的点和路线，而那正是
        图例收起、地图铺开的时候。藏在展开区里等于每次都要「展开→调→再收起」。
        它必须在 .lg-toggle 外面 —— 按钮里套滑杆，拖动会被吞成一次点击。 */
-    /* 滑杆量的是「透明度」：往右＝更透明，和标签的字面意思一致。
-       上限 0.85 而不是 1 —— 全透明是「关掉地铁层」，那件事「地铁」按钮已经
+    /* 方向：左＝更透明，右＝不透明，默认停在最右（和没有这个滑杆时一样）。
+       下限 0.15 而不是 0 —— 全透明是「关掉地铁层」，那件事「地铁」按钮已经
        在做了，滑杆再提供一次只会让人以为图层坏了。 */
     + `<div class="lg-op">`
-    + `<span>${T.transitFade}</span>`
-    + `<input type="range" min="0" max="0.85" step="0.05" value="${st.fade}" `
-    + `aria-label="${esc(T.transitFadeAria)}">`
+    + `<span>${T.transitOpacity}</span>`
+    + `<input type="range" min="0.15" max="1" step="0.05" value="${st.opacity}" `
+    + `aria-label="${esc(T.transitOpacityAria)}">`
     + `</div>`
     + `<div class="lg-list">`
     + feats.map(f => {
@@ -4308,7 +4309,7 @@ ${selected().map(p => `<Placemark>
   document.addEventListener("input", e => {
     const sl = e.target.closest(".lg-op input");
     if(!sl) return;
-    st.fade = +sl.value;
+    st.opacity = +sl.value;
     applyTransitOpacity();
   });
 
