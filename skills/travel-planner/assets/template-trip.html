@@ -776,6 +776,28 @@ pre.code{
   display:flex;align-items:center;flex-wrap:wrap;gap:3px;
 }
 #map-legend .lg-hint{color:var(--ink-3);font-size:10px;margin-top:5px}
+#map-legend .lg-op{
+  display:flex;align-items:center;gap:7px;margin-top:6px;
+  padding-top:6px;border-top:1px solid var(--line);
+  color:var(--ink-3);font-size:10.5px;
+}
+#map-legend .lg-op span{flex:none}
+#map-legend .lg-op input{
+  flex:1;min-width:0;height:12px;margin:0;
+  -webkit-appearance:none;appearance:none;background:none;cursor:pointer;
+}
+/* 轨道和滑块的两套前缀必须各写一条规则，不能并在同一个选择器列表里 ——
+   浏览器遇到一个它不认识的伪元素会把整条规则丢掉，于是两边都没样式。 */
+#map-legend .lg-op input::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:var(--line-2)}
+#map-legend .lg-op input::-moz-range-track{height:3px;border-radius:2px;background:var(--line-2)}
+#map-legend .lg-op input::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;border:0;
+  width:11px;height:11px;margin-top:-4px;border-radius:50%;background:var(--ink-2);
+}
+#map-legend .lg-op input::-moz-range-thumb{
+  border:0;width:11px;height:11px;border-radius:50%;background:var(--ink-2);
+}
+#map-legend .lg-op input:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 .map-note{
   position:absolute;left:10px;bottom:10px;right:10px;z-index:20;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
@@ -1215,6 +1237,7 @@ en: {
   tilesDeadNote:"<b>“{label}” basemap tiles failed to load</b>; switched back to Standard. Console error: <code>{msg}</code>",
   legendCollapse:"Click to collapse", legendExpand:"Click to show line names",
   legendGuessed:"Auto-assigned colors: ",
+  transitOpacity:"Opacity", transitOpacityAria:"Transit layer opacity",
   legendOfficial:"Colors come from OSM's colour tag, i.e. the official line colors",
   day0Label:"Day 0 (arrival evening)", dayN:"Day {n}",
   removeDayBlocked:"This day still has places — empty it first.",
@@ -1376,6 +1399,8 @@ zh: {
   tilesDeadNote:"<b>「{label}」底图的瓦片加载失败</b>，已自动切回标准底图。控制台原始错误：<code>{msg}</code>",
   legendCollapse:"点击收起", legendExpand:"点击展开线路名",
   legendGuessed:"自动配色：",
+  // 「浓淡」而不是「透明度」：滑杆往右是更实，叫透明度方向正好是反的
+  transitOpacity:"浓淡", transitOpacityAria:"地铁图层浓淡",
   legendOfficial:"配色取自 OSM 的 colour 标签，即官方线路色",
   day0Label:"第 0 天（抵达当晚）", dayN:"第 {n} 天",
   removeDayBlocked:"这一天还有地点，先清空再删。",
@@ -2620,6 +2645,7 @@ const MAP = (() => {
   const st = { ready:false, engine:null, map:null, markers:new Map(),
                base:"ofm", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
                grp:"area",   // 侧栏分组：area | choice。与清单视图的 ui.group 各记各的
+               opacity:1,    // 地铁层浓淡。和 st.transit 一样只活在本次会话里
                curDay:null, flat:null, addOpen:false, legendOpen:false };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
@@ -2802,6 +2828,27 @@ const MAP = (() => {
      自己画的好处：线路用 OSM 的 colour 标签，也就是官方色，一条一个颜色。 */
   const TRANSIT_SRC = "transit-lines", STATION_SRC = "transit-stations";
   const T_LAYERS = ["transit-line", "transit-line-label", "transit-station", "transit-station-label"];
+  /* 调浓淡要把这四层一起调，少一层就会露馅：只调线不调站名，拉到最淡时
+     线几乎没了、站名还是黑压压一片，比不调还难看。
+     circle 的填充和描边是两个属性，symbol 的 text-opacity 连光晕一起管。 */
+  const T_OPACITY = {
+    "transit-line":          ["line-opacity"],
+    "transit-line-label":    ["text-opacity"],
+    "transit-station":       ["circle-opacity", "circle-stroke-opacity"],
+    "transit-station-label": ["text-opacity"],
+  };
+  /* 线本身的基准就是 0.9（见 addTransit 里的 line-opacity），滑杆在基准上乘，
+     不是直接赋值 —— 否则拉到 100% 会比默认状态更实，和「本来的样子」对不上。 */
+  const T_OPACITY_BASE = { "transit-line": 0.9 };
+
+  function applyTransitOpacity(){
+    if(st.engine !== "maplibre" || !st.map) return;
+    for(const id of T_LAYERS){
+      if(!st.map.getLayer(id)) continue;
+      const v = st.opacity * (T_OPACITY_BASE[id] ?? 1);
+      for(const prop of T_OPACITY[id]) st.map.setPaintProperty(id, prop, v);
+    }
+  }
 
   const hasTransit = () => !!(TRANSIT && (TRANSIT.lines?.features || []).length);
 
@@ -2869,6 +2916,7 @@ const MAP = (() => {
       paint:{ "text-color":MI().stationLabel, "text-halo-color":MI().halo, "text-halo-width":1.6 },
     });
     setTransitVisible(st.transit);
+    applyTransitOpacity();   // 换底图会整份重挂图层，浓淡得跟着重新抹一遍
   }
 
   function setTransitVisible(on){
@@ -2908,6 +2956,14 @@ const MAP = (() => {
     + `<span class="lg-chips">${feats.map(f => chip(f.properties)).join("")}</span>`
     + `<span class="lg-hint">${st.legendOpen ? T.legendCollapse : (feats.length > 0 ? T.legendExpand : "")}</span>`
     + `</button>`
+    /* 滑杆常驻，不藏进展开区：调淡地铁层是为了看清自己的点和路线，而那正是
+       图例收起、地图铺开的时候。藏在展开区里等于每次都要「展开→调→再收起」。
+       它必须在 .lg-toggle 外面 —— 按钮里套滑杆，拖动会被吞成一次点击。 */
+    + `<div class="lg-op">`
+    + `<span>${T.transitOpacity}</span>`
+    + `<input type="range" min="0.15" max="1" step="0.05" value="${st.opacity}" `
+    + `aria-label="${esc(T.transitOpacityAria)}">`
+    + `</div>`
     + `<div class="lg-list">`
     + feats.map(f => {
         const p = f.properties, nm = p.name || p.ref;
@@ -4203,7 +4259,9 @@ ${selected().map(p => `<Placemark>
     const tb = e.target.closest("#transit-btn");
     if(tb && !tb.disabled){ setTransitVisible(tb.getAttribute("aria-pressed") !== "true"); return; }
     const lg = e.target.closest("#map-legend");
-    if(lg){
+    // 滑杆是图例里唯一不该触发展开/收起的东西：松手那下 mouseup 会冒泡成
+    // click，不排除的话每调一次浓淡，图例就翻一次面。
+    if(lg && !e.target.closest(".lg-op")){
       const open = lg.classList.toggle("open");
       st.legendOpen = open;
       const btn = lg.querySelector(".lg-toggle");
@@ -4239,6 +4297,16 @@ ${selected().map(p => `<Placemark>
       for(const b of $$(".mgrp")) b.setAttribute("aria-pressed", b === mg);
       renderSide();
     }
+  });
+
+  /* 用 input 而不是 change：setPaintProperty 是即时的，拖动过程中就该看到
+     地铁层跟着淡下去 —— 「调到多淡合适」这件事只能边看边试，等松手才生效
+     就变成了猜。 */
+  document.addEventListener("input", e => {
+    const sl = e.target.closest(".lg-op input");
+    if(!sl) return;
+    st.opacity = +sl.value;
+    applyTransitOpacity();
   });
 
   return { init, refresh, onShow, fitAll, ensureDays:autoItinerary,
