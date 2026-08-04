@@ -1,250 +1,314 @@
-# 阶段 A · 搜索手册
+# Stage A · Research playbook
 
-目标：产出 35–50 个景点的 `places.json`，每个都带**第一轮就核验过的开放信息**。
+Goal: a `places.json` with 35–50 places, every one carrying **opening
+information verified in the first pass**.
 
-核心判断标准：**用户看完清单做出的每一个选择，都应该是有效的。**
-如果他选了「想去」，结果那天闭馆、正在修缮、或者必须提前一个月预约，那这一轮筛选就白做了。
+The core quality bar: **every choice the user makes off this list must be a
+valid one.** If they pick "want to go" and it turns out the place is closed that
+day, under renovation, or requires booking a month ahead, the whole filtering
+round was wasted.
 
 ---
 
-## 分类配额
+## Category quotas
 
-总量落在 **35–50**，按下表分配。这是保证「每一类都有得选」而不是「30 个博物馆」。
+Total lands in **35–50**, allocated per the table. This guarantees "every
+category has options" rather than "30 museums".
 
-| 分类 id | 标签 | 保底 | 上限 |
+| Category id | Label | Min | Max |
 |---|---|:--:|:--:|
-| `landmark` | 地标经典 | 3 | 6 |
-| `museum` | 博物馆·美术馆·艺术空间 | 3 | 8 |
-| `hidden` | 冷门秘境·小众角落 | 5 | 10 |
-| `media` | 影视动漫打卡地 | 2 | 6 |
-| `architecture` | 建筑·街区·夜景 | 3 | 7 |
-| `shrine` | 寺庙·神社·教堂 | 2 | 6 |
-| `nature` | 自然·公园·展望台 | 3 | 6 |
-| `market` | 市场·商店街·特色商业 | 2 | 5 |
-| `food` | 有场景价值的餐饮咖啡 | 2 | 5 |
-| `event` | 限时活动·展览·季节限定 | 0 | 6 |
+| `landmark` | Classic landmarks | 3 | 6 |
+| `museum` | Museums · galleries · art spaces | 3 | 8 |
+| `hidden` | Hidden gems · off-beat corners | 5 | 10 |
+| `media` | Film & anime locations | 2 | 6 |
+| `architecture` | Architecture · districts · night views | 3 | 7 |
+| `shrine` | Temples · shrines · churches | 2 | 6 |
+| `nature` | Nature · parks · observation decks | 3 | 6 |
+| `market` | Markets · shopping streets · distinctive retail | 2 | 5 |
+| `food` | Dining & cafés with scene value | 2 | 5 |
+| `event` | Limited-run events · exhibitions · seasonal | 0 | 6 |
 
-配额可以按目的地性质微调，但**不要悄悄改**——调整了就在交付时说明。
+Write the `label` values in the user's language. Quotas may be tuned to the
+destination's character, but **never silently** — if you adjust, say so at
+delivery.
 
-### 小城市怎么办
+### What about small cities
 
-达不到保底时，按顺序：
+When a quota can't be met, in order:
 
-1. **如实说明**：「本地的美术馆类只有 2 个，已全部收录」。**绝对不许编造景点凑数。**
-2. 扩展到**车程 1 小时圈**，这些点打 `需外延` 标签，并在 `pitch` 里写明车程。
-3. 还不够就降低总量目标，在交付时说清「这个目的地一共只有 28 个值得去的点」。
+1. **Say so honestly**: "this city only has 2 art museums; both are included."
+   **Never fabricate places to pad.**
+2. Expand to the **1-hour-drive circle**; tag those points `day-trip` and state
+   the travel time in `pitch`.
+3. Still short? Lower the total target and say plainly at delivery: "this
+   destination has only 28 places worth going."
 
-### `event`（限时活动）比较特殊
+### `event` (limited-run) is special
 
-配额从 0 起，因为它**只有知道出行日期才有意义**。必须联网查当期展讯，不能凭印象。
-查到的展览要写明起止日期，并确认覆盖用户的行程日。
+Its quota starts at 0 because it's **only meaningful once travel dates are
+known**. Current exhibitions must be looked up online, never recalled from
+memory. Record each exhibition's start/end dates and confirm they cover the
+user's trip days.
 
 ---
 
-## 必须第一轮拿到的信息
+## Information that must be in the first pass
 
-这些字段不到位，用户的筛选就是白工：
+Without these fields, the user's filtering is wasted:
 
-| 字段 | 为什么第一轮就要 |
+| Field | Why first-pass |
 |---|---|
-| `hours` / `closed_days` / `closed` | 「筛了半天想去，最后发现不开门」是最伤的体验 |
-| `booking` / `booking_url` | 必须预约的地方，临时决定去等于去不成 |
-| `ticket` | 影响取舍，也是费用汇总的输入 |
-| `status` | 专治「到了发现在修缮」 |
-| `coord` | 地图和路线聚类都要用 |
-| `sources` | 防幻觉的主闸门 |
+| `hours` / `closed_days` / `closed` | "Filtered for an hour, then found it closed" is the worst experience |
+| `booking` / `booking_url` | A booking-required place decided on spontaneously = a place you can't get into |
+| `ticket` | Affects trade-offs; also feeds the cost summary |
+| `status` | The cure for "arrived to find it under renovation" |
+| `coord` | Needed by the map and route clustering |
+| `sources` | The main anti-hallucination gate |
 
-留到阶段 D 再细化的：精确参观动线、展厅级细节、当日天气适配、具体机位。
+Left for stage D: exact walking routes inside venues, gallery-level detail,
+same-day weather adaptation, specific camera angles.
 
 ---
 
-## 搜索策略
+## Search strategy
 
-### 单个景点的信息取哪
+### Where a place's information comes from
 
-优先级从高到低：
+Priority, high to low:
 
-1. **官网**——开放时间、门票、闭馆日、预约的唯一权威来源
-2. **官方旅游局**（如 osaka-info.jp、gotokyo.org）——官网挂了或没有官网时
-3. **维基百科**——历史、建筑、背景，但**不要信它的开放时间**（更新滞后）
-4. 其他——只用于发现景点，不用于核验事实
+1. **The official site** — the only authority on hours, tickets, closure days,
+   booking
+2. **The official tourism bureau** (e.g. osaka-info.jp, gotokyo.org) — when the
+   site is down or doesn't exist
+3. **Wikipedia** — history, architecture, background, but **never trust its
+   opening hours** (updates lag)
+4. Everything else — for discovering places only, never for verifying facts
 
-### 每个景点至少抓两个页面：首页 + 利用案内页
+### Fetch at least two pages per place: the homepage + the visitor-info page
 
-**这是实测出来的血泪教训，两次都栽在这。**
+**A lesson paid for twice in testing.**
 
-| 页面 | 提供什么 | 漏了会怎样 |
+| Page | Provides | Missing it means |
 |---|---|---|
-| **官网首页** | **临时公告**：长期改修、临时休馆、换展空窗、特展会期 | 把一个正在装修的馆当营业中排进路线 |
-| 利用案内 / access 页 | 常规开放时间、闭馆日、票价、预约 | 拿不到规范信息，只能猜 |
+| **Official homepage** | **Notices**: long-term renovation, temporary closure, between-exhibition gaps, special-exhibition dates | Scheduling a venue that's under renovation as if open |
+| Visitor info / access page | Regular hours, closure days, tickets, booking | No canonical information; you'd be guessing |
 
-真实案例：大阪市立东洋陶磁美术馆的 `/guide/info/` 页写着「9:30–17:00，周一休馆」，
-完全正常；而首页的新闻列表里有一条
+Real case: the Museum of Oriental Ceramics, Osaka, has a `/guide/info/` page
+reading "9:30–17:00, closed Mondays" — perfectly normal — while the homepage
+news list carries
 
 > 2026.05.19　2026（令和８）年８月３日（月）から、改修工事のため休館いたします
 
-**该馆从 8 月起长期休馆。** 只抓利用案内页的话，会把它当成正常营业的景点推荐出去。
+**The museum closes long-term from August.** Fetch only the visitor-info page
+and you'd recommend a closed museum as operating.
 
-所以：**抓完利用案内页，必须再抓一次首页**，在正文里搜 `休館` `改修` `工事` `リニューアル`
-`closed` `renovation` 这类词。找到公告要核对日期是否覆盖行程。
+So: **after the visitor-info page, always fetch the homepage too**, and search
+the text for words like `休館` `改修` `工事` `リニューアル` `closed`
+`renovation` (use the local language's equivalents). When you find a notice,
+check whether its dates overlap the trip.
 
-### 搜索摘要不能当字段来源
+### Search snippets are not a source
 
-**只有真正抓到承载页才算数。** 实测踩过：适塾的门票，搜索结果摘要说 ¥260，
-官网原页写的是「一般　400円」。摘要可能来自过期缓存或第三方转载。
+**Only an actually fetched page counts.** Observed: for Tekijuku's admission, a
+search snippet said ¥260; the official page says「一般　400円」. Snippets can
+come from stale caches or third-party reposts.
 
-抓不到承载页时（404、SSL 失败、JS 渲染），填 `null` 并在备注里写明，
-**不要用搜索摘要凑数**。
+When the page can't be fetched (404, SSL failure, JS-rendered), write `null` and
+note it — **never fill the gap with a snippet**.
 
-### 查不到 ≠ 换掉，更 ≠ 删掉
+### Unverifiable ≠ replace, and definitely ≠ delete
 
-**这是很容易做错的一步。**
+**This is the easiest step to get wrong.**
 
-实测反例：某观览车的运营方官网子页 404、专用域名连不上、观光局页面返回 HTTP 200
-但内容是 404 错误页，二手来源票价从 ¥700 到 ¥1300 不等。当时的处理是**把它换成了
-另一个能查清的景点**——这是错的。用户因此完全不知道有这个选项存在，
-而「我查不到」和「这地方不值得去」是两码事。**替用户做决定，还把决定藏起来了。**
+Observed counterexample: a ferris wheel — operator subpage 404, dedicated domain
+unreachable, the tourism-bureau page returned HTTP 200 whose content was a 404
+error page, and second-hand prices ranged ¥700–¥1300. The handling at the time
+was to **swap it for a different, easier-to-verify attraction** — wrong. The
+user never learned the option existed, and "I couldn't verify it" is not "it
+isn't worth going". **That's making the user's decision for them, then hiding
+that a decision was made.**
 
-正确做法：**保留该景点**，然后
+The correct handling: **keep the place**, then
 
-1. 能确认的字段照常填，查不到的填 `null`
-2. 加 `verify` 字段（结构见 [data-schema.md](data-schema.md)）：
+1. Fill the fields you could confirm; put `null` in the ones you couldn't
+2. Add a `verify` field (structure in [data-schema.md](data-schema.md)):
 
 ```jsonc
 "verify": {
   "state": "blocked",
-  "note": "运营方官网子页 404（试过 http/https）；专用域名连接失败；观光局页面返回 200 但内容是 404 错误页。二手来源票价说法不一（¥700–¥1300），不采信。",
-  "check": ["营业时间", "票价", "是否有临时休业"]
+  "note": "Operator subpage 404 (tried http and https); dedicated domain unreachable; tourism-bureau page returns 200 with a 404 body. Second-hand prices disagree (¥700–¥1300), not trusted.",
+  "check": ["opening hours", "ticket price", "any temporary closure"]
 }
 ```
 
-3. `sources` 里放你**尝试过的**官网地址——用户要拿它去自己查
+3. Put the official URLs **you attempted** in `sources` — the user needs them to
+   check for themselves
 
-页面会给这类景点加斜纹边框、显眼徽章和一个「待你确认」筛选按钮。
-用户自己查到之后告诉 AI，AI 补进数据并把 `state` 改回 `verified` 即可。
+The page gives such entries a hatched border, a prominent badge, and a
+"needs your confirmation" filter button. Once the user checks and reports back,
+the AI fills in the data and sets `state` back to `verified`.
 
-**只有一种情况可以真的不收**：交叉验证后确认该地点**已永久关闭或根本不存在**。
-那属于 `status: permanently_closed`，也要如实写明，而不是默默消失。
+**Only one situation justifies exclusion**: cross-verification confirms the
+place is **permanently closed or doesn't exist**. That's
+`status: permanently_closed` — state it honestly rather than silently
+disappearing it.
 
-### 域名像官网 ≠ 是官网
+### A domain that looks official ≠ the official site
 
-实测踩过：`konjyakukan.com` 域名看起来就是大阪生活今昔馆的官网，
-打开却是个占位模板站，正文写着「ここにメインのコンテンツを記述します。」（这里写主要内容）。
-真官网在 `osaka-angenet.jp`。
+Observed: `konjyakukan.com` looks exactly like the domain of the Osaka Museum of
+Housing and Living — it's a placeholder template site whose body literally reads
+「ここにメインのコンテンツを記述します。」("write the main content here"). The
+real site is at `osaka-angenet.jp`.
 
-**每次都要看一眼页面正文是否真的是这个景点的内容**，不能只看域名合不合理。
+**Always glance at whether the page body is actually about this place** — a
+plausible domain proves nothing.
 
-### 展览会期是高价值信息
+### Exhibition runs are high-value information
 
-对博物馆、美术馆类，除了常规开放信息，还要查**行程期间在展什么**：
+For museums and galleries, beyond the regular opening info, check **what's on
+during the trip**:
 
-- 特展会期是否覆盖行程日
-- 是否处于**换展空窗期**（上一档结束、下一档未开，此时去只有常设甚至闭馆）
-- 特展是否**日时指定 / 抽签制**，抽签是否已截止
+- Does the special exhibition's run cover the trip days?
+- Is it in a **between-exhibitions gap** (previous show closed, next not open —
+  only the permanent collection, or the whole venue shut)?
+- Is the special exhibition **timed-entry / lottery**, and has the lottery
+  already closed?
 
-实测案例：大阪中之岛美术馆在 2026-08-21～09-27 有弗美尔《戴珍珠耳环的少女》特展，
-但一般发售改为抽签制且抽签已于 7/21 截止——不查就完全不会知道。
-这类信息写进 `pitch` 或 `detail`，并把票价按特展价填。
+Observed case: Nakanoshima Museum of Art ran a Vermeer "Girl with a Pearl
+Earring" special exhibition 2026-08-21 – 09-27, but general sales had switched
+to a lottery that closed on 7/21 — unknowable without checking. Put this kind
+of information in `pitch` or `detail`, and price `ticket` at the
+special-exhibition rate.
 
-### 怎么找冷门点
+### How to find hidden gems
 
-光搜「XX 景点推荐」只会得到人人都知道的那十个。有效的角度：
+Searching "top attractions in X" only returns the same ten everyone knows.
+Angles that work:
 
-- 搜**建筑师**、**建筑年代**、**建筑样式** —— 能挖出大量被忽略的建筑
-- 搜**当地语言**的关键词，比英文/中文结果多得多
-- 搜**「地元民」「穴场」「本地人」「不为人知」**这类词
-- 从已知景点的**周边**找（官网常有「周边景点」）
-- 查**重要文化财 / 登录有形文化財 / 历史建筑名录**这类官方清单
-- 找**产业遗产、老图书馆、老银行、老市场、廊桥、展望台**这些类型
+- Search **architects**, **construction eras**, **architectural styles** — digs
+  up masses of overlooked buildings
+- Search in the **local language** — far richer than English or your own
+- Search terms like **"locals' favorite" "穴場" "地元民" "known only to locals"**
+- Walk the **surroundings** of known places (official sites often list "nearby")
+- Check official registries: **important cultural properties / registered
+  tangible heritage / historic building lists**
+- Hunt these types: **industrial heritage, old libraries, old banks, old
+  markets, covered arcades, observation decks**
 
-### 微景点（`scale: "spot"`）
+### Micro-spots (`scale: "spot"`)
 
-一棵树、一个机位、一块招牌——这类点值得收录，但要处理好：
+A tree, a camera angle, a signboard — worth including, handled properly:
 
-- `scale` 填 `"spot"`，`parent_id` 指向**同区域的主景点**（必填，校验器会拦）
-- 清单里会自动折叠在主景点下面，不跟主景点抢排序位
-- `pitch` 里**直说它就是个拍照点**：「就是一个拍照机位，5 分钟拍完就走，顺路才值得去」
-- `duration_min` 填 5–15
+- `scale` is `"spot"`, `parent_id` points at **the major place in the same
+  area** (required; the validator enforces it)
+- The shortlist folds it under its parent so it doesn't compete for a slot
+- The `pitch` **says outright that it's a photo stop**: "it's one camera
+  position; five minutes and done; only worth it in passing"
+- `duration_min` 5–15
 
-不要把微景点当主景点推荐，也不要因为它小就不收——顺路的加分项很有价值。
+Never promote a micro-spot as a headliner — and never skip one for being small;
+along-the-way bonuses have real value.
 
 ---
 
-## 防幻觉
+## Anti-hallucination
 
-### `sources` 是硬门槛
+### `sources` is a hard gate
 
-每个景点必须有至少一条真实的 `http(s)` URL。校验器会拦掉空的和格式不对的，但**拦不住你编一个看起来合理的 URL**。
+Every place needs at least one real `http(s)` URL. The validator blocks empty or
+malformed values, but **it can't stop you from inventing a plausible-looking
+URL**.
 
-规则：**只写你真正访问过的 URL。** 没抓取成功就换一个来源，或者干脆不收这个景点。
+Rule: **only write URLs you actually visited.** If the fetch failed, find
+another source — or don't include the place.
 
-### `status` 不许猜
+### Never guess `status`
 
-未经联网确认，一律不许填 `open`。这是唯一能防「到了发现在修缮」的机制。
+Without online confirmation, `open` is forbidden. It's the only mechanism
+preventing "arrived to find it under renovation".
 
-### 图片 URL 必须从 API 拿，不许手工拼
+### Image URLs come from the API, never hand-assembled
 
-**实测教训**：Wikimedia 已经不再按任意宽度即时生成缩略图。手工拼 `800px-` 前缀会得到 400。
+**Tested lesson**: Wikimedia no longer generates thumbnails at arbitrary widths
+on demand. Hand-building an `800px-` prefix gets a 400.
 
-| 宽度 | 220 | 320 | 480 | 640 | 800 | 960 | 1024 | 1280 |
+| Width | 220 | 320 | 480 | 640 | 800 | 960 | 1024 | 1280 |
 |---|---|---|---|---|---|---|---|---|
-| 结果 | 400 | 400 | 400 | 400 | 400 | **200** | 400 | **200** |
+| Result | 400 | 400 | 400 | 400 | 400 | **200** | 400 | **200** |
 
-正确做法——用 Commons API 的 `iiurlwidth`，它会自动吸附到真实存在的档位：
+The right way — the Commons API's `iiurlwidth`, which snaps to a width that
+actually exists:
 
 ```
-https://commons.wikimedia.org/w/api.php?action=query&titles=File:<文件名>
+https://commons.wikimedia.org/w/api.php?action=query&titles=File:<filename>
   &prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=800&format=json&formatversion=2
 ```
 
-返回的 `thumburl` 直接用。`extmetadata` 里有 `Artist` 和 `LicenseShortName`，填进 `credit`。
+Use the returned `thumburl` directly. `extmetadata` carries `Artist` and
+`LicenseShortName` — put them in `credit`.
 
-**还要肉眼确认图片对不对。** 按分类抓图很容易张冠李戴——从 `Category:Osaka Castle` 里取第一张，可能得到一张完全无关的照片。批量抓完拼成一张图看一遍，比逐个点开快得多。
+**Also eyeball every image.** Category-based fetching mislabels easily — the
+first file in `Category:Osaka Castle` may be something entirely unrelated. After
+a batch fetch, tile them into one contact sheet and scan it; far faster than
+opening them one by one.
 
-### 校验会拦、但你该更早发现的
+### Things the validator catches — but you should catch earlier
 
-跑 `validate.py --check-links` 之前，自己先想一遍：
+Before running `validate.py --check-links`, think through:
 
-- 坐标是不是落在目的地范围内？（搜到同名的另一个城市是常见错误）
-- 经纬度有没有写反？（用对象形式就不会，但值本身仍可能取错）
-- 有没有两个条目其实是同一个地方？
+- Do the coordinates fall inside the destination? (Hitting a same-named place in
+  another city is a classic error)
+- Could lat/lon be swapped? (The object form prevents the swap, but the values
+  themselves can still be wrong)
+- Are any two entries actually the same place?
 
 ---
 
-## 坐标怎么拿
+## Getting coordinates
 
-用 Nominatim（OSM 官方地理编码），**遵守 1 req/s 的政策**，并带上说明性的 User-Agent：
+Use Nominatim (OSM's official geocoder), **respect the 1 req/s policy**, and
+send a descriptive User-Agent:
 
 ```
-https://nominatim.openstreetmap.org/search?q=<当地语言名>&format=json&limit=1&accept-language=<当地语言>
+https://nominatim.openstreetmap.org/search?q=<local-language name>&format=json&limit=1&accept-language=<local language>
 ```
 
-用**当地语言名**搜命中率最高。搜不到时试试更具体的名称（「戎橋」比「グリコサイン」好搜）。
+The **local-language name** has the best hit rate. When it misses, try something
+more specific (「戎橋」 finds better than「グリコサイン」).
 
-拿到后核对返回的 `display_name` 是不是目的地所在的行政区——这是最容易发现「搜错城市」的地方。
-
----
-
-## 写文案的分寸
-
-`pitch`（一句话）和 `detail`（两三段）决定用户能不能做出好的取舍。
-
-**要诚实。** 游客化严重的地方就说清楚：
-
-> 需要如实说明：这里近十年被游客彻底改造过，很多摊位改成了现烤海鲜的站食摊，价格明显高于普通市场。作为「看」和「拍」的目的地依然成立，作为「吃得划算」的目的地则不然。
-
-**要给判断依据，不要给形容词。** 「非常值得一去」没有信息量；「展望台视野在本地并不算突出，真正值得来的是塔下的街区」才有。
-
-`photo_note` 要具体到**机位和时段**：「西之丸庭园隔草坪的角度最出片，上午顺光；天守正面正午逆光」。
+Check the returned `display_name` against the destination's administrative area
+— that's where "wrong city" errors surface first.
 
 ---
 
-## 产出前的自查
+## Writing the copy
 
-- [ ] 每一类都达到保底，或已如实说明为什么达不到
-- [ ] 每个景点都有 `sources`，且 URL 是真访问过的
-- [ ] `status` 全部经过确认，没有想当然填 `open` 的
-- [ ] `closed_days` 与 `closed` 文本一致
-- [ ] 微景点都有 `parent_id`
-- [ ] 图片 URL 来自 API，且肉眼确认过没张冠李戴
-- [ ] `validate.py --check-links` 零 P0
+`pitch` (one line) and `detail` (two or three paragraphs) decide whether the
+user can make good trade-offs.
+
+**Be honest.** If a place is heavily touristified, say so:
+
+> Honesty required here: over the past decade this market has been thoroughly
+> remade for tourists — many stalls now sell grilled-seafood street food at
+> prices well above an ordinary market. It still works as a place to look and
+> shoot; as a place to eat economically, it doesn't.
+
+**Give grounds for judgment, not adjectives.** "Absolutely worth a visit"
+carries no information; "the deck's view isn't outstanding for this city — the
+real draw is the street grid below the tower" does.
+
+`photo_note` must be specific to **position and time of day**: "best angle is
+across the lawn from Nishinomaru Garden, front-lit in the morning; the keep's
+face is backlit at noon".
+
+---
+
+## Pre-output self-check
+
+- [ ] Every category meets its minimum, or the shortfall is honestly explained
+- [ ] Every place has `sources` with URLs actually visited
+- [ ] Every `status` was confirmed; none filled in as `open` on assumption
+- [ ] `closed_days` agrees with the `closed` text
+- [ ] Every micro-spot has a `parent_id`
+- [ ] Image URLs came from the API and were eyeballed against their places
+- [ ] `validate.py --check-links` reports zero P0

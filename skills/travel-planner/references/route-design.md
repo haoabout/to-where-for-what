@@ -1,178 +1,233 @@
-# 阶段 D · 路线设计与攻略撰写
+# Stage D · Route design and guide writing
 
-输入：`places.json`（用户已填好 `choice`）+ `preferences.md`
-输出：`trips/<行程>/route.md`
+Input: `places.json` (with the user's `choice` filled in) + `preferences.md`
+Output: `trips/<trip>/route.md`
 
 ---
 
-## 先做的三件事
+## Three things first
 
-### 1. 统计筛选结果
+### 1. Tally the filtering result
 
 ```
-想去 N 个 · 待定 M 个 · 不想去 K 个 · 未表态 J 个
+want N · maybe M · skip K · undecided J
 ```
 
-- **`itinerary` 已经排好时，以它为准**——用户可能把不少「待定」真排进了某天，也可能把某个「想去」留在外面。那是他的取舍。
-- **`itinerary` 为空时才由你提议**：只排 `yes`，`maybe` 作为备选，在正文里以「时间富余可以加上」的形式提及，不占主线时间。
-- 未表态的当作没选中，但要在交付时提一句「还有 J 个没表态，要不要再看一眼」。
-- 如果 `yes` 明显排不满天数，**先告诉用户**，别硬凑。
+- **When `itinerary` is already arranged, it wins** — the user may well have
+  scheduled several "maybe"s into real days and left a "want" out. That's their
+  trade-off.
+- **Only when `itinerary` is empty do you propose one**: schedule only `yes`;
+  treat `maybe` as alternates, mentioned in the body as "add if time allows",
+  never on the main line.
+- Treat undecided as unselected, but mention at delivery: "J places are still
+  undecided — want another look?"
+- If `yes` clearly can't fill the days, **tell the user first**; don't force it.
 
-### 2. 按 `area` 聚类
+### 2. Cluster by `area`
 
-这是路线质量的关键。**同一天尽量只走 1–2 个 area**，跨城市来回是最常见的烂路线。
+This is what route quality hinges on. **At most 1–2 areas per day** —
+criss-crossing the city is the classic bad route.
 
-把 `yes` 的点按 `area` 分组，再按地理邻近把 area 合并成每日单元。落脚点（`trip.bases`）决定每天的起终点。
+Group the `yes` places by `area`, then merge adjacent areas into day units. The
+home bases (`trip.bases`) set each day's start and end points.
 
-### 3. 检查硬约束
+### 3. Check the hard constraints
 
-| 约束 | 从哪来 | 怎么处理 |
+| Constraint | Source | Handling |
 |---|---|---|
-| 闭馆日 | `closed_days` vs 行程日期 | 该点必须排在不闭馆的那天。**这往往会锁死整片区域的日期** |
-| 必须预约 | `booking: "required"` | 在正文里显著标注，给出 `booking_url`，提醒提前多久订 |
-| 夜间价值 | `night: true` | 排在当天末尾 |
-| 最后入场 | `last_entry` | 当天最后一个景点**必须**写明，别让人白跑 |
-| 修缮/关闭 | `status ≠ open` | 不该出现在路线里；若用户仍选了，正文里要说明 |
+| Closure days | `closed_days` vs trip dates | The place must go on a day it's open. **This often locks the dates of a whole area** |
+| Booking required | `booking: "required"` | Flag prominently in the body, give `booking_url`, say how far ahead to book |
+| Night value | `night: true` | Schedule at the end of its day |
+| Last entry | `last_entry` | **Must** be stated for each day's final place — don't let anyone rush over for nothing |
+| Renovation / closed | `status ≠ open` | Shouldn't be in the route; if the user chose it anyway, explain in the body |
 
-闭馆日冲突常常是决定整条路线骨架的因素——先解这个，再排别的。
+Closure-day conflicts are usually what determines the route's skeleton — solve
+them first, then arrange everything else.
 
 ---
 
-## 攻略结构
+## Guide structure
 
-按这个顺序写 `route.md`：
+Write `route.md` in this order:
 
 ```markdown
-# <目的地> N 日游
+# <Destination> in N days
 
-## 路线设计逻辑
-## Day 1 · M/D（周X）· <当日主题>
+## Route logic
+## Day 1 · M/D (Weekday) · <theme of the day>
 ## Day 2 · …
-## 交通
-## 光线与摄影
-## 注意事项
+## Transport
+## Light & photography
+## Caveats
 ```
 
-**不要**手写「费用汇总」和「全部景点对照表」——页面会从 `places.json` 自动生成，永远和数据一致。你手写的会和自动生成的重复且可能矛盾。
+**Don't** hand-write a "cost summary" or an "all-places table" — the page
+generates both from `places.json`, always in sync with the data. Hand-written
+copies duplicate them and eventually contradict them.
 
-两块都跟着 `itinerary` 走，不是跟着 `choice`：
+Both blocks follow `itinerary`, not `choice`:
 
-- **费用**按天分组汇总，只算排进日程的点（同一个点排两天只算一次票）。标了「想去」却没排进任何一天的，一分钱都不会花，不该计入。
-- **对照表**上半部分逐日列出行程，下半部分列没排进去的；标了「想去」却没排进任何一天的会被单独拎出来警示。
+- **Costs** are grouped by day and only count scheduled places (a place on two
+  days is one ticket). A place marked "want" but scheduled nowhere costs
+  nothing and must not be counted.
+- **The table** lists the schedule day by day on top and the unscheduled below;
+  places marked "want" but scheduled nowhere are called out as warnings.
 
-### 路线设计逻辑（开头必写）
+### Route logic (required at the top)
 
-用一小段说明**为什么这么分天**，让用户能判断合不合理。要点：
+One short passage on **why the days are split this way**, so the user can judge
+the reasoning. Cover:
 
-- 每天覆盖哪些片区，为什么这样分
-- 有哪些硬约束决定了顺序（闭馆日、夜景、预约）
-- **预估每日步行距离并评价强度**，对照用户的 `pace` 设定
+- Which areas each day covers and why they're grouped so
+- Which hard constraints fixed the order (closures, night views, bookings)
+- **Estimated daily walking distance with an intensity verdict**, checked
+  against the user's `pace` setting
 
-例：
+Example:
 
-> 两天分成北岛与南城两条互不交叉的线。中之岛三个点彼此步行 5-10 分钟，理应压在同一天。
-> 有两个硬约束决定了顺序：中之岛图书馆周日闭馆，所以必须排在 9/12（周六）；
-> 法善寺横丁和戎桥要夜里去，灯笼亮起来才有意义，所以放在第二天末尾。
-> 预估每日步行 9-11 公里，属于中等强度，符合「日均 12km 可接受」的设定。
+> The two days split into a north-island line and a south-city line that never
+> cross. The three Nakanoshima points are 5–10 minutes' walk apart and belong
+> in one day. Two hard constraints fixed the order: the Nakanoshima Library
+> closes Sundays, so it must be 9/12 (Saturday); Hōzenji Yokochō and Ebisubashi
+> want to be seen at night when the lanterns are lit, so they close out day
+> two. Estimated 9–11 km of walking per day — moderate, within the
+> "12 km/day acceptable" setting.
 
-### 每日节点
+### Daily timeline entries
 
-用列表，**以时间开头**，会自动渲染成时间轴：
+Use a list, **starting with a time** — it renders as a timeline automatically:
 
 ```markdown
-- 09:30 · 大阪城公园东侧入园，先沿护城河走到极乐桥。天守阁开门即入可以避开旅行团。
-- 12:30 · 地铁谷町线转京阪，到淀屋桥。午饭在北浜一带解决。
-- 14:00 · 大阪府立中之岛图书馆。**只需 30 分钟**，重点是中央大厅穹顶。
+- 09:30 · Enter Osaka Castle Park from the east; follow the moat to Gokurakubashi. Entering the keep right at opening dodges the tour groups.
+- 12:30 · Tanimachi line, transfer to Keihan, to Yodoyabashi. Lunch around Kitahama.
+- 14:00 · Nakanoshima Library. **30 minutes is enough** — the central-hall dome is the point.
 ```
 
-时间格式 `HH:MM` 或 `HH:MM–HH:MM`，后面跟 `·` 或空格。**不需要任何特殊语法。**
+Time format `HH:MM` or `HH:MM–HH:MM`, followed by `·` or a space. **No special
+syntax needed.**
 
-每个节点要包含：**到达方式**（具体到线路名）、**停留时长**、**这个点的注意事项**。
+Every node includes: **how to get there** (down to the line name), **how long to
+stay**, **what to watch out for at this stop**.
 
-不要写成流水账。「10:00 到 A，11:00 到 B」没有价值，要写「为什么这个顺序」「到了先干什么」「什么时候人最少」。
+Not a bare log. "10:00 arrive A, 11:00 arrive B" has no value; write **why this
+order**, **what to do first on arrival**, **when it's least crowded**.
 
-### 交通
+### Transport
 
-**线路、换乘站、换乘次数、时长、票价必须逐条查证，不许估。**
+**Lines, transfer stations, transfer counts, durations, and fares must be
+looked up item by item. No estimating.**
 
-这是硬规则第三条在交通上的落地。景点数据有 `sources` 字段和校验器兜底，交通表什么都没有——一旦开始估，估出来的数字和查过的数字在同一张表里长得一模一样，用户分辨不了。实际发生过：四段区间全凭直觉估，结果两段把 2 分钟的路写成 15 分钟（差 5 倍，直接影响时间线），一段票价多算 ¥110、一段少算 ¥130，而「要换 3 次车」这种真正影响体验的信息一个字都没写。
+This is hard rule #3 applied to transport. Place data has `sources` and a
+validator backstopping it; the transport table has nothing — once you start
+estimating, estimated numbers and verified numbers look identical in the same
+table and the user can't tell. It actually happened: four segments estimated on
+intuition — two wrote a 2-minute hop as 15 minutes (5× off, skewing the whole
+timeline), one fare ¥110 over, one ¥130 under, and "3 transfers", the fact that
+actually shapes the experience, never appeared at all.
 
-**日本**用 Yahoo!乗換案内，URL 带参数直接取结果页，不需要登录：
+**Japan**: use Yahoo! Transit; the result page takes URL parameters directly, no
+login:
 
 ```
-https://transit.yahoo.co.jp/search/result?from=<出发站>&to=<到达站>&y=2026&m=09&d=13&hh=08&m1=3&m2=0&type=1&ticket=ic
+https://transit.yahoo.co.jp/search/result?from=<origin>&to=<destination>&y=2026&m=09&d=13&hh=08&m1=3&m2=0&type=1&ticket=ic
 ```
 
-`from`/`to` 用 URL 编码的站名，`ticket=ic` 取 IC 卡票价。返回线路、换乘站、换乘次数、所要时间、票价、站数。其他国家找当地对应的官方或主流换乘查询。
+`from`/`to` are URL-encoded station names; `ticket=ic` returns IC-card fares.
+The page returns lines, transfer stations, transfer counts, duration, fare, and
+stop counts. In other countries, find the local official or mainstream transit
+planner.
 
-表格这样列：
+Lay the table out like this:
 
-| 区间 | 线路与换乘站 | 换乘 | 时长 | IC 票价 |
+| Segment | Lines & transfers | Transfers | Duration | IC fare |
 |---|---|---|---|---|
-| 梅田 → 南港 ATC | 御堂筋线 →〔本町〕中央线 →〔コスモスクエア〕南港港城线 | 2 次 | 33–35 分钟 | ¥290 |
+| Umeda → Nanko ATC | Midōsuji line → [Hommachi] Chūō line → [Cosmosquare] New Tram | 2 | 33–35 min | ¥290 |
 
-**表尾必须写明查询来源与日期**，并提醒出行前重查——时刻表和票价会变，行程往往在几十天后。
+**The table footer must state the query source and date**, plus a reminder to
+re-check before travel — timetables and fares change, and the trip is often
+weeks away.
 
-**查不到的不许填数字。** 步行段这类只能估的，在格子里明确标「**估算**」，不要让它和查证过的数字混在一起。
+**No number without a lookup.** Segments that can only be estimated (walking
+legs) get an explicit "**estimate**" in the cell — never let them blend in with
+verified numbers.
 
-**起终点要用真实的那个站。** 「从中之岛去梅田」听着是一件事，但从岛东端的淀屋桥走御堂筋线是 2 分钟直达，从岛西端的京阪中之岛站走是 23 分钟还要换乘——差了十倍。先确定当天实际是从哪个点出发。
+**Use the station people will actually start from.** "From Nakanoshima to
+Umeda" sounds like one fact, but from Yodoyabashi at the island's east end it's
+a 2-minute direct ride on the Midōsuji line, while from Keihan Nakanoshima
+station at the west end it's 23 minutes with a transfer — a tenfold difference.
+Pin down where that day actually starts first.
 
-**顺带看有没有更好的走法。** 查证经常会翻出直觉之外的选项：住处楼下那条线未必最优，绕一下可能少换一次车、少花一半钱、还正好落进一日券的覆盖范围。查到了就写进正文，说清为什么选它。
+**Look for better routings while you're at it.** Lookups regularly surface
+options intuition misses: the line outside the hotel isn't necessarily optimal —
+a small detour may save a transfer, halve the fare, or land inside a day-pass's
+coverage. When you find one, put it in the body and say why.
 
-然后给出**票券建议**：一日券的实际价格（工作日/周末常常不同）、覆盖哪些线、**不覆盖哪些**，再用当天的实际车费逐段相加对比，说清买不买得回本。价格和覆盖范围同样要查官网，不许凭印象。
+Then give **pass advice**: the day pass's real price (weekday/weekend often
+differ), which lines it covers and **which it doesn't**, then sum the day's
+actual segment fares to show whether it pays off. Prices and coverage also come
+from the official site, never from memory.
 
-出发与返回的交通也要写——从机场/车站到落脚点怎么走。住宿如果有免费班车之类的服务，去官网确认班次和限制条件（常见的限制是仅限住客、每班有人数上限）。
+Cover arrival and departure transport too — airport/station to the home base.
+If the lodging runs a free shuttle or similar, confirm the schedule and
+conditions on the official site (typical limits: guests only, per-run capacity).
 
-### 光线与摄影
+### Light & photography
 
-从 `photo_index` 高的点里挑，**按最佳时段排序**，说明为什么是那个时段。这是用户 md 里明确要的模块。
+Pick from the high-`photo_index` places, **ordered by best time slot**, and say
+why that slot. This module is explicitly requested in the user's preferences.
 
-### 注意事项
+### Caveats
 
-只写**真正需要注意的**：闭馆日陷阱、扒手高发区、需要现金的地方、期待值管理。
-不要写「注意安全」「保管好财物」这类废话。
-
----
-
-## 天气
-
-页面会**在浏览器端实时拉 Open-Meteo**，每次打开都是最新的，你不需要把天气写进 `route.md`。
-
-但你要理解它的行为，好在交付时说明：
-
-- 出行日在 **16 天内** → 真实预报
-- 超过 16 天 → 退回**过去 8 年同期的历史平均**，界面标注「不是预报」
-
-如果知道出行日在雨季，可以在「注意事项」里写一段**雨天备选方案**——从 `indoor: true` 的点里选。
-
----
-
-## 备选与弹性
-
-好的攻略要留余地：
-
-- **雨天替换**：每天给一个 `indoor: true` 的替代点
-- **时间不够时砍哪个**：明说哪个点可以跳过，别让用户自己猜
-- **`maybe` 怎么塞**：「如果 X 只花了一小时，可以顺路加上 Y」
+Only what **genuinely needs care**: closure-day traps, pickpocket zones,
+cash-only places, expectation management.
+No filler like "stay safe" or "mind your belongings".
 
 ---
 
-## 写完之后
+## Weather
+
+The page **fetches Open-Meteo live in the browser** — fresh on every open; you
+don't write weather into `route.md`.
+
+But understand its behavior so you can explain it at delivery:
+
+- Trip within **16 days** → a real forecast
+- Beyond 16 days → falls back to the **same-period average of the past 8
+  years**, labeled "not a forecast" in the UI
+
+If the trip falls in a rainy season, add a **rain plan** paragraph under
+"Caveats" — drawn from the `indoor: true` places.
+
+---
+
+## Alternates and slack
+
+A good guide leaves room:
+
+- **Rain swaps**: one `indoor: true` substitute per day
+- **What to cut when time runs short**: name the skippable place — don't make
+  the user guess
+- **Where the `maybe`s fit**: "if X only took an hour, Y is on the way"
+
+---
+
+## After writing
 
 ```bash
-python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
+python3 <SKILL_ROOT>/scripts/build.py trips/<trip> --serve
 ```
 
-然后**实际打开页面看一遍**：
+Then **actually open the page and look**:
 
-- [ ] 时间轴渲染正确（时间胶囊出来了）
-- [ ] 表格没有溢出
-- [ ] 费用汇总的数字合理（注意 `ticket` 是自由文本，解析不了的会单独列出）
-- [ ] 对照表的 ✅❌ 与用户的选择一致
-- [ ] 天气卡片出来了，且模式（预报/均值）正确
+- [ ] The timeline renders (time capsules appear)
+- [ ] No table overflows
+- [ ] Cost-summary numbers are sane (`ticket` is free text; unparseable ones are
+  listed separately)
+- [ ] The table's ✅❌ match the user's choices
+- [ ] The weather card appears, in the right mode (forecast/average)
 
-要单独分享攻略（不带筛选界面）：
+To share the guide alone (without the filtering UI):
 
 ```bash
-python3 <SKILL_ROOT>/scripts/build.py trips/<行程> --standalone
+python3 <SKILL_ROOT>/scripts/build.py trips/<trip> --standalone
 ```

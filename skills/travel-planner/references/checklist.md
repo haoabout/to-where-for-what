@@ -1,138 +1,156 @@
-# 交付前自检清单
+# Pre-delivery checklist
 
-按 P0 / P1 / P2 分级。**P0 有任何一条不过，就不要交付。**
+Graded P0 / P1 / P2. **If any P0 fails, do not deliver.**
 
-每一条都来自实际踩过的坑。
+Every item comes from a mistake actually made.
 
 ---
 
-## 🔴 P0 · 不过就不能交付
+## 🔴 P0 · No delivery until these pass
 
-### 0-1. `validate.py` 零 P0
+### 0-1. `validate.py` reports zero P0
 
 ```bash
-python3 <SKILL_ROOT>/scripts/validate.py trips/<行程>/places.json --check-links
+python3 <SKILL_ROOT>/scripts/validate.py trips/<trip>/places.json --check-links
 ```
 
-退出码必须是 0。P0 拦的都是会让页面出错或让用户被误导的问题。
+Exit code must be 0. P0s are the problems that break the page or mislead the
+user.
 
-### 0-2. 抽查来源链接，人工点开确认
+### 0-2. Spot-check source links by hand
 
-随机挑 3–5 个景点，**真的点开 `sources` 里的 URL**，确认：
+Pick 3–5 places at random and **actually open the URLs in `sources`** to
+confirm:
 
-- 链接能打开（不是你编的）
-- 页面确实是这个景点的
-- 开放时间、门票和你写的对得上
+- The link opens (you didn't invent it)
+- The page really is about this place
+- Hours and tickets match what you wrote
 
-校验器只能确认 URL 可达，**确认不了内容属实**。这一步只能人工做。
+The validator can only confirm a URL is reachable — **it cannot confirm the
+content is true**. Only a human pass does that.
 
-### 0-3. 浏览器实际打开页面看过
+### 0-3. Actually opened the page in a browser
 
-不是看代码，是**真的打开**。这一步抓到过：
+Not reading the code — **actually opening it**. This step has caught:
 
-- Markdown 段落被逐行拆开，正文支离破碎
-- `[hidden]` 被 CSS 覆盖，standalone 页面还显示着指向已删除视图的 tab
-- 缩略图全是空的
+- Markdown paragraphs split line by line, shredding the body text
+- `[hidden]` overridden by CSS, so the standalone page still showed a tab
+  pointing at a deleted view
+- Every thumbnail empty
 
-**读 DOM 属性和看渲染结果是两回事。** `el.hidden` 返回 `true` 不代表它真的没显示——
-要看 `getComputedStyle(el).display`。
+**Reading DOM attributes and seeing rendered output are different things.**
+`el.hidden === true` doesn't mean it isn't displayed — check
+`getComputedStyle(el).display`.
 
-### 0-4. `status` 全部经过确认
+### 0-4. Every `status` was confirmed
 
-没有一个是「看起来应该开着」就填 `open` 的。这是防「到了发现在修缮」的唯一机制。
+Not one filled in as `open` because it "looked like it should be". This is the
+only mechanism against "arrived to find it under renovation".
 
-**必须抓过官网首页。** 长期改修、临时休馆这类公告只出现在首页新闻列表里，
-利用案内页照旧写着正常的开放时间。实测：东洋陶磁美术馆的利用案内页写「9:30–17:00」，
-首页却公告自 2026-08-03 起长期休馆。只看前者会把一个关门的馆排进路线。
+**The official homepage must have been fetched.** Long-term renovations and
+temporary closures only appear in the homepage news list, while the
+visitor-info page keeps stating normal hours. Observed: the Museum of Oriental
+Ceramics' info page said "9:30–17:00" while the homepage announced a long-term
+closure from 2026-08-03. Reading only the former schedules a shut museum.
 
-### 0-5. 闭馆日与行程日期不冲突
+### 0-5. No closure-day / trip-date conflicts
 
-校验器会拦「闭馆日覆盖整个行程」的情况，但**部分冲突要你自己排**：
-某个点周一闭馆、行程包含周一，那它必须排在别的天。
+The validator blocks "closures cover the whole trip", but **partial conflicts
+are yours to schedule around**: a place closed Mondays on a trip containing a
+Monday must land on another day.
 
-### 0-6. 坐标落在目的地范围内
+### 0-6. Coordinates inside the destination
 
-校验器用 `bbox` 拦。但也要自己看一眼地图视图——**点位分布明显不合理**
-（某个点孤零零飞在海里）通常是搜错了同名地点。
-
----
-
-## 🟡 P1 · 应该处理，确有理由才跳过
-
-### 1-1. 分类配额达标，或已如实说明
-
-达不到保底时必须说清楚是「本地确实没有」，不能默默少给。
-**绝对不许编造景点凑数。**
-
-### 1-2. 图片没有张冠李戴
-
-按分类批量抓图很容易抓错。批量抓完**拼成一张图看一遍**，比逐个点开快得多。
-
-### 1-3. 图片 URL 来自 API，不是手工拼的
-
-Wikimedia 已不再按任意宽度即时生成缩略图，手拼的 `800px-` 会返回 400。
-详见 [research-playbook.md](research-playbook.md)。
-
-### 1-4. 微景点都有 `parent_id`
-
-否则它们会跟主景点抢排序位，把清单淹没。
-
-### 1-5. 数据新鲜度
-
-`verified_at` 距今超过 30 天时，页面会显示过期提醒。
-如果是在旧数据上继续工作，**先重新核验开放时间**再排路线。
-
-### 1-6. 路线按 `area` 聚类合理
-
-同一天跨了 3 个以上互不相邻的片区，基本就是烂路线。回去重排。
-
-### 1-7. 当天最后一个景点写了 `last_entry`
-
-别让用户满怀期待赶过去，结果最后入场时间已过。
+The validator uses `bbox`. But also eyeball the map view — **an obviously
+unreasonable spread** (one point alone out at sea) usually means a same-name
+mismatch.
 
 ---
 
-## 🔵 P2 · 有则更好
+## 🟡 P1 · Handle these; skip only with a real reason
 
-### 2-1. `photo_note` 具体到机位和时段
+### 1-1. Category quotas met, or the shortfall honestly explained
 
-「风景优美」没有信息量。「西之丸庭园隔草坪的角度最出片，上午顺光」才有。
+Below-minimum categories require saying "the city genuinely has no more" —
+never silently under-deliver. **Never fabricate places to pad.**
 
-### 2-2. 文案给的是判断依据，不是形容词
+### 1-2. No mislabeled images
 
-游客化严重、名不副实、期待值要放低——**如实说**。
-用户需要的是能据以取舍的信息，不是宣传稿。
+Batch image fetching mislabels easily. After fetching, **tile everything into
+one contact sheet and scan it** — far faster than opening each.
 
-### 2-3. 攻略留了弹性
+### 1-3. Image URLs came from the API, not hand-assembled
 
-雨天替换点、时间不够时砍哪个、`maybe` 怎么顺路塞进去。
+Wikimedia no longer generates thumbnails at arbitrary widths; a hand-built
+`800px-` returns 400. See [research-playbook.md](research-playbook.md).
 
-### 2-4. 博物馆展品确认了当前在展
+### 1-4. Every micro-spot has a `parent_id`
 
-藏品轮换、外借、修复很常见。查不到就在 `tips` 里提醒用户出发前查官网。
+Otherwise they compete with major places for slots and drown the shortlist.
+
+### 1-5. Data freshness
+
+When `verified_at` is more than 30 days old the page shows a staleness warning.
+When continuing on old data, **re-verify opening hours first**, then route.
+
+### 1-6. The route clusters sanely by `area`
+
+Three or more non-adjacent areas in one day is almost always a bad route. Redo
+it.
+
+### 1-7. Each day's final place has `last_entry`
+
+Don't let the user rush over full of hope after last entry has passed.
 
 ---
 
-## 交付时必须说明的
+## 🔵 P2 · Nice to have
 
-这些不说，用户会有错误预期：
+### 2-1. `photo_note` specific to position and time
 
-- [ ] **哪些信息可能过期**——开放时间和票价随时会变，出发前再确认一次
-- [ ] **门票金额是估算**——特别展、体验项目、夜间加价通常另计
-- [ ] **小红书/B 站抓不到**——影视打卡地可能不全
-- [ ] **超过 16 天的天气是历史均值，不是预报**
-- [ ] **服务停止后**双击打开仍可读，但不能直写文件、不能用 OSM 底图
-- [ ] 还有多少个景点**未表态**，要不要再看一眼
+"Beautiful scenery" carries nothing. "Best angle across the lawn from
+Nishinomaru Garden, front-lit in the morning" does.
+
+### 2-2. Copy gives grounds for judgment, not adjectives
+
+Touristy, overrated, expectations to temper — **say it straight**. The user
+needs information to trade off with, not a brochure.
+
+### 2-3. The guide leaves slack
+
+Rain swaps, what to cut when short on time, where the `maybe`s slot in.
+
+### 2-4. Museum highlights confirmed currently on display
+
+Rotation, loans, and restoration are routine. If unverifiable, note in `tips`:
+check the official site before departure.
 
 ---
 
-## 常见失误速查
+## Must be stated at delivery
 
-| 现象 | 多半是 |
+Without these, the user forms wrong expectations:
+
+- [ ] **Which information can go stale** — hours and prices change; reconfirm
+  before departure
+- [ ] **Ticket amounts are estimates** — special exhibitions, add-on
+  experiences, and night surcharges usually cost extra
+- [ ] **Xiaohongshu / Bilibili couldn't be scraped** — film/anime spots may be
+  incomplete
+- [ ] **Weather beyond 16 days is a historical average, not a forecast**
+- [ ] **After the server stops**, double-click opening still reads fine, but no
+  direct file writes and no OSM raster basemap
+- [ ] How many places remain **undecided** — want another look?
+
+---
+
+## Quick failure lookup
+
+| Symptom | Most likely |
 |---|---|
-| 地图一片空白 | 底图降级了，看页面下方的降级提示 |
-| 地图显示「Access blocked」字样的灰图 | `file://` 打开且用了 OSM 底图。用 `--serve` |
-| 攻略 tab 点不开 | `route.md` 不存在或为空 |
-| 页面内容没更新 | 改完 `places.json` / `route.md` 要重新跑 `build.py` |
-| 费用合计明显偏低 | `ticket` 里有解析不了的文字描述，看「未计入」那一行 |
-| 清单里某个点找不到 | 可能是 `scale: "spot"`，折叠在主景点下面了 |
+| Map entirely blank | Basemap fell back; check the degradation notice at the page bottom |
+| Map shows gray tiles reading "Access blocked" | Opened via `file://` with the OSM basemap. Use `--serve` |
+| Guide tab won't open | `route.md` missing or empty |
+| Page content not updating | After editing `places.json` / `route.md`, rerun `build.py` |
+| Cost total clearly too low | `ticket` contains unparseable text; see the "not counted" line |
+| A place missing from the shortlist | Probably `scale: "spot"`, folded under its parent |

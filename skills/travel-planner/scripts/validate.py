@@ -140,34 +140,34 @@ def _trip_weekdays(trip) -> set[int] | None:
 
 def check_top_level(doc, rep: Report) -> None:
     if doc.get("schema_version") != SCHEMA_VERSION:
-        rep.add("P0", "根", f"schema_version 应为 {SCHEMA_VERSION}，实际为 {doc.get('schema_version')!r}")
+        rep.add("P0", "root", f"schema_version should be {SCHEMA_VERSION}, got {doc.get('schema_version')!r}")
     for key in ("trip", "categories", "places"):
         if key not in doc:
-            rep.add("P0", "根", f"缺少顶层字段 {key}")
+            rep.add("P0", "root", f"missing top-level field {key}")
 
     trip = doc.get("trip") or {}
     for f in ("destination", "country", "bbox", "timezone", "output_language",
               "local_language", "days", "party", "pace", "generated_at", "verified_at"):
         if _blank(trip.get(f)):
-            rep.add("P0", "trip", f"缺少必填字段 {f}")
+            rep.add("P0", "trip", f"missing required field {f}")
 
     bbox = trip.get("bbox")
     if not (isinstance(bbox, list) and len(bbox) == 4 and all(isinstance(x, (int, float)) for x in bbox)):
-        rep.add("P0", "trip", "bbox 必须是 [minLon,minLat,maxLon,maxLat] 四个数字")
+        rep.add("P0", "trip", "bbox must be four numbers [minLon,minLat,maxLon,maxLat]")
     elif not (bbox[0] < bbox[2] and bbox[1] < bbox[3]):
-        rep.add("P0", "trip", f"bbox 的 min/max 顺序反了: {bbox}")
+        rep.add("P0", "trip", f"bbox min/max order is reversed: {bbox}")
 
     unknown_trip = set(trip) - KNOWN_TRIP_FIELDS
     if unknown_trip:
-        rep.add("P2", "trip", f"出现契约外的字段 {sorted(unknown_trip)}")
+        rep.add("P2", "trip", f"fields outside the contract: {sorted(unknown_trip)}")
 
     verified = _parse_date(trip.get("verified_at"))
     if verified:
         age = (date.today() - verified).days
         if age > STALE_DAYS:
-            rep.add("P1", "trip", f"verified_at 距今 {age} 天，开放时间/门票可能已变，建议重新核验")
+            rep.add("P1", "trip", f"verified_at is {age} days old; hours/tickets may have changed — re-verify")
     elif trip.get("verified_at"):
-        rep.add("P0", "trip", f"verified_at 格式应为 YYYY-MM-DD，实际 {trip.get('verified_at')!r}")
+        rep.add("P0", "trip", f"verified_at should be YYYY-MM-DD, got {trip.get('verified_at')!r}")
 
 
 def check_place(p, idx, doc, rep: Report) -> None:
@@ -177,12 +177,12 @@ def check_place(p, idx, doc, rep: Report) -> None:
 
     kind = p.get("kind") or "attraction"
     if kind not in KINDS:
-        rep.add("P0", where, f"kind={p.get('kind')!r} 非法，应为 {sorted(KINDS)}")
+        rep.add("P0", where, f"kind={p.get('kind')!r} is invalid; must be one of {sorted(KINDS)}")
         kind = "attraction"
 
     origin = p.get("origin")
     if origin is not None and origin not in ORIGINS:
-        rep.add("P0", where, f"origin={origin!r} 非法，应为 {sorted(ORIGINS)}")
+        rep.add("P0", where, f"origin={origin!r} is invalid; must be one of {sorted(ORIGINS)}")
     # 粗胚的判定是 origin=user 且还没有 tier——AI 一旦补全（填上 tier 等），
     # 它就要按普通景点的完整必填集来验，不能一直躲在精简集后面。
     is_stub = origin == "user" and p.get("tier") is None
@@ -196,7 +196,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
         req_str, req_any = LODGING_REQUIRED_STR, LODGING_REQUIRED_ANY
     elif is_stub:
         req_str, req_any = STUB_REQUIRED_STR, STUB_REQUIRED_ANY
-        rep.add("P2", where, "用户添加的粗胚（origin=user 且无 tier），待 AI 研究补全")
+        rep.add("P2", where, "user-added stub (origin=user, no tier) — awaiting AI research completion")
     else:
         req_str, req_any = REQUIRED_STR, REQUIRED_ANY
 
@@ -204,41 +204,41 @@ def check_place(p, idx, doc, rep: Report) -> None:
         if f in excused:
             continue
         if _blank(p.get(f)):
-            rep.add("P0", where, f"缺少必填字段 {f}")
+            rep.add("P0", where, f"missing required field {f}")
     for f in req_any:
         if f in excused:
             continue
         if p.get(f) is None:
-            rep.add("P0", where, f"缺少必填字段 {f}")
+            rep.add("P0", where, f"missing required field {f}")
     if excused:
         got = [f for f in sorted(excused) if not _blank(p.get(f))]
         rep.add("P2", where,
-                f"因 verify.state={vstate} 豁免了 {sorted(excused)} 的必填检查"
-                + (f"，其中 {got} 实际有值" if got else "，均为空"))
+                f"verify.state={vstate} exempts {sorted(excused)} from the required check"
+                + (f"; of those, {got} actually have values" if got else "; all are empty"))
 
     # 枚举
     for field, allowed in (("tier", TIERS), ("scale", SCALES),
                            ("status", STATUSES), ("booking", BOOKINGS)):
         v = p.get(field)
         if v is not None and v not in allowed:
-            rep.add("P0", where, f"{field}={v!r} 非法，应为 {sorted(allowed)}")
+            rep.add("P0", where, f"{field}={v!r} is invalid; must be one of {sorted(allowed)}")
     if "choice" in p and p["choice"] not in CHOICES:
-        rep.add("P0", where, f"choice={p['choice']!r} 非法")
+        rep.add("P0", where, f"choice={p['choice']!r} is invalid")
 
     # 住宿不属于任何景点分类，不参与配额，也就不必落在 categories 里
     cat_ids = {c.get("id") for c in doc.get("categories") or []}
     if kind != "lodging" and p.get("category") and p["category"] not in cat_ids:
-        rep.add("P0", where, f"category={p['category']!r} 未在 categories 中定义")
+        rep.add("P0", where, f"category={p['category']!r} is not defined in categories")
 
     # 坐标
     c = p.get("coord")
     if not isinstance(c, dict) or not isinstance(c.get("lon"), (int, float)) \
             or not isinstance(c.get("lat"), (int, float)):
-        rep.add("P0", where, 'coord 必须是 {"lon": 数字, "lat": 数字}（不许用数组，防经纬度写反）')
+        rep.add("P0", where, 'coord must be {"lon": number, "lat": number} (arrays are forbidden — they invite lon/lat swaps)')
     else:
         lon, lat = c["lon"], c["lat"]
         if not (-180 <= lon <= 180 and -90 <= lat <= 90):
-            rep.add("P0", where, f"坐标超出合法范围: lon={lon} lat={lat}")
+            rep.add("P0", where, f"coordinates out of range: lon={lon} lat={lat}")
         else:
             bbox = trip.get("bbox")
             if isinstance(bbox, list) and len(bbox) == 4:
@@ -247,63 +247,63 @@ def check_place(p, idx, doc, rep: Report) -> None:
                         # 临时起意的点常在 bbox 边缘外（大阪行程加奈良），
                         # 坐标又来自 OSM 而非 AI 之手，写反/搜错的先验低得多
                         rep.add("P1", where,
-                                f"用户添加的点坐标 ({lon}, {lat}) 在目的地 bbox 之外，"
-                                f"请确认不是搜错了同名地点")
+                                f"user-added point ({lon}, {lat}) is outside the destination bbox; "
+                                f"confirm it isn't a same-named place elsewhere")
                     else:
                         rep.add("P0", where,
-                                f"坐标 ({lon}, {lat}) 落在目的地 bbox 之外——"
-                                f"极可能是经纬度写反或搜错了同名地点")
+                                f"coordinates ({lon}, {lat}) fall outside the destination bbox — "
+                                f"very likely swapped lon/lat or a same-named place elsewhere")
 
     # 来源（防幻觉主闸门）
     srcs = p.get("sources")
     if not isinstance(srcs, list) or not srcs:
-        rep.add("P0", where, "sources 为空——未经联网核验的条目不许进入数据集")
+        rep.add("P0", where, "sources is empty — entries not verified online must not enter the dataset")
     else:
         for i, s in enumerate(srcs):
             if not isinstance(s, dict) or not _is_url(s.get("url")):
-                rep.add("P0", where, f"sources[{i}] 缺少合法的 http(s) url")
+                rep.add("P0", where, f"sources[{i}] lacks a valid http(s) url")
 
     # 状态
     if p.get("status") and p["status"] != "open" and _blank(p.get("status_note")):
-        rep.add("P0", where, f"status={p['status']} 但缺少 status_note（需说明起止时间）")
+        rep.add("P0", where, f"status={p['status']} but status_note is missing (state the dates)")
 
     # 核实状态。与 status 正交：status 说场馆开不开，verify 说我们查没查清。
     v = p.get("verify")
     if v is not None:
         if not isinstance(v, dict):
-            rep.add("P0", where, "verify 必须是对象 {state, note, check}")
+            rep.add("P0", where, "verify must be an object {state, note, check}")
         else:
             st = v.get("state")
             if st not in VERIFY_STATES:
-                rep.add("P0", where, f"verify.state={st!r} 非法，应为 {sorted(VERIFY_STATES)}")
+                rep.add("P0", where, f"verify.state={st!r} is invalid; must be one of {sorted(VERIFY_STATES)}")
             elif st != "verified":
                 if _blank(v.get("note")):
                     rep.add("P0", where,
-                            f"verify.state={st} 但缺少 note——必须写清尝试过什么、为什么失败，"
-                            f"否则用户无从判断该不该自己去查")
+                            f"verify.state={st} but note is missing — it must say what was tried and why it failed, "
+                            f"or the user can't judge whether to check it themselves")
                 if not v.get("check"):
-                    rep.add("P1", where, f"verify.state={st} 建议用 check 列出需用户自行确认的项")
+                    rep.add("P1", where, f"verify.state={st}: consider listing the items the user should confirm in check")
                 rep.add("P1", where,
-                        f"核实被拦截或不完整（{st}）：{str(v.get('note'))[:60]}…"
-                        f" —— 页面会标注提醒用户自行确认")
+                        f"verification blocked or incomplete ({st}): {str(v.get('note'))[:60]}…"
+                        f" — the page will flag it for the user to confirm")
 
     # closed_days。住宿没有「闭馆日」这个概念，不参与。
     cd = p.get("closed_days")
     if cd is None:
         if kind != "lodging" and not is_stub:
             rep.add("P1", where,
-                    "closed_days 为 null（查不到或来源矛盾）——无法校验闭馆日与行程是否冲突，"
-                    "请在 detail 里提醒用户出发前自行确认")
+                    "closed_days is null (unfindable or sources conflict) — closure/trip conflicts can't be validated; "
+                    "remind the user in detail to confirm before departure")
     else:
         if not isinstance(cd, list) or any(not isinstance(d, int) or not 1 <= d <= 7 for d in cd):
-            rep.add("P0", where, "closed_days 必须是 1–7 的整数数组（1=周一），全年无休填 []")
+            rep.add("P0", where, "closed_days must be an array of integers 1–7 (1=Monday); use [] for no closures")
         else:
             trip_days = _trip_weekdays(trip)
             if trip_days and trip_days.issubset(set(cd)):
-                names = "".join("一二三四五六日"[d - 1] for d in sorted(trip_days))
+                names = ", ".join(WEEK_NAMES[d] for d in sorted(trip_days))
                 rep.add("P0", where,
-                        f"闭馆日覆盖整个行程（行程含周{names}，该点这几天都不开）——"
-                        f"不该让用户在清单里看到它可选")
+                        f"closure days cover the whole trip (trip spans {names}; the place is shut on all of them) — "
+                        f"the user should never see it as selectable")
 
     # spot 归属。parent_id 是可选的——实测发现有些微景点（渡船口、街边小神社）
     # 在它所在片区里本来就没有主景点，强行指定 parent 会造出假的从属关系。
@@ -311,49 +311,49 @@ def check_place(p, idx, doc, rep: Report) -> None:
     if p.get("scale") == "spot":
         parent = p.get("parent_id")
         if _blank(parent):
-            rep.add("P2", where, 'scale="spot" 未指定 parent_id，将作为独立卡片显示。'
-                                 '若同片区有主景点，挂上去可以让清单更紧凑')
+            rep.add("P2", where, 'scale="spot" without parent_id renders as a standalone card. '
+                                 'If the area has a major place, attaching it keeps the list compact')
         else:
             all_ids = {q.get("id") for q in doc.get("places") or []}
             if parent not in all_ids:
-                rep.add("P0", where, f"parent_id={parent!r} 指向不存在的景点")
+                rep.add("P0", where, f"parent_id={parent!r} points at a nonexistent place")
 
     # 数值
     for f in ("duration_min", "photo_index"):
         v = p.get(f)
         if v is not None and not isinstance(v, int):
-            rep.add("P0", where, f"{f} 必须是整数，实际 {v!r}")
+            rep.add("P0", where, f"{f} must be an integer, got {v!r}")
     if isinstance(p.get("photo_index"), int) and not 1 <= p["photo_index"] <= 5:
-        rep.add("P0", where, f"photo_index 应在 1–5，实际 {p['photo_index']}")
+        rep.add("P0", where, f"photo_index should be 1–5, got {p['photo_index']}")
     for f in ("indoor", "night"):
         if p.get(f) is not None and not isinstance(p[f], bool):
-            rep.add("P0", where, f"{f} 必须是布尔值，实际 {p[f]!r}")
+            rep.add("P0", where, f"{f} must be a boolean, got {p[f]!r}")
 
     # ---- P1
     # 粗胚豁免：name_local 是研究产物，页面端只有 OSM namedetails 里碰巧有才填得上
     if (not is_stub and trip.get("local_language") and trip.get("output_language")
             and trip["local_language"] != trip["output_language"]
             and _blank(p.get("name_local"))):
-        rep.add("P1", where, "当地语言与输出语言不同，应提供 name_local（且需能在地图搜到）")
+        rep.add("P1", where, "local language differs from the output language; name_local should be provided (and be findable on the map)")
 
     unknown = set(p) - KNOWN_PLACE_FIELDS
     if unknown:
         rep.add("P2", where,
-                f"出现契约外的字段 {sorted(unknown)}——模板不会渲染它们，内容会静默丢失。"
-                f"确需新字段请先改 data-schema.md 与 validate.py")
+                f"fields outside the contract: {sorted(unknown)} — the template won't render them and the content is silently lost. "
+                f"If a new field is truly needed, change data-schema.md and validate.py first")
 
     # ---- P2
     # 住宿和粗胚不参与这几条：摄影机位、配图、长篇介绍都是研究后的质量要求。
     # 对着酒店或刚钉下的粗胚提"缺少拍摄建议"只会制造噪声，把真正该看的提示淹掉。
     if kind != "lodging" and not is_stub:
         if _blank(p.get("photo_note")):
-            rep.add("P2", where, "缺少 photo_note（画面描述与拍摄建议）")
+            rep.add("P2", where, "missing photo_note (shot description and shooting advice)")
         if not p.get("images"):
-            rep.add("P2", where, "没有配图")
+            rep.add("P2", where, "no images")
         if isinstance(p.get("detail"), str) and 0 < len(p["detail"].strip()) < 60:
-            rep.add("P2", where, f"detail 仅 {len(p['detail'].strip())} 字，偏薄")
+            rep.add("P2", where, f"detail is only {len(p['detail'].strip())} characters — thin")
     if p.get("booking") in ("required", "recommended") and _blank(p.get("booking_url")):
-        rep.add("P2", where, f"booking={p['booking']} 但缺少 booking_url")
+        rep.add("P2", where, f"booking={p['booking']} but booking_url is missing")
 
 
 def check_cross(doc, rep: Report) -> None:
@@ -365,7 +365,7 @@ def check_cross(doc, rep: Report) -> None:
         if not pid:
             continue
         if pid in seen:
-            rep.add("P0", f"places[{i}]", f"id {pid!r} 与 places[{seen[pid]}] 重复")
+            rep.add("P0", f"places[{i}]", f"id {pid!r} duplicates places[{seen[pid]}]")
         else:
             seen[pid] = i
 
@@ -379,10 +379,10 @@ def check_cross(doc, rep: Report) -> None:
         label = c.get("label", c.get("id"))
         if isinstance(lo, int) and n < lo:
             rep.add("P1", "categories",
-                    f"「{label}」只有 {n} 个，低于保底 {lo}——"
-                    f"若目的地确实没有更多，请在正文如实说明，不要凑数硬编")
+                    f"\"{label}\" has only {n}, below the minimum {lo} — "
+                    f"if the destination truly has no more, say so honestly in the text; never pad")
         if isinstance(hi, int) and n > hi:
-            rep.add("P1", "categories", f"「{label}」有 {n} 个，超过上限 {hi}")
+            rep.add("P1", "categories", f"\"{label}\" has {n}, above the maximum {hi}")
 
     # 坐标重合
     pts = [(i, p) for i, p in enumerate(places) if isinstance(p.get("coord"), dict)
@@ -398,16 +398,16 @@ def check_cross(doc, rep: Report) -> None:
                 continue
             if d < DUPE_METERS:
                 rep.add("P1", f"places[{ia}] / places[{ib}]",
-                        f"{pa.get('name')} 与 {pb.get('name')} 坐标相距仅 {d:.0f} 米，疑似重复录入")
+                        f"{pa.get('name')} and {pb.get('name')} are only {d:.0f} m apart — possible duplicate")
 
     total = len([p for p in places if (p.get("kind") or "attraction") != "lodging"])
     if total < 15:
-        rep.add("P1", "places", f"总共只有 {total} 个景点，可能搜得不够充分（目标 35–50）")
+        rep.add("P1", "places", f"only {total} places in total — the search may be too thin (target 35–50)")
     elif total > 60:
-        rep.add("P1", "places", f"总共 {total} 个景点，超出建议上限，用户筛选负担过重")
+        rep.add("P1", "places", f"{total} places in total — above the suggested cap; too heavy to filter")
 
 
-WEEK_CN = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+WEEK_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def check_itinerary(doc, rep: Report) -> None:
@@ -422,7 +422,7 @@ def check_itinerary(doc, rep: Report) -> None:
     if it is None:
         return
     if not isinstance(it, list):
-        rep.add("P0", "itinerary", "itinerary 必须是数组")
+        rep.add("P0", "itinerary", "itinerary must be an array")
         return
 
     places = doc.get("places") or []
@@ -434,39 +434,39 @@ def check_itinerary(doc, rep: Report) -> None:
     for di, day in enumerate(it):
         dwhere = f"itinerary[{di}]"
         if not isinstance(day, dict):
-            rep.add("P0", dwhere, "每一天必须是对象")
+            rep.add("P0", dwhere, "each day must be an object")
             continue
 
         n = day.get("n")
-        label = day.get("label") or (f"第 {n} 天" if isinstance(n, int) else dwhere)
+        label = day.get("label") or (f"Day {n}" if isinstance(n, int) else dwhere)
         if not isinstance(n, int):
-            rep.add("P0", dwhere, f"n 必须是整数（0 表示抵达当晚），实际 {n!r}")
+            rep.add("P0", dwhere, f"n must be an integer (0 = arrival evening), got {n!r}")
         elif n in seen_n:
-            rep.add("P0", dwhere, f"n={n} 与 itinerary[{seen_n[n]}] 重复")
+            rep.add("P0", dwhere, f"n={n} duplicates itinerary[{seen_n[n]}]")
         else:
             seen_n[n] = di
 
         # 日期用来做闭馆冲突判断；第 0 天可以没有独立日期
         d = _parse_date(day.get("date")) if day.get("date") else None
         if day.get("date") and not d:
-            rep.add("P0", dwhere, f"date 格式应为 YYYY-MM-DD，实际 {day.get('date')!r}")
+            rep.add("P0", dwhere, f"date should be YYYY-MM-DD, got {day.get('date')!r}")
 
         entries = day.get("places")
         if not isinstance(entries, list):
-            rep.add("P0", dwhere, "places 必须是数组（顺序即游览顺序）")
+            rep.add("P0", dwhere, "places must be an array (order = visit order)")
             continue
         if not entries:
-            rep.add("P1", dwhere, f"{label} 一个地点都没有")
+            rep.add("P1", dwhere, f"{label} has no places at all")
 
         for ei, ent in enumerate(entries):
             ewhere = f"{dwhere}.places[{ei}]"
             if not isinstance(ent, dict) or not ent.get("id"):
-                rep.add("P0", ewhere, '每一项必须是 {"id": "..."} 形式的对象')
+                rep.add("P0", ewhere, 'each entry must be an object of the form {"id": "..."}')
                 continue
             pid = ent["id"]
             p = by_id.get(pid)
             if p is None:
-                rep.add("P0", ewhere, f"id {pid!r} 在 places 里不存在")
+                rep.add("P0", ewhere, f"id {pid!r} does not exist in places")
                 continue
 
             assigned.setdefault(pid, []).append(n if isinstance(n, int) else di)
@@ -477,10 +477,10 @@ def check_itinerary(doc, rep: Report) -> None:
                 cds = p.get("closed_days")
                 if isinstance(cds, list) and wd in cds:
                     rep.add("P0", ewhere,
-                            f"{p.get('name')} 排在 {day.get('date')}（{WEEK_CN[wd]}），"
-                            f"但它当天闭馆（closed_days={cds}）")
+                            f"{p.get('name')} is scheduled on {day.get('date')} ({WEEK_NAMES[wd]}), "
+                            f"but it's closed that day (closed_days={cds})")
             if p.get("status") == "permanently_closed":
-                rep.add("P0", ewhere, f"{p.get('name')} 已永久关闭，不能排进行程")
+                rep.add("P0", ewhere, f"{p.get('name')} is permanently closed and cannot be scheduled")
 
     # ---- 跨天的检查 ----
     for pid, days_in in assigned.items():
@@ -500,14 +500,14 @@ def check_itinerary(doc, rep: Report) -> None:
                 if isinstance(ent, dict) and ent.get("id") == pid)
             if not has_note:
                 rep.add("P2", f"itinerary/{pid}",
-                        f"{p.get('name')} 被排进第 {distinct} 天却没写 note，"
-                        f"确认是有意重复访问而非误操作")
+                        f"{p.get('name')} is scheduled on days {distinct} without a note — "
+                        f"confirm it's a deliberate repeat visit, not a drag mistake")
 
     for p in places:
         if (p.get("kind") or "attraction") == "lodging" and p.get("id") not in assigned:
             rep.add("P1", "itinerary",
-                    f"住宿「{p.get('name')}」没有出现在任何一天——"
-                    f"住宿要放进当天的行程里，起点终点才说得清")
+                    f"lodging \"{p.get('name')}\" appears on no day — "
+                    f"put lodging into each day so start and end points are clear")
 
 
 # ---------------------------------------------------------------- links
@@ -552,7 +552,7 @@ def check_links(doc, rep: Report) -> None:
 
     if not targets:
         return
-    print(f"  检查 {len(targets)} 个链接…", file=sys.stderr)
+    print(f"  checking {len(targets)} links…", file=sys.stderr)
     with ThreadPoolExecutor(max_workers=12) as ex:
         for url, status in ex.map(_fetch, targets):
             if isinstance(status, int) and status < 400:
@@ -560,51 +560,51 @@ def check_links(doc, rep: Report) -> None:
             if status in BOT_BLOCKED:
                 # 站点活着，只是拒绝自动访问——不能算死链，但值得人工点一下确认
                 for where in targets[url]:
-                    rep.add("P2", where, f"无法自动验证（疑似反爬，HTTP {status}），请人工确认：{url}")
+                    rep.add("P2", where, f"can't verify automatically (likely bot-blocked, HTTP {status}); check manually: {url}")
             else:
                 for where in targets[url]:
-                    rep.add("P1", where, f"链接不可达 [{status}] {url}")
+                    rep.add("P1", where, f"link unreachable [{status}] {url}")
 
 
 # ---------------------------------------------------------------- output
 
-LEVEL_STYLE = {"P0": ("\033[91m", "拒绝"), "P1": ("\033[93m", "警告"), "P2": ("\033[96m", "提示")}
+LEVEL_STYLE = {"P0": ("\033[91m", "reject"), "P1": ("\033[93m", "warn"), "P2": ("\033[96m", "note")}
 
 
 def render(rep: Report, quiet: bool) -> None:
     if not rep.items:
-        print("\033[92m✓ 校验通过，无任何问题\033[0m")
+        print("\033[92m✓ Validation passed, no findings\033[0m")
         return
     for level in ("P0", "P1", "P2"):
         items = rep.of(level)
         if not items or (quiet and level == "P2"):
             continue
         color, label = LEVEL_STYLE[level]
-        print(f"\n{color}{level} · {label}（{len(items)} 条）\033[0m")
+        print(f"\n{color}{level} · {label} ({len(items)})\033[0m")
         for _, where, msg in items:
             print(f"  {color}•\033[0m {where}\n      {msg}")
     n0, n1, n2 = len(rep.of("P0")), len(rep.of("P1")), len(rep.of("P2"))
-    print(f"\n合计  P0 {n0} · P1 {n1} · P2 {n2}")
+    print(f"\nTotal  P0 {n0} · P1 {n1} · P2 {n2}")
     if n0:
-        print("\033[91m→ 存在 P0，数据不可用，必须修正后重新校验\033[0m")
+        print("\033[91m→ P0 findings present: the data is unusable; fix and re-validate\033[0m")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="校验 places.json")
+    ap = argparse.ArgumentParser(description="Validate places.json")
     ap.add_argument("path")
-    ap.add_argument("--check-links", action="store_true", help="并发检查所有 URL 是否可达（较慢）")
-    ap.add_argument("--json", action="store_true", help="以 JSON 输出结果")
-    ap.add_argument("--quiet", action="store_true", help="不显示 P2 提示")
+    ap.add_argument("--check-links", action="store_true", help="check all URLs for reachability concurrently (slower)")
+    ap.add_argument("--json", action="store_true", help="output results as JSON")
+    ap.add_argument("--quiet", action="store_true", help="hide P2 notes")
     args = ap.parse_args()
 
     try:
         with open(args.path, encoding="utf-8") as f:
             doc = json.load(f)
     except FileNotFoundError:
-        print(f"找不到文件: {args.path}", file=sys.stderr)
+        print(f"File not found: {args.path}", file=sys.stderr)
         return 2
     except json.JSONDecodeError as e:
-        print(f"JSON 解析失败: {e}", file=sys.stderr)
+        print(f"Failed to parse JSON: {e}", file=sys.stderr)
         return 2
 
     rep = Report()
@@ -614,7 +614,7 @@ def main() -> int:
             if isinstance(p, dict):
                 check_place(p, i, doc, rep)
             else:
-                rep.add("P0", f"places[{i}]", "元素不是对象")
+                rep.add("P0", f"places[{i}]", "element is not an object")
         check_cross(doc, rep)
         check_itinerary(doc, rep)
     if args.check_links:

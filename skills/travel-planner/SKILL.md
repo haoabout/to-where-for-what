@@ -1,350 +1,445 @@
 ---
 name: travel-planner
-description: 规划一次旅行，产出可交互的行程页（景点清单 + 地图 + 攻略，单个 HTML 文件）。当用户说「帮我规划去 XX 的行程」「XX 几日游怎么安排」「想去 XX 玩，帮我看看有什么值得去的」「帮我做份 XX 攻略」，或提到穷举景点、筛选景点、排路线、做旅行攻略时使用。也用于在已有行程上继续：重新筛选、调整路线、补充景点。Plan a trip and produce an interactive itinerary page (shortlist + map + guide in one HTML file). Use when the user asks to plan a trip, find things to do in a city, build a travel guide, or design a day-by-day route.
+description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, use lite-search to recommend directly in conversation instead of starting this pipeline.
 ---
 
-# 旅行规划
+# Trip Planning
 
-把一次旅行拆成四个阶段，产出**单个 `trip.html`**（三视图：景点清单 / 地图 / 攻略）。
+Split a trip into four stages and produce a **single `trip.html`** (three views: shortlist / map / guide).
 
 ```
-A 搜索景点 →(你)→ ┌ ① 景点清单 ⇄ ② 地图（筛选 + 排程）┐ →(你)→ ③ 攻略
-                  └   用户自由来回，你不介入        ┘
+A search places →(you)→ ┌ ① shortlist ⇄ ② map (filter + schedule) ┐ →(you)→ ③ guide
+                        └   the user iterates freely; you stay out ┘
 ```
 
-**筛选和排程都不需要你介入**——地图视图里三栏并排：景点清单 | 日程 | 地图。
-用户改了选择 marker 立刻变色，把地点分到各天、排出顺序也全在页面里完成。
-你只在 A（搜索）和 D（写攻略）两处工作。
+**Filtering and scheduling need no involvement from you** — the map view has three
+panes side by side: shortlist | day plan | map. When the user changes a choice the
+marker recolors instantly; assigning places to days and ordering them all happens
+on the page. You only work at A (search) and D (writing the guide).
 
 ---
 
-## 三条硬规则
+## Three hard rules
 
-违反任何一条，产出就是坏的。
+Break any one of them and the output is bad.
 
-**1. 不许手写 HTML。**
-你只产出 `places.json` 和 `route.md`，跑 `build.py` 生成页面。模板已经处理好了三视图、地图降级、天气、响应式、明暗配色。手写 HTML 会得到样式不一致、有 bug 的页面。
+**1. Never hand-write HTML.**
+You only produce `places.json` and `route.md`, then run `build.py` to generate the
+page. The template already handles the three views, map fallbacks, weather,
+responsive layout, and light/dark theming. Hand-written HTML gets you an
+inconsistent, buggy page.
 
-**2. 不许发明字段。**
-`places.json` 的字段全部定义在 [references/data-schema.md](references/data-schema.md)。契约外的字段模板不会渲染，内容会**静默丢失**。确需新字段就先改 schema 和校验器。
+**2. Never invent fields.**
+Every field of `places.json` is defined in
+[references/data-schema.md](references/data-schema.md). Fields outside the contract
+are not rendered by the template — the content is **silently lost**. If you truly
+need a new field, change the schema and the validator first.
 
-**3. 不许写没联网确认过的信息。**
-每个景点必须有 `sources`（真实 URL）。`status` 未经确认一律不许填 `open`。校验器会拦，但拦得住格式拦不住编造——你自己要守住。
-
----
-
-## 运行环境适配
-
-- **Claude Code / 支持结构化提问的环境**：用 AskUserQuestion 做开场问卷和阶段确认。
-- **Codex / 纯对话环境**：直接用普通对话询问，**不要假设结构化提问工具存在**。一次最多问 1-3 个最关键的问题；信息缺口不影响开工时，先做合理假设并在回复里写明。
-
-判断依据是你实际有没有那个工具，不要猜。
-
----
-
-## 偏好文件
-
-长期偏好存在 **`~/.travel-planner/preferences.md`**，跨行程、跨项目复用。
-
-**刻意放在 skill 目录之外**：用户更新或重装 skill 时（不管是 git pull、下载 zip 还是直接删掉重装）都不会碰到它。skill 目录里只有 `preferences.template.md` 模板。
-
-启动时：
-
-1. 读 `~/.travel-planner/preferences.md`。不存在就把 `<SKILL_ROOT>/preferences.template.md` 的内容原样写过去，并告诉用户"第一次用，我先建了个偏好文件"。
-2. 文件里有、但模板新增的段落缺失时，**只补不改**——问用户那一项，然后追加。**绝不整体重写**，那会丢掉用户攒下的偏好。
-
-**用你自己的读写工具做这两步，不要走 shell。** `mkdir -p`、`[ -f ... ]`、`cp` 都是
-POSIX 专有的，Windows 的 PowerShell / cmd 下会直接失败——而这是整个流程的第一步，
-断在这里用户连开始都开始不了。
+**3. Never write information you haven't verified online.**
+Every place must have `sources` (real URLs). Never set `status` to `open` without
+confirmation. The validator catches format problems, but it cannot catch
+fabrication — that discipline is on you.
 
 ---
 
-## 跑脚本用哪个解释器
+## Adapting to the runtime environment
 
-**不要写死 `python3`。** Windows 上 python.org 的安装包只装 `python.exe` 和 `py.exe`，
-**不装 `python3.exe`**；而系统自带一个同名的应用执行别名，作用是**打开微软商店**。
-所以 Windows 用户跑 `python3 build.py` 最常见的结果不是报错，是弹出商店页面。
+- **Claude Code / environments with structured questioning**: use AskUserQuestion
+  for the opening questionnaire and stage confirmations.
+- **Codex / plain-chat environments**: just ask in normal conversation — **do not
+  assume a structured questioning tool exists**. Ask at most 1–3 of the most
+  critical questions at a time; when a gap doesn't block starting, make a
+  reasonable assumption and state it in your reply.
 
-第一次要跑脚本时探一次，之后整场对话都用探到的那个（下文一律写作 `<PY>`）：
+Decide by whether you actually have the tool, not by guessing.
 
-| 顺序 | 试 | 说明 |
+---
+
+## Preferences file
+
+Long-term preferences live in **`~/.travel-planner/preferences.md`**, reused
+across trips and across projects.
+
+**Deliberately outside the skill directory**: updating or reinstalling the skill
+(git pull, downloading a zip, or deleting and reinstalling) never touches it. The
+skill directory only ships the `preferences.template.md` template.
+
+On startup:
+
+1. Read `~/.travel-planner/preferences.md`. If it doesn't exist, copy the content
+   of `<SKILL_ROOT>/preferences.template.md` over verbatim and tell the user
+   "first run — I've created a preferences file for you".
+2. When the file exists but lacks a section the template has since added,
+   **append, never rewrite** — ask the user about that one item, then add it.
+   **Never rewrite the whole file**; that would destroy preferences the user has
+   accumulated. Match sections **by meaning, not by literal heading text** — an
+   existing file may have been created from an older template in another language
+   (e.g. Chinese); a heading in a different language is the same section, not a
+   missing one.
+
+**Use your own read/write tools for these two steps, not the shell.**
+`mkdir -p`, `[ -f ... ]`, and `cp` are POSIX-only and fail outright under
+Windows PowerShell / cmd — and this is the very first step of the whole flow;
+break here and the user can't even start.
+
+---
+
+## Which interpreter runs the scripts
+
+**Do not hardcode `python3`.** On Windows, the python.org installer only installs
+`python.exe` and `py.exe` — **no `python3.exe`** — while the system ships an app
+execution alias of that exact name whose job is to **open the Microsoft Store**.
+So for Windows users, `python3 build.py` most often doesn't error — it pops up a
+store page.
+
+Probe once the first time you need to run a script, then use the probed command
+for the whole conversation (written as `<PY>` below):
+
+| Order | Try | Notes |
 |---|---|---|
-| 1 | `py -3 --version` | Windows 官方启动器，最可靠 |
-| 2 | `python --version` | 要确认输出是 3.x，不是 2.7 |
-| 3 | `python3 --version` | macOS / Linux 上的常态 |
+| 1 | `py -3 --version` | Official Windows launcher, most reliable |
+| 2 | `python --version` | Confirm the output is 3.x, not 2.7 |
+| 3 | `python3 --version` | The norm on macOS / Linux |
 
-需要 Python 3.9 以上。都不通就告诉用户去装，别硬跑。
+Python 3.9+ is required. If none works, tell the user to install it — don't push on.
 
 ---
 
-## 开工前 · 先看有没有已经在做的行程
+## Before starting · check for a trip already in progress
 
-用户说「继续」「接着上次」「改一下我那个 XX 行程」时，**不要从开场问卷重来**。
+When the user says "continue", "pick up where we left off", or "tweak my X trip",
+**do not restart from the opening questionnaire**.
 
-对话是新开的，但行程数据一直在磁盘上——**它跟对话 session 没有任何关系**。
-重新搜一轮不只是浪费，还会把用户上次筛的 `choice` 和排的 `itinerary` 全冲掉。
+The conversation is new, but the trip data has been on disk the whole time — **it
+has no relationship to the chat session**. Re-running a search round isn't just
+wasteful: it wipes out the `choice` values the user filtered and the `itinerary`
+they arranged last time.
 
-1. 按下一节的顺序找到行程根目录，看里面有没有匹配的行程，有就读它的 `places.json`
-2. 那就是全部真相：`choice` 是用户筛的，`itinerary` 是用户排的天和顺序
-3. `trip.html` 是构建产物，**不要读它，也不要手改**——重新 build 一次就有了
+1. Locate the trips root in the order given in the next section, look for a
+   matching trip, and read its `places.json`
+2. That file is the whole truth: `choice` is what the user filtered, `itinerary`
+   is the days and ordering they arranged
+3. `trip.html` is a build artifact — **don't read it, don't hand-edit it** —
+   rebuilding regenerates it
 
-重跑一次 build 就能把页面恢复到上次的样子：
+One rebuild restores the page to where it was last time:
 
 ```bash
-<PY> <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
+<PY> <SKILL_ROOT>/scripts/build.py trips/<trip> --serve
 ```
 
-**不确定是哪个行程就把根目录下的行程列出来让用户选**，不要猜。
+**If you're not sure which trip it is, list the trips under the root and let the
+user pick.** Don't guess.
 
-如果用户说"我明明排过日程"而 `places.json` 里没有：多半是他用 `file://` 双击打开的
-（那种方式没有自动保存），改动只在**那台机器、那个浏览器、那个地址**的 localStorage 里
-（`file://` 和 `http://localhost` 是两份不同的存储），你读不到。
-让他打开原来那个页面点一次「保存选择和日程」。
+If the user says "but I did arrange a schedule" and `places.json` has none: they
+most likely opened the page by double-clicking (`file://`, which has no
+auto-save), so the changes only live in localStorage on **that machine, that
+browser, that address** (`file://` and `http://localhost` are two separate
+stores) — you can't read them. Have them open that same page and click
+"Save choices & schedule" once.
 
-### 用户粗胚补全
+### Completing user-added stubs
 
-行程页的地图上有搜索框（Nominatim），用户临时想去哪就搜一下、一键加进清单或
-某一天——落进 `places.json` 的只有名称 + 坐标 + OSM 链接，带 `origin: "user"`，
-没有任何研究型字段。这是设计好的分工：**用户加粗胚，你事后补全**。
+The trip page's map has a search box (Nominatim). When the user spontaneously
+wants to go somewhere, they search it and add it to the shortlist or to a day
+with one click — what lands in `places.json` is only a name + coordinates + OSM
+link, marked `origin: "user"`, with none of the research fields. This division of
+labor is by design: **the user adds stubs, you complete them afterwards**.
 
-在已有行程上继续工作时（不管用户要你干什么），先扫一遍：
+Whenever you continue work on an existing trip (whatever the user asked for),
+first scan:
 
-1. 找 `places[]` 里 `origin == "user"` 且**没有 `tier`** 的点——这就是待补全清单
-2. 对它们走 A2 的研究流程：联网核实开放时间/门票/预约，写 `pitch`、`detail`、
-   定 `tier`/`scale`/`category`，补 `name_local`（契约见 data-schema.md「用户粗胚」）
-3. **保留 `origin: "user"` 字段**（它是出处标记，不是待办标记），**保留用户已有的
-   `choice` 和日程引用**——用户特意搜来加的点，`choice` 通常已是 `yes`，别动它
-4. 补全后跑一遍 `validate.py`；坐标在 bbox 外只会报 P1，确认不是搜错了同名地点即可。
-   若点真的在 bbox 外较远（如大阪行程加了奈良），在攻略里按实际通勤时间排路线
+1. Find entries in `places[]` with `origin == "user"` and **no `tier`** — that's
+   the to-complete list
+2. Run them through the stage-A research pipeline: verify hours / tickets /
+   booking online, write `pitch` and `detail`, set `tier`/`scale`/`category`,
+   fill `name_local` (contract: data-schema.md, "User stubs")
+3. **Keep the `origin: "user"` field** (it records provenance, not a to-do flag),
+   and **keep the user's existing `choice` and any schedule references** — a
+   place the user deliberately searched for and added usually already has
+   `choice: yes`; don't touch it
+4. After completing, run `validate.py`; coordinates outside the bbox only raise
+   P1 — just confirm it isn't a same-name mismatch. If the point truly is well
+   outside the bbox (e.g. Nara added to an Osaka trip), route it in the guide
+   using realistic travel times
 
-用户没提这些点时也要补——他在地图上加完就认为「这事交给 AI 了」。
-
----
-
-## 行程文件存哪
-
-**第一次用时问一次，记进 `preferences.md` 的 `trips_root`，之后不再问。**
-
-不问就默认落在"用户当时开着 AI 的那个目录"下，会把行程塞进一个毫不相干的代码仓库，
-换个目录再问「继续我的京都行程」就找不着了。
-
-按这个顺序定：
-
-1. `preferences.md` 里有 `trips_root` → 用它
-2. 当前目录下已经有 `trips/` → 用它（不必打扰用户）
-3. 否则问用户，默认建议 **`~/travel-plans/`**，把答案写进 `preferences.md`
-
-默认值不用 `~/.travel-planner/trips/`（隐藏目录里放用户要打开和分享的 HTML 不方便），
-也不用 `~/Documents`（不同语言的系统上目录名不一样）。
-
-行程目录本身是 AI 建的，用户不需要碰任何文件对话框。下文的 `trips/<行程>/`
-一律指 `<trips_root>/<行程>/`。
+Complete these even when the user doesn't mention them — once they added the
+point on the map, they consider it handed off to the AI.
 
 ---
 
-## 阶段 A · 搜索景点
+## Where trip files live
 
-### A1. 开场问卷
+**Ask once on first use, record it as `trips_root` in `preferences.md`, never ask
+again.**
 
-目的地是必问的。另外四项：
+If you don't ask, trips land in "whatever directory the user happened to have the
+AI open in" — stuffed into an unrelated code repo, and unfindable when they ask
+"continue my Kyoto trip" from a different directory.
 
-| 问什么 | 为什么 |
+Resolve in this order:
+
+1. `preferences.md` has `trips_root` → use it
+2. The current directory already contains `trips/` → use it (no need to bother
+   the user)
+3. Otherwise ask the user, suggesting **`~/travel-plans/`** as the default, and
+   write the answer into `preferences.md`
+
+The default is not `~/.travel-planner/trips/` (HTML files the user opens and
+shares don't belong in a hidden directory) and not `~/Documents` (the directory
+name varies by system language).
+
+The trip directory itself is created by the AI; the user never touches a file
+dialog. Below, `trips/<trip>/` always means `<trips_root>/<trip>/`.
+
+---
+
+## Stage A · Search for places
+
+### A1. Opening questionnaire
+
+Destination is mandatory. Four more:
+
+| Ask | Why |
 |---|---|
-| **出行日期 + 天数** | 决定闭馆日冲突、季节限定、限时展览、天气。没有日期，这几块全做不了 |
-| **抵达与离开的时间** | 见下方「为什么要问到几点」 |
-| **同行人 + 体力强度** | 决定路线强度和景点取舍 |
-| **落脚点** | 已订酒店给地址，没订给大致区域。决定每日路线的起终点 |
+| **Travel dates + number of days** | Determines closure-day conflicts, seasonal specials, limited-run exhibitions, weather. Without dates, none of these can be done |
+| **Arrival and departure times** | See "Why ask down to the hour" below |
+| **Party + stamina** | Determines route intensity and place selection |
+| **Home base** | Address if a hotel is booked, rough area if not. Determines each day's start and end points |
 
-交通方式、预算档、兴趣权重**不在这里问**——它们在 `preferences.md` 里，问一次长期复用。
+Transport mode, budget tier, and interest weights are **not asked here** — they
+live in `preferences.md`, asked once and reused long-term.
 
-#### 为什么要问到几点
+#### Why ask down to the hour
 
-只问「几天」问不出这两种很常见的形态：
+"How many days" alone misses two very common shapes:
 
-- **第一天下午三点才落地** —— 那天实际只有半天，塞满四个馆一定完不成
-- **最后一天中午的飞机** —— 早上只够吃个早饭、逛一条商店街
-- **前一晚就到了** —— 多出「第 0 天（抵达当晚）」，够在住处附近走走
+- **Landing at 3 pm on day one** — that day is really half a day; four museums
+  will not fit
+- **A noon flight on the last day** — the morning fits breakfast and one
+  shopping street
+- **Arriving the night before** — an extra "Day 0 (arrival evening)", enough for
+  a stroll near the hotel
 
-问清楚之后：
+Once you know:
 
-| 情况 | 怎么落到数据里 |
+| Situation | How it lands in the data |
 |---|---|
-| 抵达日 = `dates.start` 的前一天晚上 | 告诉用户排程页可以加「第 0 天」 |
-| 首日或末日只有半天 | 写进 `trip.note`，D 阶段排路线时按半天算 |
-| 都是整天 | 什么都不用做 |
+| Arrival = the evening before `dates.start` | Tell the user the scheduling page can add a "Day 0" |
+| First or last day is half a day | Write it into `trip.note`; stage D plans that day as a half day |
+| All full days | Nothing to do |
 
-**`itinerary` 字段不要预填。** 页面打开时会按 `dates` 自动逐日建好空容器，
-两处都造同一份数据迟早会对不上。契约见 [data-schema.md](references/data-schema.md)。
+**Do not pre-fill the `itinerary` field.** The page auto-creates the empty
+per-day containers from `dates` when it opens. Building the same data in two
+places will eventually disagree. Contract:
+[data-schema.md](references/data-schema.md).
 
-### A2. 搜索并产出 `places.json`
+### A2. Search and produce `places.json`
 
-详细规则读 **[references/research-playbook.md](references/research-playbook.md)**：分类配额、搜索策略、防幻觉、图片获取、微景点处理。
+Read **[references/research-playbook.md](references/research-playbook.md)** for
+the full rules: category quotas, search strategy, anti-hallucination, image
+sourcing, micro-spot handling.
 
-要点：
+Key points:
 
-- 总量 **35–50**，按分类配额分配，小城市不足**如实说明，不许凑数**
-- 开放时间、闭馆日、预约状态、门票、修缮状态**第一轮就要拿到**——否则用户筛半天，最后发现那天不开门
-- 坐标用 `{"lon":…, "lat":…}` 对象形式，不许用数组
-- 图片 URL 必须从 API 拿，**不许手工拼**（见 playbook 里的 Wikimedia 教训）
+- Total **35–50**, allocated by category quotas; if a small city can't fill
+  them, **say so honestly — never pad**
+- Hours, closure days, booking status, tickets, renovation status **must be
+  obtained in the first pass** — otherwise the user filters for an hour and then
+  discovers the place is shut that day
+- Coordinates use the `{"lon":…, "lat":…}` object form, never an array
+- Image URLs must come from the API, **never hand-assembled** (see the Wikimedia
+  lesson in the playbook)
 
-### A3. 补齐坐标与配图 · 校验 · 构建
+### A3. Fill coordinates & images · validate · build
 
-**坐标和配图不要自己填，跑脚本。** 它们是确定性的 API 调用，脚本比你准，
-而且已经处理好了 Nominatim 的 1 req/s 限速、bbox 越界校验、
-以及 Wikimedia 缩略图必须走 API 的问题。
+**Don't fill coordinates and images yourself — run the scripts.** These are
+deterministic API calls; the scripts are more accurate than you, and they already
+handle Nominatim's 1 req/s rate limit, bbox validation, and the fact that
+Wikimedia thumbnails must go through the API.
 
 ```bash
-<PY> <SKILL_ROOT>/scripts/enrich.py   trips/<行程>/places.json --coords --images
-<PY> <SKILL_ROOT>/scripts/enrich.py   trips/<行程>/places.json --transit
-<PY> <SKILL_ROOT>/scripts/validate.py trips/<行程>/places.json --check-links
-<PY> <SKILL_ROOT>/scripts/build.py    trips/<行程> --serve
+<PY> <SKILL_ROOT>/scripts/enrich.py   trips/<trip>/places.json --coords --images
+<PY> <SKILL_ROOT>/scripts/enrich.py   trips/<trip>/places.json --transit
+<PY> <SKILL_ROOT>/scripts/validate.py trips/<trip>/places.json --check-links
+<PY> <SKILL_ROOT>/scripts/build.py    trips/<trip> --serve
 ```
 
-`--transit` 从 OSM 抓当地的地铁/轻轨线路与车站，产出 `transit.geojson`。
-线路配色取自 OSM 的 `colour` 标签，也就是官方线路色。**单独跑一次**，
-不要和 `--coords --images` 合并——Overpass 按 IP 分配执行槽，
-紧接着连发容易吃限流。抓不到就跳过，地铁层是加分项，不阻塞出图。
+`--transit` pulls the local metro / light-rail lines and stations from OSM into
+`transit.geojson`. Line colors come from OSM's `colour` tag, i.e. the official
+line colors. **Run it separately** — don't combine with `--coords --images`:
+Overpass allocates execution slots per IP, and back-to-back requests get
+throttled. If it fails, skip it — the transit layer is a bonus, never a blocker.
 
-`enrich.py` 补不上的会明确报出来（多半是查不到，或搜到的点落在 bbox 外），
-这时才需要你人工处理——**它宁可留空也不会填一个看似合理的错坐标**。
+Whatever `enrich.py` can't fill, it reports explicitly (usually not found, or the
+hit falls outside the bbox) — only then do you step in manually. **It prefers
+leaving a blank over writing a plausible-looking wrong coordinate.**
 
-**必须零 P0 才能交付。** P1 逐条看过再决定忽略还是修。
+**Delivery requires zero P0.** Read each P1 and decide to fix or ignore.
 
-`--serve` 会起本地服务并打开浏览器。**优先用它**，因为 `file://` 下 OSM 官方底图会返回一张写着「Access blocked」的图片（HTTP 状态码还是 200，肉眼才看得出来）。
-
----
-
-## 阶段 B + C · 用户筛选与排程（你不参与）
-
-告诉用户分两步，都在同一个页面里做完：
-
-**先筛选**
-
-- 在清单里给每个点选**想去 / 待定 / 不想去**，选「不想去」时可以记个理由
-- 随时切到地图看分布，改了选择 marker 会立刻变色，**不用回来找你**
-
-**再排程**（地图视图，中间那一栏）
-
-- 日程栏已按行程日期自动建好每一天，不需要新建
-- 把地点放进某天：**从清单拖过去**，或选中那天后**点地点的圆点**
-- 天内调顺序：拖，或用条目上的 ↑ ↓
-- 地图上会把每天的点按顺序连成一条当天颜色的虚线，**绕路一眼可见**
-- 一个地点可以出现在多天（世博会连着去两天），也可以一天出现两次（白天夜景各一次）
-- 航班傍晚才落地就点日程栏右上角的 `+` 加「第 0 天」
-
-**不用告诉用户去点保存。** `--serve` 起的服务下，改动会在几秒空闲后自动写回
-`places.json`，状态显示在页面底部。只有用 `file://` 打开时才需要点「保存选择和日程」
-（浏览器不允许网页在无用户手势时写文件），不支持直写的浏览器再退到「下载 JSON」
-或「复制短码」。
-
-短码里 `+ ? -` 三行是选择，`D1 D2 …` 行是日程（**行内顺序就是当天路线顺序**，
-`(括号)` 是备注）。用户贴短码回来时，按它更新 `places.json` 的 `choice` 和
-`itinerary`，然后重新 build。
-
-然后**停下来等**。不要自作主张替用户筛选或排程——砍掉哪些、哪天去哪，
-是取舍不是计算，那是用户的决定。
-
-用户说排完了：重新读 `places.json`，确认 `choice` 分布与 `itinerary`，再进入 D。
+`--serve` starts a local server and opens the browser. **Prefer it**: under
+`file://` the official OSM basemap returns an image reading "Access blocked"
+(HTTP status still 200 — only eyes catch it).
 
 ---
 
-## 阶段 D · 设计路线
+## Stages B + C · The user filters and schedules (you're not involved)
 
-详细规则读 **[references/route-design.md](references/route-design.md)**。
+Tell the user it's two steps, both done on the same page:
 
-**`places.json` 里有 `itinerary` 时，按它写，不要重新分组。** 那是用户自己排的天
-和顺序，推翻它等于把他刚做完的取舍作废。有异议就写进正文说明理由，让他自己改。
-只有 `itinerary` 缺失或全空时，才由你按下面的规则提议一份。
+**Filter first**
 
-要点：
+- In the shortlist, mark each place **want / maybe / skip** — picking "skip"
+  allows noting a reason
+- Switch to the map anytime to see the spread; markers recolor the moment a
+  choice changes, **no need to come back to you**
 
-- 按 `area` 聚类，**同一天尽量只走 1–2 个片区**
-- 用 `closed_days` 排除冲突日；`night: true` 的排在晚上；下雨备选从 `indoor: true` 里取
-- 写进 `trips/<行程>/route.md`，用 Markdown
-- 列表项以 `09:30 ` 开头会自动变成时间轴，**不需要特殊语法**
-- **不要**在 route.md 里手写费用汇总和景点对照表——页面会从数据自动生成，保证永不出错
+**Then schedule** (map view, middle pane)
 
-路线里出现博物馆/美术馆时，调用 **[references/museum-module.md](references/museum-module.md)** 做深度展开。
-出现影视动漫打卡地时，参考 **[references/media-pilgrimage.md](references/media-pilgrimage.md)**。
+- The day-plan pane is pre-built from the trip dates; nothing to create
+- Put a place into a day: **drag it from the shortlist**, or select the day and
+  **click the place's dot**
+- Reorder within a day: drag, or use the ↑ ↓ on the entry
+- The map links each day's points in visit order with a dashed line in that
+  day's color — **detours are visible at a glance**
+- A place may appear on multiple days (two consecutive Expo days) or twice in
+  one day (daytime and night views)
+- Flight lands in the evening? Click `+` in the day-plan header to add "Day 0"
 
-写完重新构建：
+**Don't tell the user to hit save.** Under a `--serve` server, changes auto-write
+back to `places.json` after a few idle seconds; status shows at the bottom of the
+page. Only `file://` needs the "Save choices & schedule" button (browsers won't
+let a page write files without a user gesture); browsers without direct write
+fall back to "Download JSON" or "Copy code".
+
+In the code, the `+ ? -` lines are choices and the `D1 D2 …` lines are the
+schedule (**in-line order = that day's route order**, `(parentheses)` are notes).
+When the user pastes a code back, update `choice` and `itinerary` in
+`places.json` from it, then rebuild.
+
+Then **stop and wait**. Don't filter or schedule on the user's behalf — what to
+cut and which day to go are trade-offs, not computations; they belong to the
+user.
+
+When the user says they're done: re-read `places.json`, confirm the `choice`
+distribution and `itinerary`, then move to D.
+
+---
+
+## Stage D · Design the route
+
+Read **[references/route-design.md](references/route-design.md)** for the full
+rules.
+
+**When `places.json` has an `itinerary`, write to it — do not regroup.** That is
+the user's own day assignment and ordering; overriding it throws away the
+trade-offs they just made. If you disagree, say so in the guide body and let them
+change it. Only when `itinerary` is missing or entirely empty do you propose one
+using the rules below.
+
+Key points:
+
+- Cluster by `area`; **at most 1–2 areas per day**
+- Exclude conflicts with `closed_days`; put `night: true` places in the evening;
+  draw rain alternatives from `indoor: true`
+- Write to `trips/<trip>/route.md` in Markdown
+- List items starting with `09:30 ` render as a timeline automatically — **no
+  special syntax**
+- **Don't** hand-write the cost summary or the place-by-place table in
+  `route.md` — the page generates them from the data, guaranteed correct
+
+When the route includes museums or galleries, apply
+**[references/museum-module.md](references/museum-module.md)** for the deep
+dive. For film/anime pilgrimage spots, see
+**[references/media-pilgrimage.md](references/media-pilgrimage.md)**.
+
+Rebuild when done:
 
 ```bash
-<PY> <SKILL_ROOT>/scripts/build.py trips/<行程> --serve
+<PY> <SKILL_ROOT>/scripts/build.py trips/<trip> --serve
 ```
 
-想单独分享攻略（不带筛选界面）：
+To share the guide alone (without the filtering UI):
 
 ```bash
-<PY> <SKILL_ROOT>/scripts/build.py trips/<行程> --standalone   # 输出 guide.html
+<PY> <SKILL_ROOT>/scripts/build.py trips/<trip> --standalone   # outputs guide.html
 ```
 
 ---
 
-## 文件布局
+## File layout
 
 ```
-<trips_root>/2026-09-osaka/          # 根目录见「行程文件存哪」
-├── brief.md          # 行程参数（开场问卷的答案）
-├── places.json       # ★唯一数据源，三个视图都从它渲染
-├── transit.geojson   # 地铁线路与车站（enrich.py --transit 产出）
-├── route.md          # 攻略正文（你写）
-└── trip.html         # 构建产物，不要手改
+<trips_root>/2026-09-osaka/          # root: see "Where trip files live"
+├── brief.md          # trip parameters (answers to the opening questionnaire)
+├── places.json       # ★ the single source of truth; all three views render from it
+├── transit.geojson   # metro lines & stations (from enrich.py --transit)
+├── route.md          # guide body (you write this)
+└── trip.html         # build artifact — never hand-edit
 ```
 
-`places.json` 是唯一真相。用户的选择原地更新到 `choice` 字段，不另存文件——所以清单和地图永远不可能对不上。
+`places.json` is the single truth. User choices update its `choice` fields in
+place — no side files — so the shortlist and the map can never disagree.
 
-`trip.html` 是**某一次构建时的快照**：它自包含（分享给同行的人，对方双击就能看，
-不需要服务、不需要这个仓库），但对方看到的只是构建那一刻的数据，包括所有
-「不想去」的理由。用户在浏览器里的后续改动存在他自己的 localStorage 里，
-**不在文件里**，别人打不开也看不到。所以每次写完 `places.json` 都要重新 build
-——`--serve` 起的本地服务在收到保存时已经自动做了。
-
----
-
-## 语言规则
-
-- 正文以**用户语言**的地名为主。
-- 中国以外的地点，**第一次**在正文出现时写「中文名（当地语言名）」，之后只写中文名。
-- 当地语言名必须**能在地图里搜到**；中文名要自然、可读、前后一致。
-- 没有通行译名时可以音译或意译，但同一份文档内**不得混用多个译名**。
+`trip.html` is a **snapshot at build time**: it's self-contained (share it with
+travel companions; they double-click and it works, no server, no repo), but they
+see the data as of that build — including every "skip" reason. The user's later
+in-browser changes live in their own localStorage, **not in the file**; nobody
+else can see them. So rebuild after every `places.json` write — the `--serve`
+server already does this automatically on save.
 
 ---
 
-## 交付前自检
+## Language rules
 
-跑一遍 **[references/checklist.md](references/checklist.md)**，尤其：
-
-- [ ] `validate.py` 零 P0
-- [ ] 抽查 3–5 个景点，**人工点开 `sources` 里的链接**确认信息属实
-- [ ] 浏览器实际打开页面看过（不是只看代码）
-- [ ] 攻略里的 ✅❌ 对照表与用户的 `choice` 一致（自动生成的，但要确认渲染了）
-- [ ] 明确告诉用户哪些信息可能过期、哪些是估算
+- Body text uses place names in **the user's language**.
+- Where the local language differs, write "user-language name (local-language
+  name)" on **first** occurrence in the body; after that, the user-language name
+  alone.
+- The local-language name must be **findable on the map**; the user-language
+  name must be natural, readable, and consistent throughout.
+- With no established translation, transliterate or translate freely — but
+  **never mix multiple renderings** of the same place in one document.
 
 ---
 
-## 已知限制（要主动告诉用户，不要含糊）
+## Pre-delivery self-check
 
-| 限制 | 说明 |
+Run through **[references/checklist.md](references/checklist.md)**, especially:
+
+- [ ] `validate.py` reports zero P0
+- [ ] Spot-check 3–5 places by **manually opening the links in `sources`** to
+  confirm the facts
+- [ ] Actually opened the page in a browser (not just read the code)
+- [ ] The guide's ✅❌ table matches the user's `choice` values (auto-generated,
+  but confirm it rendered)
+- [ ] Explicitly told the user which information may go stale and which numbers
+  are estimates
+
+---
+
+## Known limitations (state them proactively; don't be vague)
+
+| Limitation | Notes |
 |---|---|
-| 小红书 / B 站抓不到 | 反爬 + 登录墙。影视打卡地只能靠搜索引擎找二手整理，可能不全 |
-| 门票金额是估算 | `ticket` 是自由文本，特别展、体验项目、夜间加价通常另计 |
-| 地铁线路来自 OSM，质量因城市而异 | 线路的官方配色取自 OSM 的 `colour` 标签。大阪实测 20/20 全有；冷门城市可能缺，此时退回自动分配色并在图例注明 |
-| 超过 16 天的天气不是预报 | 自动退回历史同期均值，界面已标注，但你也要说一句 |
-| 服务停止后功能降级 | `file://` 打开仍可读、矢量底图和地铁层照常，但不能直写文件、不能用 OSM 官方光栅底图（它要 Referer） |
+| Xiaohongshu / Bilibili can't be scraped | Anti-bot + login walls. Film/anime spots rely on second-hand write-ups found via search engines; may be incomplete |
+| Ticket prices are estimates | `ticket` is free text; special exhibitions, add-on experiences, and night surcharges usually cost extra |
+| Transit lines come from OSM; quality varies by city | Official line colors come from OSM's `colour` tag. Osaka measured 20/20 present; minor cities may lack them — the map falls back to auto-assigned colors and says so in the legend |
+| Weather beyond 16 days is not a forecast | Falls back to historical same-period averages; the UI labels this, but say it yourself too |
+| Features degrade once the server stops | `file://` still opens read-only fine — vector basemap and transit layer work — but no direct file write and no official OSM raster basemap (it requires a Referer) |
 
 ---
 
-## 资源导览
+## Resource guide
 
-| 文件 | 什么时候读 |
+| File | When to read |
 |---|---|
-| [references/data-schema.md](references/data-schema.md) | 写 `places.json` 之前，必读 |
-| [references/research-playbook.md](references/research-playbook.md) | 阶段 A 搜索之前，必读 |
-| [references/route-design.md](references/route-design.md) | 阶段 D 排路线之前，必读 |
-| [references/museum-module.md](references/museum-module.md) | 路线含博物馆时 |
-| [references/media-pilgrimage.md](references/media-pilgrimage.md) | 做影视动漫打卡地时 |
-| [references/checklist.md](references/checklist.md) | 交付前 |
-| `scripts/enrich.py` | 补坐标与配图，写完 `places.json` 主体后 |
-| `scripts/validate.py` | 每次改完 `places.json` |
-| `scripts/build.py` | 生成/更新页面 |
+| [references/data-schema.md](references/data-schema.md) | Before writing `places.json` — required |
+| [references/research-playbook.md](references/research-playbook.md) | Before stage-A searching — required |
+| [references/route-design.md](references/route-design.md) | Before stage-D routing — required |
+| [references/museum-module.md](references/museum-module.md) | When the route includes museums |
+| [references/media-pilgrimage.md](references/media-pilgrimage.md) | When covering film/anime spots |
+| [references/checklist.md](references/checklist.md) | Before delivery |
+| `scripts/enrich.py` | Fill coordinates & images, after the `places.json` body is written |
+| `scripts/validate.py` | After every `places.json` change |
+| `scripts/build.py` | Generate/update the page |

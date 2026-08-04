@@ -51,7 +51,7 @@ def geocode(query: str, lang: str | None = None) -> dict | None:
     try:
         res = get_json("https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(params))
     except Exception as e:  # noqa: BLE001
-        print(f"      查询失败: {type(e).__name__}", file=sys.stderr)
+        print(f"      lookup failed: {type(e).__name__}", file=sys.stderr)
         return None
     return res or None
 
@@ -124,10 +124,10 @@ def fill_coords(doc: dict, dry: bool) -> int:
     todo = [p for p in doc["places"] if not (isinstance(p.get("coord"), dict)
             and isinstance(p["coord"].get("lon"), (int, float)))]
     if not todo:
-        print("坐标：全部已就绪")
+        print("Coordinates: all present")
         return 0
 
-    print(f"坐标：{len(todo)} 个待补（Nominatim，{NOMINATIM_QPS}s 间隔）")
+    print(f"Coordinates: {len(todo)} to fill (Nominatim, {NOMINATIM_QPS}s interval)")
     ok = 0
     for p in todo:
         # 当地语言名命中率最高，其次英文名，最后用户语言名
@@ -146,7 +146,7 @@ def fill_coords(doc: dict, dry: bool) -> int:
                     if not in_bbox(lon, lat, bbox):
                         continue
                     if not name_matches(names, disp):
-                        print(f"      ↷ 跳过：搜「{nm}」返回的是「{disp.split(',')[0]}」，名称对不上")
+                        print(f"      ↷ skipped: searching \"{nm}\" returned \"{disp.split(',')[0]}\" — names don't match")
                         continue
                     hit = (lon, lat, disp[:64], q)
                     break
@@ -160,9 +160,9 @@ def fill_coords(doc: dict, dry: bool) -> int:
             if not dry:
                 p["coord"] = {"lon": round(lon, 6), "lat": round(lat, 6)}
             ok += 1
-            print(f"  ✓ {p.get('name'):<22} {lon:.5f},{lat:.5f}  ←「{q}」 {disp}")
+            print(f"  ✓ {p.get('name'):<22} {lon:.5f},{lat:.5f}  ← \"{q}\" {disp}")
         else:
-            print(f"  ✗ {p.get('name'):<22} 未找到 bbox 内的匹配，需人工填写")
+            print(f"  ✗ {p.get('name'):<22} no match inside the bbox; fill in manually")
     return ok
 
 
@@ -204,10 +204,10 @@ def fill_images(doc: dict, dry: bool) -> int:
     langs = [l for l in (trip.get("local_language"), "en") if l]
     todo = [p for p in doc["places"] if not p.get("images")]
     if not todo:
-        print("配图：全部已就绪")
+        print("Images: all present")
         return 0
 
-    print(f"配图：{len(todo)} 个待补（维基条目主图 → Commons API）")
+    print(f"Images: {len(todo)} to fill (Wikipedia lead image → Commons API)")
     ok = 0
     for p in todo:
         found = None
@@ -228,7 +228,7 @@ def fill_images(doc: dict, dry: bool) -> int:
             ok += 1
             print(f"  ✓ {p.get('name'):<22} {found['url'].rsplit('/', 1)[-1][:46]}")
         else:
-            print(f"  – {p.get('name'):<22} 维基无主图，留空（配图非必填）")
+            print(f"  – {p.get('name'):<22} no Wikipedia lead image; left empty (images are optional)")
     return ok
 
 
@@ -288,7 +288,7 @@ def overpass(query: str, timeout: int = 180, tries: int = 4) -> dict:
             last = e
         if i < tries - 1:
             wait = 5 * 2 ** i          # 5s, 10s, 20s
-            print(f"    ({type(last).__name__}) {wait}s 后换镜像重试…", file=sys.stderr)
+            print(f"    ({type(last).__name__}) retrying on another mirror in {wait}s…", file=sys.stderr)
             time.sleep(wait)
     raise last
 
@@ -303,13 +303,13 @@ def fetch_transit(doc: dict) -> dict:
     """抓目的地范围内的轨道交通线路与车站，产出一份 GeoJSON。"""
     bbox = doc.get("trip", {}).get("bbox")
     if not bbox or len(bbox) != 4:
-        sys.exit("trip.bbox 缺失或格式不对，无法确定抓取范围")
+        sys.exit("trip.bbox missing or malformed; cannot determine the fetch area")
     s, w, n, e = bbox[1], bbox[0], bbox[3], bbox[2]      # Overpass 用 (南,西,北,东)
     area = f"({s},{w},{n},{e})"
 
     # 线路和车站合成一个请求。分两次发实测会被限流打中第二次：
     # Overpass 按 IP 分配执行槽，连发两条几乎必然吃 429/504。
-    print(f"→ Overpass 查询轨道交通线路与车站 {area}")
+    print(f"→ Overpass query for rail lines and stations {area}")
     q = f'''[out:json][timeout:180];
 relation["route"~"^({"|".join(RAIL_ROUTES)})$"]{area};
 out geom;
@@ -321,9 +321,9 @@ out tags center;'''
     try:
         data = overpass(q)
     except Exception as exc:  # noqa: BLE001
-        print(f"  ✗ 查询失败：{type(exc).__name__}: {exc}", file=sys.stderr)
-        print("    Overpass 是公共免费服务，限流时稍后重试即可。地铁层会被跳过，"
-              "其余功能不受影响。", file=sys.stderr)
+        print(f"  ✗ query failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print("    Overpass is a free public service; when throttled, just retry later. "
+              "The transit layer is skipped; everything else is unaffected.", file=sys.stderr)
         return {}
 
     # 同一条线的往返两个方向几何几乎一样，按 ref+colour 归并只留一份
@@ -407,13 +407,13 @@ out tags center;'''
             "geometry": {"type": "Point", "coordinates": [round(lon, 5), round(lat, 5)]},
         })
 
-    print(f"  线路 {len(feats)} 条、车站 {len(stations)} 个；坐标点简化后 {kept_pts}")
+    print(f"  {len(feats)} lines, {len(stations)} stations; {kept_pts} points after simplification")
     if no_colour:
-        print(f"  ⚠ 其中 {no_colour} 条线 OSM 里没有 colour 标签，已用兜底色板，"
-              f"图例会注明「非官方配色」")
+        print(f"  ⚠ {no_colour} line(s) have no colour tag in OSM; fallback palette used, "
+              f"the legend will say \"unofficial colors\"")
     for f in sorted(feats, key=lambda f: f["properties"]["ref"]):
         p = f["properties"]
-        print(f"    {p['ref']:8s} {p['colour']:9s}{'（推测）' if p['guessed'] else '        '} {p['name'][:32]}")
+        print(f"    {p['ref']:8s} {p['colour']:9s}{'(guessed)' if p['guessed'] else '         '} {p['name'][:32]}")
 
     return {"lines": {"type": "FeatureCollection", "features": feats},
             "stations": {"type": "FeatureCollection", "features": stations}}
@@ -422,17 +422,17 @@ out tags center;'''
 # ------------------------------------------------------------------ cli
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="补齐 places.json 的坐标与配图，并抓取轨道交通线路")
+    ap = argparse.ArgumentParser(description="Fill in coordinates and images for places.json, and fetch rail transit lines")
     ap.add_argument("path")
     ap.add_argument("--coords", action="store_true")
     ap.add_argument("--images", action="store_true")
     ap.add_argument("--transit", action="store_true",
-                    help="抓取轨道交通线路与车站，写到同目录的 transit.geojson")
-    ap.add_argument("--dry-run", action="store_true", help="只报告，不写文件")
+                    help="fetch rail lines and stations into transit.geojson next to the input")
+    ap.add_argument("--dry-run", action="store_true", help="report only, write nothing")
     args = ap.parse_args()
 
     if not (args.coords or args.images or args.transit):
-        ap.error("至少指定 --coords / --images / --transit 之一")
+        ap.error("specify at least one of --coords / --images / --transit")
 
     with open(args.path, encoding="utf-8") as f:
         doc = json.load(f)
@@ -461,23 +461,23 @@ def main() -> int:
                     old_n = len(old.get(key, {}).get("features") or [])
                     if new_n == 0 and old_n > 0:
                         tr[key] = old[key]
-                        print(f"  ↷ 本次没抓到{'线路' if key == 'lines' else '车站'}，"
-                              f"保留已有的 {old_n} 条")
+                        print(f"  ↷ no {'lines' if key == 'lines' else 'stations'} fetched this run; "
+                              f"keeping the existing {old_n}")
             out.write_text(json.dumps(tr, ensure_ascii=False, separators=(",", ":")),
                            encoding="utf-8")
-            print(f"✓ 轨道交通已写入 {out}（{out.stat().st_size / 1024:.0f} KB，"
-                  f"线路 {len(tr['lines']['features'])} 条 / "
-                  f"车站 {len(tr['stations']['features'])} 个）")
+            print(f"✓ Transit written to {out} ({out.stat().st_size / 1024:.0f} KB, "
+                  f"{len(tr['lines']['features'])} lines / "
+                  f"{len(tr['stations']['features'])} stations)")
 
     if args.dry_run:
-        print(f"\n[dry-run] 本可补齐 {n} 项，未写入文件")
+        print(f"\n[dry-run] would have filled {n} item(s); nothing written")
     elif n:
         with open(args.path, "w", encoding="utf-8") as f:
             json.dump(doc, f, ensure_ascii=False, indent=2)
-        print(f"\n✓ 已补齐 {n} 项并写回 {args.path}")
-        print("  下一步：python3 validate.py <places.json> --check-links")
+        print(f"\n✓ Filled {n} item(s) and wrote back to {args.path}")
+        print("  Next: python3 validate.py <places.json> --check-links")
     elif not args.transit:
-        print("\n没有需要补齐的内容")
+        print("\nNothing to fill")
     return 0
 
 

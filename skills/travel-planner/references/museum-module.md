@@ -1,109 +1,133 @@
-# 博物馆深度模块
+# Museum deep-dive module
 
-路线里出现博物馆、美术馆、纪念馆时调用。目的是让用户**进馆前就知道该看什么、怎么走**，
-而不是进去随便逛一圈出来。
+Invoke when the route includes a museum, gallery, or memorial hall. The goal is
+for the user to **know what to see and how to walk it before entering**, rather
+than wandering one lap and leaving.
 
-写进 `places.json` 对应景点的 `museum` 字段，页面会在详情弹窗和攻略里展开。
+Write into the place's `museum` field in `places.json`; the page expands it in
+the detail dialog and the guide.
 
 ---
 
-## 数据结构
+## Data structure
 
 ```jsonc
 "museum": {
-  "layout": "共 5 层，常设在 2-3 层，特别展在 1 层与地下 1 层",
+  "layout": "5 floors; permanent collection on 2–3F, special exhibitions on 1F and B1",
   "route": [
-    { "stop": "1F 大厅", "why": "先看这一层的建筑本身——中庭挑空是建筑的核心", "min": 10 },
-    { "stop": "B1 特别展", "why": "人最多，先看避开高峰", "min": 50 },
-    { "stop": "2F 常设 · 佐伯祐三", "why": "本馆的立馆之本，不能跳过", "min": 40 }
+    { "stop": "1F lobby", "why": "Start with the building itself — the atrium void is the architectural core", "min": 10 },
+    { "stop": "B1 special exhibition", "why": "The most crowded part; see it first to beat the peak", "min": 50 },
+    { "stop": "2F permanent · Saeki Yūzō", "why": "The museum's founding collection; unskippable", "min": 40 }
   ],
   "highlights": [
-    { "name": "佐伯祐三《郵便配達夫》", "name_local": "郵便配達夫",
-      "era": "1928", "where": "2F 常设展厅东侧",
-      "why": "画家去世前几个月的作品，本馆藏品的核心" }
+    { "name": "Saeki Yūzō, The Postman", "name_local": "郵便配達夫",
+      "era": "1928", "where": "east side, 2F permanent gallery",
+      "why": "Painted months before the artist's death; the core of the collection" }
   ],
   "tips": [
-    "常设展与特别展分开售票，只想看佐伯祐三买常设即可",
-    "馆内可摄影但禁用闪光灯与三脚架"
+    "Permanent and special exhibitions are ticketed separately; for Saeki alone the permanent ticket suffices",
+    "Photography allowed; no flash, no tripods"
   ],
   "glossary": [
-    { "zh": "常设展", "local": "常設展", "en": "Permanent Collection" },
-    { "zh": "特别展", "local": "特別展", "en": "Special Exhibition" }
+    { "user": "permanent exhibition", "local": "常設展", "en": "Permanent Collection" },
+    { "user": "special exhibition", "local": "特別展", "en": "Special Exhibition" }
   ]
 }
 ```
 
-字段都是可选的，有多少写多少。**没查到就不写，不要编。**
+All fields optional — write what you found. **Not found = not written. Never
+invent.**
+
+The `glossary` `user` key holds the term in the user's language (when the user's
+language is English, `user` and `en` will coincide — that's fine).
 
 ---
 
-## 各字段怎么写
+## How to write each field
 
-### `layout` — 展厅分区
+### `layout` — floor plan
 
-一两句话说清楚楼层与内容的对应关系。用户拿到手册前就能建立空间概念。
+One or two sentences mapping floors to contents. The user builds a spatial model
+before they're handed a floor guide.
 
-### `route` — 参观动线
+### `route` — walking order
 
-**这是最有价值的部分。** 不是把展厅按编号列一遍，而是给一个有理由的顺序：
+**The most valuable part.** Not the galleries listed by number, but an order
+with reasons:
 
-- 人多的先看还是后看
-- 哪里是建筑本身值得停留的地方
-- 哪些可以快速走过
-- 每段建议时长，加起来要和景点的 `duration_min` 对得上
+- See the crowded part first or last?
+- Where is the building itself worth lingering?
+- What can be walked through quickly?
+- Minutes per leg — the total must reconcile with the place's `duration_min`
 
-理由要具体。「先看特别展」没用，「特别展人最多，开馆后一小时内是唯一的空窗」才有用。
+Reasons must be concrete. "See the special exhibition first" is useless; "the
+special exhibition is the crowded part, and the first hour after opening is the
+only lull" is useful.
 
-### `highlights` — 重要展品
+### `highlights` — key works
 
-每件写清 **年代**（用户 md 明确要求）、**位置**、**为什么值得看**。
+For each: **era** (explicitly requested in the user's preferences),
+**location**, **why it matters**.
 
-`name_local` 要给当地语言原名——现场的标签牌是那个写法，找起来才对得上。
+`name_local` carries the local-language original — the label on the wall uses
+that spelling; it's what makes the work findable.
 
-数量控制在 3–8 件。列 30 件等于没列。
+Keep it to 3–8 works. Listing 30 is listing none.
 
-### `tips` — 实用提示
+### `tips` — practicalities
 
-售票组合、摄影限制、寄存、语音导览有没有中文、馆内餐厅值不值得吃。
+Ticket combinations, photography rules, lockers, whether the audio guide covers
+the user's language, whether the café is worth it.
 
-### `glossary` — 中外文对照
+### `glossary` — term cross-reference
 
-只收**现场会看到、且不认识会影响参观**的词。常设展/特别展/企划展/寄托品/修复中这类。
-不要变成词典。
-
----
-
-## 怎么查
-
-优先级：
-
-1. **官网的楼层图与展厅介绍** —— 分区和动线的唯一可靠来源
-2. **官网的收藏品数据库** —— 重要展品的年代、作者、当前是否在展
-3. **维基百科** —— 背景与历史，但展品是否在展要以官网为准
-4. 展览评论、博物馆学论文 —— 帮助判断哪些是真正的核心藏品
-
-**必须确认的一件事：重要展品当前在不在展。** 藏品轮换、外借、修复都很常见，
-写了一件正在外借的展品，用户白跑一趟。查不到就在 `tips` 里写「展品可能轮换，建议出发前查官网」。
+Only terms **seen on site whose misreading would hurt the visit**: permanent /
+special / planned exhibition, on deposit, under restoration, and the like.
+Don't build a dictionary.
 
 ---
 
-## 攻略正文里怎么呈现
+## How to research
 
-在对应的时间轴节点下展开，不要另起一节割裂开：
+Priority:
+
+1. **The official floor map and gallery pages** — the only reliable source for
+   layout and walking order
+2. **The official collection database** — era, artist, and whether a key work
+   is currently displayed
+3. **Wikipedia** — background and history; display status defers to the
+   official site
+4. Exhibition reviews, museology papers — help judge which works are truly core
+
+**One thing that must be confirmed: whether the key works are currently on
+display.** Rotation, loans, and restoration are routine; naming a work that's
+out on loan sends the user on a wasted trip. If unverifiable, add a `tips`
+entry: "works rotate; check the official site before departure".
+
+---
+
+## Presenting it in the guide body
+
+Expand under the corresponding timeline node — don't split off a separate
+section:
 
 ```markdown
-- 15:00 · 中之岛美术馆。建议动线：先上 5F 看中庭全景（10 分钟），
-  再下到 4F 常设展看佐伯祐三（40 分钟），最后按需看特别展。
-  **《郵便配達夫》（1928）在 4F 东侧**，是本馆的立馆之作。
-  常设与特展分开售票，只看佐伯祐三买常设即可。
+- 15:00 · Nakanoshima Museum of Art. Suggested path: 5F first for the atrium
+  view (10 min), down to the 4F permanent collection for Saeki Yūzō (40 min),
+  special exhibition as needed. **The Postman (1928) hangs on the east side of
+  4F** — the museum's founding work. Permanent and special tickets are
+  separate; for Saeki alone, the permanent ticket suffices.
 ```
 
-写成散文，不要把 JSON 结构直接翻译成条目。
+Write prose. Don't transliterate the JSON structure into bullet points.
 
 ---
 
-## 边界
+## Boundaries
 
-- 小型纪念馆、一个房间的展示馆**不需要**这个模块，直接在 `detail` 里写清楚即可。
-- 一条路线里最多深挖 2–3 个馆。全挖等于没重点，也会让攻略变得没法读。
-- 用户明确说「不爱逛博物馆」时，即使路线里有，也不要展开。
+- Small memorial halls and one-room museums **don't need** this module; a clear
+  `detail` suffices.
+- Deep-dive at most 2–3 museums per route. Digging into all of them means no
+  focus — and an unreadable guide.
+- If the user has said they don't enjoy museums, don't expand this even when
+  the route contains one.

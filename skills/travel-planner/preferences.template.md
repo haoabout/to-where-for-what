@@ -1,64 +1,68 @@
-# 旅行偏好
+# Travel preferences
 
-> 这份文件存在 `~/.travel-planner/preferences.md`，**跨行程、跨项目复用**。
-> 它刻意放在 skill 目录之外——更新或重装 skill 都不会碰到它。
+> This file lives at `~/.travel-planner/preferences.md` and is **reused across
+> trips and across projects**.
+> It is deliberately kept outside the skill directory — updating or
+> reinstalling the skill never touches it.
 >
-> 可以随时手动编辑。AI 读到缺失的段落时会问你，然后**追加**，不会重写已有内容。
+> Edit it by hand anytime. When the AI finds a missing section it will ask you,
+> then **append** — it never rewrites what's already here.
 
 ---
 
-## 存放位置
+## Storage
 
-- **trips_root**：<行程文件放哪，例：~/travel-plans。第一次用时 AI 会问一次>
+- **trips_root**: <where trip files go, e.g. ~/travel-plans. The AI asks once on first use>
 
 ---
 
-## 交通
+## Transport
 
-- **市内主要方式**：<地铁/公交 · 步行 · 打车 · 自驾 · 骑行>
-- **能接受的单程通勤**：<例：市内 40 分钟以内；郊区景点 1 小时以内>
-- **打车的态度**：<例：赶时间或行李多时才打；晚上宁可打车不挤地铁>
+- **Primary mode in the city**: <metro/bus · walking · taxi · driving · cycling>
+- **Acceptable one-way commute**: <e.g. within 40 min in the city; within 1 h for suburban sights>
+- **Attitude to taxis**: <e.g. only when rushed or carrying luggage; at night prefer a taxi over a packed metro>
 
-## 体力与节奏
+## Stamina & pace
 
-- **日均可接受步行**：<例：12 公里>
-- **偏好节奏**：<例：宁可少去两个点也不要赶；每天留一段空白>
-- **早起意愿**：<例：愿意为清晨无人的机位早起；不愿意在 8 点前出门>
+- **Acceptable daily walking**: <e.g. 12 km>
+- **Preferred pace**: <e.g. rather drop two places than rush; keep a blank stretch every day>
+- **Early rising**: <e.g. will get up early for an empty photo spot; won't leave before 8 am>
 
-## 兴趣权重
+## Interest weights
 
-按你的实际偏好排序，AI 会据此调整推荐分级：
+Rank by your actual preferences; the AI adjusts recommendation tiers
+accordingly:
 
-- **高**：<例：建筑、近代美术、老街区、冷门角落>
-- **中**：<例：自然风景、历史遗迹>
-- **低**：<例：主题乐园、购物中心、网红餐厅>
-- **不感兴趣，不用推荐**：<例：夜店、赌场>
+- **High**: <e.g. architecture, modern art, old districts, hidden corners>
+- **Medium**: <e.g. natural scenery, historic sites>
+- **Low**: <e.g. theme parks, shopping malls, influencer restaurants>
+- **Not interested — don't recommend**: <e.g. nightclubs, casinos>
 
-## 摄影
+## Photography
 
-- **重要程度**：<例：很重要，愿意为机位调整行程顺序>
-- **偏好题材**：<例：建筑几何、street、夜景；不太拍人像>
-- **器材限制**：<例：只带手机；带三脚架，需要注意禁用三脚架的场所>
+- **Importance**: <e.g. very — willing to reorder the day for a camera position>
+- **Preferred subjects**: <e.g. architectural geometry, street, night views; rarely portraits>
+- **Gear constraints**: <e.g. phone only; carrying a tripod — flag venues that ban tripods>
 
-## 饮食
+## Food
 
-- **忌口与过敏**：<例：不吃牛肉；对花生过敏>
-- **口味偏好**：<例：能吃辣；不吃生食>
-- **就餐态度**：<例：不排队超过 20 分钟；愿意为一顿好的专门安排>
+- **Restrictions & allergies**: <e.g. no beef; peanut allergy>
+- **Taste**: <e.g. handles spicy; no raw food>
+- **Dining attitude**: <e.g. won't queue past 20 minutes; will plan around one great meal>
 
-## 预算
+## Budget
 
-- **门票档位**：<例：单点 200 元以内不犹豫；超过会掂量值不值>
-- **整体态度**：<例：交通和住宿省，体验和门票不省>
+- **Ticket threshold**: <e.g. under ~$30 no hesitation; above that, weigh it>
+- **Overall stance**: <e.g. save on transport and lodging, don't skimp on experiences and tickets>
 
-## 攻略输出
+## Guide output
 
-- **详略**：<例：要详细，每个节点都写清怎么去、停多久、注意什么>
-- **语言**：<例：中文，境外地名用「中文名（当地语言名）」>
-- **特别要求**：<例：一定要有摄影时段建议；一定要列出放弃的景点>
+- **Detail level**: <e.g. detailed — every stop states how to get there, how long to stay, what to watch for>
+- **Language**: <e.g. English; foreign place names as "English name (local-language name)">
+- **Special requests**: <e.g. always include photo-timing advice; always list the places dropped>
 
-## 其他约束
+## Other constraints
 
-- **同行人常见构成**：<例：情侣两人；偶尔带父母>
-- **必须避开的**：<例：人特别多的网红点；需要提前一个月预约的地方>
-- **其他**：<自由填写>
+- **Usual party**: <e.g. couple; occasionally with parents>
+- **Must avoid**: <e.g. extremely crowded influencer spots; places requiring booking a month ahead>
+- **Anything else**: <free-form>

@@ -1,121 +1,143 @@
-# 影视动漫打卡地
+# Film & anime locations
 
-找目的地的电影取景地、动画圣地、剧集拍摄点。写进 `places.json` 的 `media` 字段。
-
----
-
-## 先说清楚能做到什么
-
-**做得到**：有明确公开资料的取景地——官方公布的、地方政府做圣地巡礼推广的、
-爱好者社区长期整理并交叉验证过的。
-
-**做不到**：小红书、B 站、抖音的内容。这些平台有反爬和登录墙，抓不到。
-所以**靠短视频传播、但没有文字资料沉淀的网红打卡点，很可能会漏**。
-
-这一条要主动告诉用户，不要让他以为清单是穷尽的。
+Find the destination's film locations, anime pilgrimage sites, and TV shooting
+spots. Written into the `media` field of `places.json`.
 
 ---
 
-## 数据结构
+## Be upfront about what's achievable
+
+**Achievable**: locations with clear public documentation — officially
+announced, promoted by local governments as pilgrimage routes, or long
+maintained and cross-verified by fan communities.
+
+**Not achievable**: content on Xiaohongshu, Bilibili, or Douyin. These platforms
+have anti-bot measures and login walls; they can't be scraped. So **spots that
+spread via short video but never settled into written sources will likely be
+missed**.
+
+Tell the user this proactively — don't let them assume the list is exhaustive.
+
+---
+
+## Data structure
 
 ```jsonc
 "category": "media",
 "media": {
-  "title": "你的名字。",
+  "title": "Your Name",
   "title_local": "君の名は。",
   "year": 2016,
-  "type": "动画电影",
-  "scene": "泷与三叶擦肩而过的楼梯，片尾最后一幕",
+  "type": "anime film",
+  "scene": "The staircase where Taki and Mitsuha pass each other — the film's final shot",
   "fidelity": "high",
   "official": true
 }
 ```
 
-| 字段 | 说明 |
+| Field | Notes |
 |---|---|
-| `title` / `title_local` | 作品名。当地语言名要给，现场指示牌和周边资料用的是它 |
-| `year` | 上映/播出年份，帮用户判断还热不热 |
-| `type` | 动画电影 / 电视动画 / 电影 / 剧集 / MV / 综艺 |
-| `scene` | **具体到哪一幕**。这是这个模块的核心价值 |
-| `fidelity` | `high` 现场与画面高度一致 / `medium` 需要找角度 / `low` 只是取材参考 |
-| `official` | 是否有官方或地方政府认证（有的话通常有指示牌、朝圣地图） |
+| `title` / `title_local` | Work title. Always give the local-language title — on-site signs and merchandise use it |
+| `year` | Release/broadcast year; helps the user judge how current it still is |
+| `type` | anime film / TV anime / film / TV series / music video / variety show |
+| `scene` | **Down to the exact scene.** This is the module's core value |
+| `fidelity` | `high` the site matches the frame closely / `medium` takes angle-hunting / `low` loose reference only |
+| `official` | Official or local-government endorsement (usually means signage and a pilgrimage map) |
 
-`scene` 要写得让人能对上号。「主角相遇的地方」不够，「泷与三叶擦肩而过的楼梯，片尾最后一幕」才够。
-
----
-
-## 怎么找
-
-按可靠度排序：
-
-1. **官方圣地巡礼企划** —— 日本很多地方政府和「アニメツーリズム協会」有正式认定，
-   会出地图和指示牌。搜「<作品名> 聖地巡礼 公式」
-2. **制作方公布的取景地** —— 电影官网、蓝光特典、导演访谈
-3. **地方观光协会的专题页** —— 常有「XX 电影拍摄地巡游」路线
-4. **长期维护的爱好者数据库** —— 有具体地址和对比图的那种，可信度较高
-5. 一般博客文章 —— 只用于发现线索，要用 1-4 交叉验证
-
-**必须交叉验证。** 取景地是错误信息重灾区，很多流传的「打卡点」其实是错的，
-或者是另一部作品的。至少两个独立来源对上才收录。
+`scene` must let people match the shot. "Where the leads meet" isn't enough;
+"the staircase where Taki and Mitsuha pass each other — the film's final shot"
+is.
 
 ---
 
-## 特别要注意的
+## How to find them
 
-### 现场可能已经变了
+By reliability:
 
-取景地经常改建、拆除、或者被围起来。`status` 字段要如实反映：
+1. **Official pilgrimage programs** — many Japanese local governments and the
+   Anime Tourism Association certify sites formally, with maps and signage.
+   Search `<title> 聖地巡礼 公式` (or the local language's equivalent of
+   "official filming locations")
+2. **Locations announced by the production** — the film's site, Blu-ray extras,
+   director interviews
+3. **Local tourism-association feature pages** — often a "filmed in X" trail
+4. **Long-maintained fan databases** — the kind with exact addresses and
+   side-by-side comparison shots; fairly reliable
+5. General blog posts — leads only; cross-verify against 1–4
+
+**Cross-verification is mandatory.** Filming locations are a misinformation
+hotspot: many circulated "pilgrimage spots" are wrong, or belong to a different
+work. Two independent agreeing sources minimum.
+
+---
+
+## Special cautions
+
+### The site may have changed
+
+Locations get rebuilt, demolished, or fenced off. `status` must reflect
+reality:
 
 ```jsonc
 "status": "permanently_closed",
-"status_note": "该楼梯所在建筑已于 2023 年拆除，现为工地"
+"status_note": "The building containing the staircase was demolished in 2023; the site is now a construction lot"
 ```
 
-拍摄年份越久远，越要确认现状。
+The older the filming, the more the current state needs confirming.
 
-### 很多是普通民居或私有地
+### Many are private homes or private property
 
-大量取景地是居民区、私人商铺、正常运营的学校。这类必须在 `detail` 里明确写：
+Plenty of locations are residential streets, private shops, or operating
+schools. These must say so explicitly in `detail`:
 
-> 这里是普通住宅区，请勿进入院内、勿大声喧哗、勿在私宅前长时间停留拍摄。
+> This is an ordinary residential area. Do not enter the grounds, keep noise
+> down, and don't linger shooting in front of private homes.
 
-这不是客套话——圣地巡礼引发的扰民纠纷很常见，有些地方因此禁止拍摄。
+Not boilerplate — pilgrimage friction with residents is common, and some sites
+have banned photography because of it.
 
-### 大多数是微景点
+### Most are micro-spots
 
-一个楼梯、一个路口、一个站台——通常 5-15 分钟拍完。按微景点处理：
+A staircase, an intersection, a platform — usually 5–15 minutes. Handle as
+micro-spots:
 
-- `scale: "spot"`，`parent_id` 指向同区域主景点
+- `scale: "spot"`, `parent_id` pointing at the area's major place
 - `duration_min` 5–15
-- `pitch` 里直说：「就是那个楼梯，拍两张就走，顺路才值得」
+- The `pitch` says it straight: "it's that staircase; two photos and go —
+  worth it only in passing"
 
-除非是主题馆、博物馆、或者作品本身就以整个街区为舞台。
+Unless it's a dedicated museum, or the work's stage is a whole district.
 
-### 期待值管理
+### Expectation management
 
-`fidelity` 低的点要说明白：
+Low-`fidelity` spots must say so:
 
-> 现场与画面差异较大，动画做了大幅美化。抱着「找找看」的心态去还行，
-> 专程赶来会失望。
+> The site differs a lot from the frame — the anime beautified it heavily.
+> Fine with a "let's see if we can find it" attitude; a special trip will
+> disappoint.
 
 ---
 
-## 怎么排进路线
+## Slotting them into the route
 
-- 单个打卡点**不值得为它绕路**，只在顺路时插入
-- 同一部作品的多个点如果集中在一个区域，可以串成一条小支线，这时值得专门安排半天
-- 在攻略正文里注明作品和场景，让不看这部作品的同行者也知道这是什么：
+- A single spot **never justifies a detour** — insert only when passing by
+- Several spots from one work clustered in one area can chain into a small
+  side-line — then half a day is justified
+- Name the work and scene in the guide body, so companions who haven't seen it
+  know what this is:
 
 ```markdown
-- 16:20 · 须贺神社石阶（《你的名字。》片尾擦肩而过的那道楼梯，5 分钟）。
-  就在四谷站步行 8 分钟处，顺路。周边是住宅区，拍照请安静。
+- 16:20 · Suga Shrine steps (the passing-each-other staircase from the end of
+  *Your Name*, 5 min). Eight minutes' walk from Yotsuya station, on the way.
+  Residential area — photograph quietly.
 ```
 
 ---
 
-## 配额
+## Quota
 
-`media` 分类保底 2 个、上限 6 个。
+The `media` category: minimum 2, maximum 6.
 
-冷门目的地可能一个都没有——**如实说没有，不要硬凑**。
-把一个「据说某剧在这里取过景」的模糊线索写进去，比留空更糟。
+Niche destinations may have none — **say there are none; never pad**.
+Writing in a vague "some show supposedly shot here" lead is worse than leaving
+it empty.

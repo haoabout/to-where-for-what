@@ -195,14 +195,14 @@ def md_to_html(md: str) -> str:
 def build(trip_dir: Path, standalone: bool = False) -> Path:
     places_path = trip_dir / "places.json"
     if not places_path.exists():
-        sys.exit(f"找不到 {places_path}")
+        sys.exit(f"Not found: {places_path}")
     if not TEMPLATE.exists():
-        sys.exit(f"找不到模板 {TEMPLATE}")
+        sys.exit(f"Template not found: {TEMPLATE}")
 
     try:
         data = json.loads(places_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        sys.exit(f"places.json 解析失败: {e}")
+        sys.exit(f"Failed to parse places.json: {e}")
 
     route_md = ""
     route_path = trip_dir / "route.md"
@@ -216,7 +216,7 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
         try:
             transit = json.loads(transit_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
-            print(f"  ⚠ transit.geojson 解析失败，本次不含地铁层: {e}")
+            print(f"  ⚠ Failed to parse transit.geojson; building without the transit layer: {e}")
 
     html = TEMPLATE.read_text(encoding="utf-8")
 
@@ -225,11 +225,11 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     vendor = SKILL_ROOT / "assets" / "vendor" / "sortable.min.js"
     sortable = vendor.read_text(encoding="utf-8") if vendor.exists() else ""
     if not sortable:
-        print("  ⚠ 找不到 assets/vendor/sortable.min.js，拖拽排序将不可用（上下移按钮仍可用）")
+        print("  ⚠ assets/vendor/sortable.min.js not found; drag sorting disabled (the ↑/↓ buttons still work)")
 
     for mark in (DATA_MARK, BUILT_MARK):
         if mark not in html:
-            sys.exit(f"模板缺少占位符 {mark}")
+            sys.exit(f"Template is missing placeholder {mark}")
 
     # </script> 出现在 JSON 字符串里会提前关闭标签；转义掉。
     data_js = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
@@ -251,15 +251,15 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 
     n = len(data.get("places") or [])
     chosen = sum(1 for p in data.get("places") or [] if p.get("choice"))
-    kind = "攻略页（独立分享用）" if standalone else "行程页（三视图）"
+    kind = "guide page (standalone, for sharing)" if standalone else "trip page (three views)"
     print(f"✓ {kind}: {out}")
-    print(f"  {n} 个景点，{chosen} 个已表态，{out.stat().st_size / 1024:.0f} KB"
-          + ("，含攻略正文" if route_md else "，攻略正文尚未生成"))
+    print(f"  {n} places, {chosen} with a choice, {out.stat().st_size / 1024:.0f} KB"
+          + (", guide body included" if route_md else ", guide body not yet written"))
     if transit:
-        print(f"  地铁层：{len(transit.get('lines', {}).get('features') or [])} 条线路 / "
-              f"{len(transit.get('stations', {}).get('features') or [])} 个车站")
+        print(f"  Transit layer: {len(transit.get('lines', {}).get('features') or [])} lines / "
+              f"{len(transit.get('stations', {}).get('features') or [])} stations")
     elif not standalone:
-        print("  无地铁层（跑 enrich.py --transit 可生成 transit.geojson）")
+        print("  No transit layer (run enrich.py --transit to generate transit.geojson)")
     return out
 
 
@@ -318,7 +318,7 @@ def merge(incoming):
     """
     base = json.loads(TARGET.read_text(encoding="utf-8"))
     if not isinstance(base, dict) or not isinstance(base.get("places"), list):
-        raise ValueError("磁盘上的 places.json 结构不对，拒绝在上面打补丁")
+        raise ValueError("places.json on disk is malformed; refusing to patch it")
 
     ch = {c[0]: c for c in incoming.get("choices") or []
           if isinstance(c, list) and c and isinstance(c[0], str)}
@@ -408,10 +408,10 @@ class H(SimpleHTTPRequestHandler):
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n <= 0 or n > 8 * 1024 * 1024:
-                raise ValueError("请求体大小异常")
+                raise ValueError("unexpected request body size")
             doc = json.loads(self.rfile.read(n).decode("utf-8"))
             if not isinstance(doc, dict) or not doc.get("patch"):
-                raise ValueError("不是合法的补丁结构")
+                raise ValueError("not a valid patch structure")
             # 写的永远是 ROOT 下这一个文件名，不接受来自页面的任意路径
             with LOCK:
                 out = merge(doc)
@@ -454,15 +454,15 @@ def serve(trip_dir: Path, page: Path, port: int) -> None:
     (trip_dir / PID_FILE).write_text(f"{proc.pid} {port}")
     time.sleep(0.8)
     if proc.poll() is not None:
-        sys.exit(f"服务启动失败（端口 {port} 可能被占用），可用 --port 换一个")
+        sys.exit(f"Server failed to start (port {port} may be in use); pick another with --port")
 
     url = f"http://localhost:{port}/{page.name}"
-    print(f"✓ 本地服务已启动: {url}")
+    print(f"✓ Local server running: {url}")
     # 打印当前解释器而不是写死 python3——Windows 上 python.org 的安装包
     # 不装 python3.exe，而系统自带的同名别名会去打开微软商店。
-    print(f"  停止: {Path(sys.executable).name} {Path(__file__).name} {trip_dir} --stop")
-    print("  页面上的改动会自动写回 places.json（本服务负责合并落盘并重建页面）")
-    print("  （走 http 还能让 OSM 官方光栅底图合规可用；矢量底图 file:// 下也能用）")
+    print(f"  Stop it: {Path(sys.executable).name} {Path(__file__).name} {trip_dir} --stop")
+    print("  Page edits auto-save back to places.json (this server merges, writes, and rebuilds)")
+    print("  (http also keeps the official OSM raster basemap compliant; the vector basemap works under file:// too)")
     try:
         webbrowser.open(url)
     except Exception:  # noqa: BLE001
@@ -473,7 +473,7 @@ def stop(trip_dir: Path, quiet: bool = False) -> None:
     f = trip_dir / PID_FILE
     if not f.exists():
         if not quiet:
-            print("没有正在运行的服务")
+            print("No server running")
         return
     try:
         pid, port = f.read_text().split()
@@ -486,10 +486,10 @@ def stop(trip_dir: Path, quiet: bool = False) -> None:
         else:
             os.kill(int(pid), signal.SIGTERM)                 # Windows：只能杀进程本身
         if not quiet:
-            print(f"✓ 已停止端口 {port} 上的服务")
+            print(f"✓ Stopped the server on port {port}")
     except (OSError, ValueError):
         if not quiet:
-            print("服务已不在运行")
+            print("Server is no longer running")
     finally:
         f.unlink(missing_ok=True)
 
@@ -497,17 +497,17 @@ def stop(trip_dir: Path, quiet: bool = False) -> None:
 # ------------------------------------------------------------------ cli
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="生成行程页")
+    ap = argparse.ArgumentParser(description="Build the trip page")
     ap.add_argument("trip_dir")
-    ap.add_argument("--serve", action="store_true", help="起后台本地服务并打开浏览器")
-    ap.add_argument("--stop", action="store_true", help="停掉该目录的后台服务")
+    ap.add_argument("--serve", action="store_true", help="start a background local server and open the browser")
+    ap.add_argument("--stop", action="store_true", help="stop this directory's background server")
     ap.add_argument("--port", type=int, default=8787)
-    ap.add_argument("--standalone", action="store_true", help="只输出攻略页 guide.html")
+    ap.add_argument("--standalone", action="store_true", help="output only the standalone guide.html")
     args = ap.parse_args()
 
     trip_dir = Path(args.trip_dir).resolve()
     if not trip_dir.is_dir():
-        sys.exit(f"目录不存在: {trip_dir}")
+        sys.exit(f"Directory does not exist: {trip_dir}")
 
     if args.stop:
         stop(trip_dir)
@@ -517,7 +517,7 @@ def main() -> int:
     if args.serve:
         serve(trip_dir, page, args.port)
     else:
-        print(f"  直接打开: open {page}")
+        print(f"  Open directly: open {page}")
     return 0
 
 
