@@ -161,6 +161,30 @@ def check_top_level(doc, rep: Report) -> None:
     if unknown_trip:
         rep.add("P2", "trip", f"fields outside the contract: {sorted(unknown_trip)}")
 
+    # 界面文案覆盖表（可选）。模板内置 en/zh，按 output_language 选；
+    # 其他语言由 AI 把模板 I18N.en 的 key 逐条译好写在这里。模板对未知 key
+    # 静默忽略、缺 key 落回英文，所以这里只把住类型——值类型错了页面会渲染出
+    # undefined/[object Object]。
+    ui = doc.get("ui")
+    if ui is not None:
+        if not isinstance(ui, dict):
+            rep.add("P0", "ui", "ui must be an object of {key: translated string}")
+        else:
+            for k, v in ui.items():
+                if k == "quick":
+                    if not (isinstance(v, list) and all(isinstance(x, str) for x in v)):
+                        rep.add("P0", "ui", "ui.quick must be an array of strings")
+                elif k == "wmo":
+                    if not (isinstance(v, dict) and all(isinstance(x, str) for x in v.values())):
+                        rep.add("P0", "ui", "ui.wmo must be an object mapping WMO codes to strings")
+                elif not isinstance(v, str):
+                    rep.add("P0", "ui", f"ui.{k} must be a string, got {type(v).__name__}")
+            lang = str(trip.get("output_language") or "").lower()
+            if lang.startswith(("en", "zh")):
+                rep.add("P2", "ui",
+                        "output_language is en/zh, which the template ships built-in — "
+                        "the ui override is unnecessary and will shadow the built-in strings")
+
     verified = _parse_date(trip.get("verified_at"))
     if verified:
         age = (date.today() - verified).days

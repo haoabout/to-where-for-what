@@ -17,7 +17,8 @@ back into it.
   "trip":       { ... },   // parameters of this trip
   "categories": [ ... ],   // category definitions + quotas
   "places":     [ ... ],   // attractions and lodging
-  "itinerary":  [ ... ]    // optional. Scheduling result: which day, what order (written back by the page)
+  "itinerary":  [ ... ],   // optional. Scheduling result: which day, what order (written back by the page)
+  "ui":         { ... }    // optional. UI string overrides for languages other than en/zh — see "ui"
 }
 ```
 
@@ -275,7 +276,7 @@ Stage D writes the guide by expanding this user-arranged list.
 |---|---|:--:|---|
 | `n` | int | ✅ | Day number, unique. `0` = arrival evening |
 | `date` | string\|null | | `YYYY-MM-DD`. **Closure-conflict validation needs it** |
-| `label` | string | | Display name; generated from `n` when absent |
+| `label` | string | | Display name; generated from `n` in the UI language when absent. **The page no longer writes this field** — leave it out so the file stays language-neutral |
 | `places[].id` | string | ✅ | Must exist in `places[]` |
 | `places[].note` | string | | Note for this particular visit (distinguishes purposes when a place is visited twice) |
 
@@ -298,6 +299,42 @@ levels with different types confuses both the JSON writer and the code reader.
 4. **`n` may be 0.** "Day 0 (arrival evening)" is common — the flight lands in
    the evening and there's only time for a stroll near the hotel. The user adds
    it manually on the page; its date is the day before `dates.start`.
+
+---
+
+## `ui` (UI string overrides — only for languages other than en/zh)
+
+The trip page's interface language follows `trip.output_language`: any `zh*`
+value gets the built-in Chinese strings, everything else gets the built-in
+English. **When the output language is neither**, translate the UI at trip
+creation and put the result here:
+
+1. Open `assets/template-trip.html` in the skill and find the `I18N.en` table
+   (`const I18N = { en: {...}`). That table is the canonical key list.
+2. Translate every value into `output_language` and write them as a top-level
+   `ui` object with **the same keys**:
+
+```jsonc
+"ui": {
+  "tabList": "Liste", "tabMap": "Carte", "tabGuide": "Guide",
+  "dayN": "Jour {n}",
+  "quick": ["Trop loin", "Trop de monde", "…"],   // array, same as I18N.en.quick
+  "wmo": { "0": "Ciel clair", "1": "…" }          // object: WMO code → text
+}
+```
+
+Rules:
+
+- Keep `{x}` placeholders exactly as they appear in the English value — the
+  page substitutes them at runtime.
+- `quick` is an array of strings; `wmo` is an object; every other value is a
+  plain string. The validator enforces these types (P0 on mismatch).
+- Missing keys fall back to English silently — translating the whole table is
+  still strongly preferred.
+- Weekday and date names are **not** in the table; the page derives them from
+  `output_language` via `Intl.DateTimeFormat`.
+- When `output_language` is en/zh, **omit `ui` entirely** (the validator flags
+  it as a P2 — it would only shadow the built-ins).
 
 ---
 

@@ -392,6 +392,15 @@ server already does this automatically on save.
 
 ## Language rules
 
+**UI language of the trip page**: follows `trip.output_language`. `zh*` gets the
+built-in Chinese interface, everything else gets the built-in English one. For
+any other language, translate the template's `I18N.en` table into a top-level
+`ui` object in `places.json` when creating the trip — contract and example in
+[data-schema.md](references/data-schema.md), section "ui". Weekday/date names
+localize automatically via `Intl`; no work needed there.
+
+**Body text (`pitch` / `detail` / `route.md`)**:
+
 - Body text uses place names in **the user's language**.
 - Where the local language differs, write "user-language name (local-language
   name)" on **first** occurrence in the body; after that, the user-language name

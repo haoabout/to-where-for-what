@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>行程</title>
+<title>Trip</title>
 <style>
 /* ═══════════════════════════════════════════════ 设计令牌
    两套配色写在一处。light-dark() 按「已采用的 color-scheme」取值，
@@ -909,18 +909,18 @@ pre.code{
 <header class="top">
   <div class="top-in">
     <div class="brand">
-      <h1 id="title">行程</h1>
+      <h1 id="title">Trip</h1>
       <div class="sub" id="subtitle"></div>
       <button class="theme-btn" id="theme"></button>
     </div>
     <nav class="tabs" role="tablist">
-      <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list">景点清单 <span class="n" id="n-list">0</span></button>
-      <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">地图</button>
-      <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="生成攻略后可用">攻略</button>
+      <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span> <span class="n" id="n-list">0</span></button>
+      <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
+      <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
       <div class="tab-actions" id="map-actions" hidden>
-        <button class="btn sm" id="exp-csv">导出 CSV</button>
-        <button class="btn sm" id="exp-kml">导出 KML</button>
-        <span class="hint">CSV 可直接导入 Google My Maps</span>
+        <button class="btn sm" id="exp-csv">Export CSV</button>
+        <button class="btn sm" id="exp-kml">Export KML</button>
+        <span class="hint" id="csv-hint">CSV imports straight into Google My Maps</span>
       </div>
     </nav>
   </div>
@@ -930,15 +930,15 @@ pre.code{
   <!-- ══════════════ 视图① 景点清单 ══════════════ -->
   <section class="view" id="view-list" role="tabpanel" aria-labelledby="tab-list">
     <div class="toolbar">
-      <input class="search" id="q" type="search" placeholder="搜索名称、亮点、标签…" autocomplete="off"
-        aria-label="搜索景点">
-      <div class="seg" role="group" aria-label="分组方式">
-        <button id="by-area" aria-pressed="true">按区域</button>
-        <button id="by-tier" aria-pressed="false">按推荐度</button>
+      <input class="search" id="q" type="search" placeholder="Search names, highlights, tags…" autocomplete="off"
+        aria-label="Search places">
+      <div class="seg" role="group" id="seg-group" aria-label="Group by">
+        <button id="by-area" aria-pressed="true">By area</button>
+        <button id="by-tier" aria-pressed="false">By tier</button>
       </div>
-      <div class="seg" role="group" aria-label="显示范围">
-        <button id="f-all"  aria-pressed="true">全部</button>
-        <button id="f-todo" aria-pressed="false">未表态</button>
+      <div class="seg" role="group" id="seg-scope" aria-label="Show">
+        <button id="f-all"  aria-pressed="true">All</button>
+        <button id="f-todo" aria-pressed="false">Undecided</button>
       </div>
       <div class="tally" id="tally"></div>
     </div>
@@ -953,11 +953,11 @@ pre.code{
     <div class="map-wrap" id="map-wrap">
       <div class="map-side">
         <div class="ms-head">
-          <div class="seg" role="group" aria-label="显示哪些选择">
-            <button class="mfil" data-c="yes"   aria-pressed="true">想去<span class="c">0</span></button>
-            <button class="mfil" data-c="maybe" aria-pressed="true">待定<span class="c">0</span></button>
-            <button class="mfil" data-c="none"  aria-pressed="true">未表态<span class="c">0</span></button>
-            <button class="mfil" data-c="no"    aria-pressed="true">不想去<span class="c">0</span></button>
+          <div class="seg" role="group" id="seg-mfil" aria-label="Filter by choice">
+            <button class="mfil" data-c="yes"   aria-pressed="true">Want<span class="c">0</span></button>
+            <button class="mfil" data-c="maybe" aria-pressed="true">Maybe<span class="c">0</span></button>
+            <button class="mfil" data-c="none"  aria-pressed="true">Undecided<span class="c">0</span></button>
+            <button class="mfil" data-c="no"    aria-pressed="true">Skip<span class="c">0</span></button>
           </div>
         </div>
         <div id="map-list"></div>
@@ -967,13 +967,13 @@ pre.code{
         <div id="map-canvas"></div>
         <div class="map-bar">
           <div class="mgroup msearch">
-            <input id="msq" type="search" placeholder="搜索想去的地点…" autocomplete="off"
-              aria-label="搜索地点并添加到行程" enterkeyhint="search">
-            <button id="msq-go">搜索</button>
+            <input id="msq" type="search" placeholder="Search for a place to add…" autocomplete="off"
+              aria-label="Search for a place and add it to the trip" enterkeyhint="search">
+            <button id="msq-go">Search</button>
           </div>
           <div class="mgroup" id="basemaps"></div>
           <div class="mgroup" id="transit-group" hidden>
-            <button id="transit-btn" aria-pressed="false">地铁</button>
+            <button id="transit-btn" aria-pressed="false">Transit</button>
           </div>
         </div>
         <div id="msq-panel" hidden></div>
@@ -1001,13 +1001,13 @@ pre.code{
      只留状态文字；file:// 下没有自动保存，「保存」才是主按钮。见 layoutActionbar。 -->
 <div class="actionbar">
   <div class="actionbar-in">
-    <button class="btn primary" id="save">保存选择和日程</button>
+    <button class="btn primary" id="save">Save choices &amp; schedule</button>
     <div class="hint" id="hint" aria-live="polite"></div>
     <div class="more-box" id="more-box" hidden>
-      <button class="btn" id="download">下载 places.json</button>
-      <button class="btn" id="copy">复制给 AI…</button>
+      <button class="btn" id="download">Download places.json</button>
+      <button class="btn" id="copy">Copy for AI…</button>
     </div>
-    <button class="lnk" id="more" aria-expanded="false">手动保存…</button>
+    <button class="lnk" id="more" aria-expanded="false">Manual save…</button>
   </div>
 </div>
 
@@ -1033,6 +1033,346 @@ const TRIP   = DATA.trip || {};
 const PLACES = DATA.places || [];
 const CATS   = DATA.categories || [];
 const CATMAP = Object.fromEntries(CATS.map(c => [c.id, c.label || c.id]));
+
+/* ═══════════════════════════════════════════════════════════════════
+   界面语言（i18n）
+
+   内置 en / zh 两套，按 trip.output_language 选（zh* → zh，其余 → en）。
+   其他语言：AI 在 places.json 顶层放一个 `ui` 对象，key 与 I18N.en 相同、
+   值为译文（契约见 data-schema.md）。合并顺序 en ← 内置语言 ← ui ——
+   缺哪个 key 就落回英文，永远不会渲染出空串。
+   占位符 {x} 由 tf() 填充；`quick` 是数组、`wmo` 是对象，其余全是字符串。
+   ═══════════════════════════════════════════════════════════════════ */
+const I18N = {
+en: {
+  trip:"Trip", docTitle:"{dest} · Trip plan",
+  tabList:"Places", tabMap:"Map", tabGuide:"Guide",
+  guideTabDisabled:"Available once the guide is written",
+  exportCsv:"Export CSV", exportKml:"Export KML",
+  csvHint:"CSV imports straight into Google My Maps",
+  searchPh:"Search names, highlights, tags…", searchAria:"Search places",
+  groupAria:"Group by", byArea:"By area", byTier:"By tier",
+  scopeAria:"Show", fAll:"All", fTodo:"Undecided",
+  filterAria:"Filter by choice",
+  yes:"Want", maybe:"Maybe", no:"Skip", none:"Undecided",
+  msqPh:"Search for a place to add…", msqAria:"Search for a place and add it to the trip",
+  msqGo:"Search", transit:"Transit",
+  saveBtn:"Save choices & schedule", saveNow:"Save now",
+  downloadBtn:"Download places.json", copyBtn:"Copy for AI…", moreBtn:"Manual save…",
+  themeAuto:"Follow system", themeLight:"Light", themeDark:"Dark",
+  themeTitle:"Theme: {cur} (click for {next})",
+  scaleSpot:"photo stop, 5–15 min", scale30:"~30 min", scale12:"1–2 h",
+  scale23:"2–3 h", scaleHalf:"half a day", scaleFull:"a full day",
+  stRenovating:"Under renovation", stSeasonal:"Seasonally closed", stPermanent:"Permanently closed",
+  closedAllTrip:"Closed for your entire trip",
+  closedOn:"Closed {d}", closedWeekly:"Closed {days}", listSep:", ",
+  bookingRequired:"Booking required", bookingRecommended:"Booking recommended",
+  fUnverified:"Official info couldn't be verified", fPartial:"Info only partially verified",
+  vbBlocked:"Official information for this place couldn't be reached",
+  vbPartial:"Only part of this place's information could be verified",
+  vbCheck:"Check yourself: {x}",
+  vbTell:"Once you find out, tell the AI and it will fill in the data.",
+  stubFacts:"Added by hand · details pending AI research",
+  indoor:"▢ indoor", outdoor:"△ outdoor", nightGood:"☾ good at night",
+  stubTier:"pending", photoIdx:"Photogenic score {n}/5", whyNot:"Reason: ",
+  spotsHeader:"Photo stops along the way · {n}",
+  otherArea:"Other", tierGroup:"Tier {t}", stubGroup:"Added by hand · pending",
+  emptyBig:"No places match", emptySub:"Adjust the search or filters",
+  groupMeta:"{n} places", plusSpots:" + {k} stops",
+  unvChip:"⚠ Needs your check",
+  unvChipTitle:"Places whose official info couldn't be verified — confirm them yourself",
+  kvHours:"Hours", kvLastEntry:"Last entry", kvClosed:"Closed", kvTicket:"Tickets",
+  kvBooking:"Booking", kvDuration:"Suggested time", kvArea:"Area", kvPhoto:"Photogenic",
+  bkRequiredLong:"Booking required to enter", bkRecommendedLong:"Walk-up possible, booking recommended",
+  bkNone:"No booking needed", aboutMin:"~{n} min", close:"Close",
+  stubDetail:"You added this place on the map; hours, tickets and other details haven't been researched yet. The AI will complete them next time it works on this trip.",
+  photoAdvice:"Photo tips", practicalInfo:"Practical info", sources:"Sources",
+  schedRemove:"Remove from Day {n}", schedAdd:"Add to Day {n}",
+  quick:["Too far","Too crowded","Not interested","Not enough time","Too expensive","Been there","Closed that day","Same as elsewhere"],
+  whyNotTitle:"Why skip {name}?",
+  reasonHint:"Note a reason so you can judge later whether to bring it back. You can skip this.",
+  reasonPh:"Or write your own…", skip:"Skip", ok:"OK",
+  scSummary:"# want {y} · maybe {m} · skip {n} · undecided {u}",
+  scDays:" · schedule: {d} days, {i} items (each D line is that day's visit order)",
+  scNoDays:" · no schedule yet",
+  fileHint:"Opened as a local file — changes are not saved automatically. Click “{btn}” to write them back to places.json.",
+  builtAt:" Page data generated {t}.",
+  saving:"Saving…",
+  saveErr:"Auto-save failed. Changes only live in this browser — click “{btn}” to retry",
+  savedAt:"Saved · {t}",
+  autoSaveInfo:"Changes auto-save to places.json — no need to save manually",
+  pickerDesc:"Trip data",
+  savedTo:"Saved to {where}: {n} decided",
+  savedDays:" · {d} days with {i} scheduled items", savedNoDays:", schedule not arranged yet",
+  savedTail:" — ready for the AI to write the guide",
+  rebuiltToo:". Page rebuilt too",
+  dlFallback:"This browser doesn't allow writing files directly, so it downloaded instead. Your choices and schedule are inside — move places.json back into the trip folder, replacing the original",
+  dlDone:"Downloaded places.json (choices and schedule included). Move it back into the trip folder, replacing the original",
+  codeTitle:"Paste this back to the AI",
+  codeHint:"Firefox and Safari don't let pages write files. Copy this block to the AI — it can restore your choices and schedule from it.",
+  copy:"Copy", copied:"Copied",
+  copyFail:"This browser blocks automatic copying — the text is selected, press ⌘C / Ctrl+C",
+  bmSimple:"Simple", bmStandard:"Standard", bmRaster:"Raster",
+  loadFail:"failed to load: ",
+  osmOffline:"Opened from a local file, the browser sends no Referer, and OSM's raster tiles return an “Access blocked” image (HTTP 200). Open via build.py --serve to unlock.",
+  osmOk:"Official OpenStreetMap basemap",
+  osmFail:"OSM returned blocked tiles (the ~7KB “Access blocked” image); disabled",
+  probing:"Checking availability…",
+  tilesDead:"Tiles keep failing to load; disabled: ",
+  tilesDeadNote:"<b>“{label}” basemap tiles failed to load</b>; switched back to Standard. Console error: <code>{msg}</code>",
+  legendCollapse:"Click to collapse", legendExpand:"Click to show line names",
+  legendGuessed:"{n} line(s) carry no official colour in OSM; colors were auto-assigned",
+  legendOfficial:"Colors come from OSM's colour tag, i.e. the official line colors",
+  day0Label:"Day 0 (arrival evening)", dayN:"Day {n}",
+  removeDayBlocked:"This day still has places — empty it first.",
+  schedule:"Schedule", nDays:"{n} days",
+  collapseDays:"Collapse", flatDays:"Expand all", addDayTitle:"Add a day",
+  addFirst:"＋ Add the first day", addZero:"＋ Day 0 (arrival evening)", addTail:"＋ Add a day at the end",
+  noDatesMsg:"The trip has no dates, so days can't be created automatically.<br>Use <b>+</b> above to add one.",
+  emptyHintCur:"<b>Drag</b> places in from the left<br>or click a place's <b>dot</b>",
+  emptyHintOther:"<b>Drag</b> places in from the left<br>Click the title to make this the current day",
+  dayAria:"{label}{date}, {n} places. Set as current day",
+  nPlaces:"{n} places",
+  moveUp:"Move up", moveDown:"Move down", removeFromDay:"Remove from this day", deleteDay:"Delete this day",
+  pinNoSchedule:"{name}: no schedule to add to yet",
+  pinRemove:"Remove from {day}: {name}", pinAdd:"Add to {day}: {name}",
+  noScheduleToast:"No schedule yet. Create the days first, then add places.",
+  sideEmpty:"No places to show under the current filters",
+  free:"free", fromSuffix:"+",
+  wClosed:"closed", wAbnormal:"not operating normally", wUnverified:"unverified",
+  wBooking:"booking req.", wClosedThatDay:"closed that day",
+  lodging:"Lodging",
+  noCoords:"No locatable places", noCoordsSub:"The places lack coord fields",
+  noWebgl:"WebGL is unavailable in this browser", needWebgl:"WebGL required",
+  ofmFail:"Simple basemap unavailable ({e}); switched to Standard",
+  bmDead:"This basemap is currently unavailable: ",
+  unaffected:"Markers, linking and export are unaffected.",
+  vectorFail:"Vector basemaps unavailable ({e})",
+  degradedNote:"<b>Degraded</b>: {p}. Now using Leaflet + CARTO raster tiles; markers, linking and export are unaffected — you just can't switch basemaps.",
+  degradedLock:"Basemap switching is unavailable in degraded mode",
+  rasterFail:"The raster fallback is also unavailable ({e})",
+  allDead:"<b>No basemap available</b>: {p}. Below is a relative-position sketch computed from coordinates — the scale is off, but bearings and clusters are right, and export still works.",
+  noBasemap:"No basemap available",
+  transitFailNote:"The transit layer failed to load ({e}); everything else works.",
+  errMapLibre:"MapLibre not ready", errLeaflet:"Leaflet not ready",
+  errVector20:"vector basemap didn't finish loading within 20 s", errBasemap:"basemap error",
+  searching:"Searching…",
+  notFound:"No results for “{q}”.<br>Colloquial names sometimes miss the map data — try the English or local-language name.",
+  notFoundSay:"No results for “{q}” — try the English or local-language name",
+  foundSay:"{n} results, listed below the search box",
+  searchFail:"Search failed ({e}). It needs a network connection — try again later.",
+  searchFailSay:"Search failed, try again later",
+  addToList:"Add to list", addToDay:"Add to {day}", cancel:"Cancel",
+  candHint:"This pins the name and location now; the AI fills in hours and details later",
+  manualArea:"Added by hand",
+  addedToast:"Added “{name}” — details pending AI research",
+  exported:"Exported {name} ({n} places)",
+  wxLoading:"Fetching weather…",
+  precipProb:"precip. chance {p}%", precipProbHi:"precip. chance <b>{p}%</b>{mm}",
+  wxLive:"Live forecast · Open-Meteo · refreshed every time this page opens",
+  climate:"typical", climateDesc:"historical same-period average",
+  wetRate:"historically rainy on <b>{p}%</b> of these days",
+  wxEstWarn:"⚠ The trip is {n} days out, beyond the 16-day forecast range. These are <b>8-year historical averages</b> for the same dates — rough climate, <b>not a forecast</b>. Reopen this page closer to departure for a real forecast.",
+  wxFail:"Couldn't fetch weather ({e}). Reopen this page when online to retry.",
+  costTitle:"Cost summary", costHead:"Tickets & admission",
+  costScheduled:"{n} scheduled places", costWanted:"{n} places marked “want”",
+  costTotal:"{n} parsed, total ≈ <b>{cur}{sum}</b>",
+  costNoSched:"The schedule isn't arranged yet, so this estimates from “want” picks. Once scheduled, it switches to the places actually planned per day.",
+  costUnparsed:"{n} ticket prices are text-only and not counted: {list}. Special exhibitions, add-on experiences and night surcharges usually cost extra, so the real total will be higher.",
+  costOnly:"Tickets only — no transport, meals, or special-exhibition surcharges.",
+  markYes:"want", markMaybe:"maybe", markNo:"dropped", markNone:"undecided",
+  byDayTitle:"Day-by-day plan", nDaysItems:"{d} days · {i} items", nItems:"{n} items",
+  missedTitle:"Marked “want” but scheduled nowhere", nCount:"{n}",
+  missedCaveat:"Either add them to a day or downgrade them to “maybe” — otherwise you'll only notice the gap mid-trip.",
+  unscheduled:"Not in the schedule", allCandidates:"All candidates",
+  checklistTitle:"All places at a glance",
+  checklistIntroDays:"The top half is your day-by-day plan; the bottom half is everything unscheduled — dropped places included, so you can reconsider them.",
+  checklistIntro:"All candidate places, dropped ones included, so you can reconsider them.",
+  staleNote:"Data verified {n} days ago; hours may have changed",
+  noGuideBig:"No guide yet",
+  noGuideSub:"Filter the places first, save, then tell the AI — it reads your choices back and designs the route.",
+  restoredChoices:"{n} earlier choices", restoredItin:"{n} scheduled items",
+  restoredAdded:"{n} hand-added places",
+  restoredToast:"Restored from this browser's cache: {list}",
+  wmo:{0:"Clear",1:"Mostly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Rime fog",
+    51:"Drizzle",53:"Light rain",55:"Rain",56:"Freezing rain",57:"Freezing rain",
+    61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",
+    71:"Light snow",73:"Snow",75:"Heavy snow",77:"Snow grains",
+    80:"Showers",81:"Heavy showers",82:"Violent showers",85:"Snow showers",86:"Heavy snow showers",
+    95:"Thunderstorm",96:"Thunderstorm with hail",99:"Severe thunderstorm with hail"},
+},
+zh: {
+  trip:"行程", docTitle:"{dest} · 行程规划",
+  tabList:"景点清单", tabMap:"地图", tabGuide:"攻略",
+  guideTabDisabled:"生成攻略后可用",
+  exportCsv:"导出 CSV", exportKml:"导出 KML",
+  csvHint:"CSV 可直接导入 Google My Maps",
+  searchPh:"搜索名称、亮点、标签…", searchAria:"搜索景点",
+  groupAria:"分组方式", byArea:"按区域", byTier:"按推荐度",
+  scopeAria:"显示范围", fAll:"全部", fTodo:"未表态",
+  filterAria:"显示哪些选择",
+  yes:"想去", maybe:"待定", no:"不想去", none:"未表态",
+  msqPh:"搜索想去的地点…", msqAria:"搜索地点并添加到行程",
+  msqGo:"搜索", transit:"地铁",
+  saveBtn:"保存选择和日程", saveNow:"立即保存",
+  downloadBtn:"下载 places.json", copyBtn:"复制给 AI…", moreBtn:"手动保存…",
+  themeAuto:"跟随系统", themeLight:"浅色", themeDark:"深色",
+  themeTitle:"配色：{cur}（点击切换到{next}）",
+  scaleSpot:"打卡点 5-15 分钟", scale30:"约 30 分钟", scale12:"1-2 小时",
+  scale23:"2-3 小时", scaleHalf:"半天", scaleFull:"一整天",
+  stRenovating:"修缮中", stSeasonal:"季节性关闭", stPermanent:"已永久关闭",
+  closedAllTrip:"行程期间全程闭馆",
+  closedOn:"{d}闭馆", closedWeekly:"{days}闭馆", listSep:"、",
+  bookingRequired:"必须预约才能进", bookingRecommended:"建议预约",
+  fUnverified:"官方信息未能核实", fPartial:"信息仅部分核实",
+  vbBlocked:"这个地点的官方信息没能查到",
+  vbPartial:"这个地点只核实了一部分信息",
+  vbCheck:"需自行确认：{x}",
+  vbTell:"查到之后告诉 AI，它会补进数据里。",
+  stubFacts:"手动添加 · 详情待 AI 补全",
+  indoor:"▢ 室内", outdoor:"△ 户外", nightGood:"☾ 适合夜间",
+  stubTier:"待补全", photoIdx:"出片指数 {n}/5", whyNot:"不去的理由：",
+  spotsHeader:"顺路打卡点 · {n} 个",
+  otherArea:"其他", tierGroup:"{t} 级", stubGroup:"手动添加·待补全",
+  emptyBig:"没有符合条件的景点", emptySub:"调整一下搜索或筛选条件",
+  groupMeta:"{n} 个", plusSpots:" + {k} 打卡点",
+  unvChip:"⚠ 待你确认",
+  unvChipTitle:"官方信息没能查到的地点，需要你自己确认",
+  kvHours:"开放时间", kvLastEntry:"最后入场", kvClosed:"闭馆", kvTicket:"门票",
+  kvBooking:"预约", kvDuration:"建议时长", kvArea:"所属区域", kvPhoto:"出片指数",
+  bkRequiredLong:"必须预约才能进入", bkRecommendedLong:"可现场前往，但建议预约",
+  bkNone:"无需预约", aboutMin:"约 {n} 分钟", close:"关闭",
+  stubDetail:"你在地图上手动添加的地点，开放时间、门票等信息还没研究。下次让 AI 继续规划时，它会自动补全这里。",
+  photoAdvice:"拍摄建议", practicalInfo:"实用信息", sources:"信息来源",
+  schedRemove:"从第 {n} 天移出", schedAdd:"加进第 {n} 天",
+  quick:["太远了","人太多","不感兴趣","时间不够","门票太贵","去过了","那天不开门","和别处重复"],
+  whyNotTitle:"为什么不去{name}？",
+  reasonHint:"记下理由，之后回看清单时能快速判断要不要把它捡回来。可以跳过。",
+  reasonPh:"或者自己写…", skip:"跳过", ok:"确定",
+  scSummary:"# 想去 {y} · 待定 {m} · 不想去 {n} · 未表态 {u}",
+  scDays:" · 日程 {d} 天共 {i} 项（D 行按顺序，即当天路线）",
+  scNoDays:" · 尚未排日程",
+  fileHint:"以本地文件方式打开，改动不会自动保存。点「{btn}」写回 places.json",
+  builtAt:" 页面数据生成于 {t}。",
+  saving:"保存中…",
+  saveErr:"自动保存失败。改动只在这个浏览器里，点「{btn}」重试",
+  savedAt:"已保存 · {t}",
+  autoSaveInfo:"改动自动写回 places.json，不用手动保存",
+  pickerDesc:"行程数据",
+  savedTo:"已保存到 {where}：{n} 个已表态",
+  savedDays:" · {d} 天共 {i} 项日程", savedNoDays:"，日程还没排",
+  savedTail:"，可以让 AI 写攻略了",
+  rebuiltToo:"。页面也已同步重建",
+  dlFallback:"这个浏览器不允许直接写文件，已改为下载。选择和日程都在里面，把 places.json 放回行程目录覆盖原文件即可",
+  dlDone:"已下载 places.json（含选择和日程），把它放回行程目录覆盖原文件",
+  codeTitle:"把这段贴回对话",
+  codeHint:"Firefox 和 Safari 不允许网页直接写文件。把下面这段复制给 AI，它能还原你的选择和日程。",
+  copy:"复制", copied:"已复制",
+  copyFail:"这个浏览器不允许自动复制，已帮你选中，按 ⌘C / Ctrl+C",
+  bmSimple:"简约", bmStandard:"标准", bmRaster:"光栅",
+  loadFail:"加载失败：",
+  osmOffline:"本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。",
+  osmOk:"OpenStreetMap 官方底图",
+  osmFail:"探测到 OSM 返回封禁瓦片（约 7KB 的「Access blocked」图），已停用",
+  probing:"正在探测是否可用…",
+  tilesDead:"瓦片持续加载失败，已停用：",
+  tilesDeadNote:"<b>「{label}」底图的瓦片加载失败</b>，已自动切回标准底图。控制台原始错误：<code>{msg}</code>",
+  legendCollapse:"点击收起", legendExpand:"点击展开线路名",
+  legendGuessed:"其中 {n} 条 OSM 未标注官方配色，颜色为自动分配",
+  legendOfficial:"配色取自 OSM 的 colour 标签，即官方线路色",
+  day0Label:"第 0 天（抵达当晚）", dayN:"第 {n} 天",
+  removeDayBlocked:"这一天还有地点，先清空再删。",
+  schedule:"日程", nDays:"{n} 天",
+  collapseDays:"收起", flatDays:"平铺", addDayTitle:"加一天",
+  addFirst:"＋ 加第一天", addZero:"＋ 第 0 天（抵达当晚）", addTail:"＋ 在末尾加一天",
+  noDatesMsg:"行程没有日期信息，无法自动分天。<br>点右上角 <b>+</b> 手动加。",
+  emptyHintCur:"把左边的景点<b>拖进来</b><br>或点它左边的<b>圆点</b>",
+  emptyHintOther:"把左边的景点<b>拖进来</b><br>点标题可把这天设为当前天",
+  dayAria:"{label}{date}，{n} 个地点。设为当前天",
+  nPlaces:"{n} 个",
+  moveUp:"上移", moveDown:"下移", removeFromDay:"移出这一天", deleteDay:"删除这一天",
+  pinNoSchedule:"{name}：还没有日程可排",
+  pinRemove:"移出{day}：{name}", pinAdd:"加入{day}：{name}",
+  noScheduleToast:"还没有日程。先建立分天，再往里放地点。",
+  sideEmpty:"当前筛选下没有可显示的地点",
+  free:"免费", fromSuffix:"起",
+  wClosed:"已关闭", wAbnormal:"非正常营业", wUnverified:"待确认",
+  wBooking:"须预约", wClosedThatDay:"当天闭馆",
+  lodging:"住宿",
+  noCoords:"没有可定位的地点", noCoordsSub:"景点缺少 coord 字段",
+  noWebgl:"浏览器未启用 WebGL", needWebgl:"需要 WebGL",
+  ofmFail:"简约底图不可用（{e}），已改用标准",
+  bmDead:"该底图当前不可用：",
+  unaffected:"点位、联动、导出都不受影响。",
+  vectorFail:"矢量底图不可用（{e}）",
+  degradedNote:"<b>已降级</b>：{p}。当前使用 Leaflet + CARTO 光栅底图，点位、联动、导出都不受影响，只是不能切底图。",
+  degradedLock:"降级模式下不可切换底图",
+  rasterFail:"光栅底图也不可用（{e}）",
+  allDead:"<b>底图全部不可用</b>：{p}。下面是按经纬度换算的相对位置示意图——比例不准，但方位和聚集关系是对的，导出功能照常可用。",
+  noBasemap:"无可用底图",
+  transitFailNote:"地铁层未能加载（{e}），其余功能不受影响。",
+  errMapLibre:"MapLibre 未就绪", errLeaflet:"Leaflet 未就绪",
+  errVector20:"矢量底图 20 秒未加载完成", errBasemap:"底图出错",
+  searching:"搜索中…",
+  notFound:"没找到「{q}」。<br>中文俗名偶尔对不上地图数据，试试英文或当地语言名称。",
+  notFoundSay:"没找到「{q}」，试试英文或当地语言名称",
+  foundSay:"找到 {n} 个结果，就在搜索框下方",
+  searchFail:"搜索失败（{e}）。搜索需要联网，稍后再试。",
+  searchFailSay:"搜索失败，稍后再试",
+  addToList:"加入清单", addToDay:"加入{day}", cancel:"取消",
+  candHint:"先钉住位置和坐标，开放时间等详情之后让 AI 补全",
+  manualArea:"手动添加",
+  addedToast:"已添加「{name}」，详情待 AI 补全",
+  exported:"已导出 {name}（{n} 个地点）",
+  wxLoading:"正在获取天气…",
+  precipProb:"降水概率 {p}%", precipProbHi:"降水概率 <b>{p}%</b>{mm}",
+  wxLive:"实时预报 · Open-Meteo · 每次打开本页都会重新获取",
+  climate:"常年", climateDesc:"历史同期均值",
+  wetRate:"历史降雨日占比 <b>{p}%</b>",
+  wxEstWarn:"⚠ 出行日在 {n} 天后，超出 16 天预报范围。以上是<b>过去 8 年同期的历史平均</b>，只能说明大致气候，<b>不是预报</b>。临近出行请重新打开本页查看真实预报。",
+  wxFail:"天气获取失败（{e}）。联网后重新打开本页即可重试。",
+  costTitle:"费用汇总", costHead:"门票与入场费",
+  costScheduled:"已排进日程的 {n} 个地点", costWanted:"{n} 个「想去」的地点",
+  costTotal:"已解析 {n} 项，合计约 <b>{cur}{sum}</b>",
+  costNoSched:"日程还没排，这里按「想去」的地点估算。排完之后会改成按每天实际要去的点计算。",
+  costUnparsed:"以下 {n} 项的票价是文字描述，未计入合计：{list}。特别展、体验项目、夜间加价通常另计，实际花费会高于此数。",
+  costOnly:"仅含门票，不含交通、餐饮与特别展加价。",
+  markYes:"想去", markMaybe:"待定", markNo:"放弃", markNone:"未表态",
+  byDayTitle:"按天的行程", nDaysItems:"{d} 天 · {i} 项", nItems:"{n} 项",
+  missedTitle:"想去，但没排进任何一天", nCount:"{n} 个",
+  missedCaveat:"要么加进某一天，要么改成「待定」——否则出发时才发现漏了。",
+  unscheduled:"没排进日程的", allCandidates:"全部候选",
+  checklistTitle:"全部景点对照表",
+  checklistIntroDays:"上半部分是你排好的每天行程，下半部分是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。",
+  checklistIntro:"包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。",
+  staleNote:"数据核验于 {n} 天前，开放时间可能已变",
+  noGuideBig:"攻略还没生成",
+  noGuideSub:"先在清单里筛完景点，保存后告诉 AI，它会读回你的选择并设计路线。",
+  restoredChoices:"{n} 个之前的选择", restoredItin:"{n} 项日程安排",
+  restoredAdded:"{n} 个手动添加的地点",
+  restoredToast:"从浏览器缓存恢复了 {list}",
+  wmo:{0:"晴",1:"多云转晴",2:"多云",3:"阴",45:"雾",48:"雾凇",
+    51:"毛毛雨",53:"小雨",55:"中雨",56:"冻雨",57:"冻雨",
+    61:"小雨",63:"中雨",65:"大雨",66:"冻雨",67:"冻雨",
+    71:"小雪",73:"中雪",75:"大雪",77:"雪粒",
+    80:"阵雨",81:"强阵雨",82:"暴雨",85:"阵雪",86:"强阵雪",
+    95:"雷雨",96:"雷雨伴冰雹",99:"强雷雨伴冰雹"},
+},
+};
+const UI_LANG = String(TRIP.output_language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+const T = Object.assign({}, I18N.en, I18N[UI_LANG] || {},
+  (DATA.ui && typeof DATA.ui === "object" && !Array.isArray(DATA.ui)) ? DATA.ui : {});
+const tf = (key, vars) => String(T[key] ?? key)
+  .replace(/\{(\w+)\}/g, (_, k) => String(vars && vars[k] != null ? vars[k] : ""));
+
+/* 星期名跟 UI 语言走，用 Intl 而不是写死数组 —— 任何语言都不用再翻一份星期表。
+   WD_NAMES 按 ISO 序号 1–7（周一…周日）取值；2024-01-01 恰是周一。 */
+let _wdFmt;
+try{ _wdFmt = new Intl.DateTimeFormat(TRIP.output_language || "en", { weekday:"short" }); }
+catch(e){ _wdFmt = new Intl.DateTimeFormat("en", { weekday:"short" }); }
+const wdName = d => _wdFmt.format(d);
+const WD_NAMES = [""];
+for(let i = 0; i < 7; i++) WD_NAMES.push(_wdFmt.format(new Date(2024, 0, 1 + i)));
 
 /* ═══════════════════════════════════════════════════════════════════
    排程索引
@@ -1118,8 +1458,6 @@ let fileHandle = null;
 const ui = { group:"area", scope:"all", q:"", cats:new Set(), tags:new Set(), unv:false };
 
 /* ─────────────────────────────────────────────── 行程日期 */
-const WD = ["一","二","三","四","五","六","日"];
-
 /* 本地日期格式化。绝不能用 toISOString()——它转 UTC，
    在东八区会把 09-13 输出成 09-12，用户会以为错误的那天闭馆。 */
 const isoLocal = d =>
@@ -1143,27 +1481,28 @@ const DAYS = tripDays();
 function flags(p){
   const out = [];
   if(p.status && p.status !== "open"){
-    const label = { renovating:"修缮中", seasonal_closed:"季节性关闭", permanently_closed:"已永久关闭" }[p.status] || p.status;
-    out.push({ cls:"f-danger", txt:label + (p.status_note ? "：" + p.status_note : "") });
+    const label = { renovating:T.stRenovating, seasonal_closed:T.stSeasonal, permanently_closed:T.stPermanent }[p.status] || p.status;
+    out.push({ cls:"f-danger", txt:label + (p.status_note ? ": " + p.status_note : "") });
   }
   const cd = p.closed_days || [];
   if(cd.length && DAYS.length){
     const hit = DAYS.filter(d => cd.includes(d.wd));
     if(hit.length === DAYS.length){
-      out.push({ cls:"f-danger", txt:"行程期间全程闭馆" });
+      out.push({ cls:"f-danger", txt:T.closedAllTrip });
     }else if(hit.length){
-      out.push({ cls:"f-warn", txt:hit.map(d => `${d.iso.slice(5)}(周${WD[d.wd-1]})闭馆`).join("、") });
+      out.push({ cls:"f-warn", txt:tf("closedOn",
+        { d: hit.map(d => `${d.iso.slice(5)}(${WD_NAMES[d.wd]})`).join(T.listSep) }) });
     }
   }else if(cd.length){
-    out.push({ cls:"f-info", txt:"周" + cd.map(d => WD[d-1]).join("、") + "闭馆" });
+    out.push({ cls:"f-info", txt:tf("closedWeekly", { days: cd.map(d => WD_NAMES[d]).join(T.listSep) }) });
   }
-  if(p.booking === "required") out.push({ cls:"f-warn", txt:"必须预约才能进" });
-  else if(p.booking === "recommended") out.push({ cls:"f-info", txt:"建议预约" });
+  if(p.booking === "required") out.push({ cls:"f-warn", txt:T.bookingRequired });
+  else if(p.booking === "recommended") out.push({ cls:"f-info", txt:T.bookingRecommended });
   // 核实被拦截：必须显眼，否则用户会把未核实的信息当成已核实的
   const v = p.verify;
   if(v && v.state && v.state !== "verified"){
     out.push({ cls:"f-unverified",
-      txt: v.state === "blocked" ? "官方信息未能核实" : "信息仅部分核实" });
+      txt: v.state === "blocked" ? T.fUnverified : T.fPartial });
   }
   return out;
 }
@@ -1172,10 +1511,10 @@ function verifyBox(p){
   const v = p.verify;
   if(!v || !v.state || v.state === "verified") return "";
   return `<div class="verify-box">
-    <b>${v.state === "blocked" ? "这个地点的官方信息没能查到" : "这个地点只核实了一部分信息"}</b><br>
+    <b>${v.state === "blocked" ? T.vbBlocked : T.vbPartial}</b><br>
     ${rich(v.note || "")}
-    ${(v.check || []).length ? `<ul>${v.check.map(x => `<li>需自行确认：${esc(x)}</li>`).join("")}</ul>` : ""}
-    <div style="margin-top:6px">查到之后告诉 AI，它会补进数据里。</div>
+    ${(v.check || []).length ? `<ul>${v.check.map(x => `<li>${tf("vbCheck", { x: esc(x) })}</li>`).join("")}</ul>` : ""}
+    <div style="margin-top:6px">${T.vbTell}</div>
   </div>`;
 }
 
@@ -1194,7 +1533,7 @@ const DARK_MQ = matchMedia("(prefers-color-scheme: dark)");
    不用重新打开页面。 */
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)");
 const THEMES = ["auto", "light", "dark"];
-const THEME_TXT = { auto:"跟随系统", light:"浅色", dark:"深色" };
+const THEME_TXT = { auto:T.themeAuto, light:T.themeLight, dark:T.themeDark };
 const THEME_ICON = {
   // 太阳：一圈短射线
   light: stroke("M8 2.6V1M8 15v-1.6M13.2 8H15M1 8h1.8M11.8 4.2 12.9 3.1M3.1 12.9l1.1-1.1"
@@ -1229,7 +1568,7 @@ function applyTheme(pref, persist = true){
   if(btn){
     const next = THEMES[(THEMES.indexOf(pref) + 1) % THEMES.length];
     btn.innerHTML = THEME_ICON[pref];
-    btn.title = `配色：${THEME_TXT[pref]}（点击切换到${THEME_TXT[next]}）`;
+    btn.title = tf("themeTitle", { cur: THEME_TXT[pref], next: THEME_TXT[next] });
     btn.setAttribute("aria-label", btn.title);
   }
   // 底图不是 CSS 管得到的东西，得单独通知
@@ -1263,8 +1602,8 @@ function initTheme(){
 const LOCAL_LANG = (TRIP.local_language && TRIP.local_language !== TRIP.output_language)
   ? TRIP.local_language : "";
 const langAttr = LOCAL_LANG ? ` lang="${esc(LOCAL_LANG)}"` : "";
-const SCALE_TXT = { spot:"打卡点 5-15 分钟", "30min":"约 30 分钟", "1-2h":"1-2 小时",
-                    "2-3h":"2-3 小时", "half-day":"半天", "full-day":"一整天" };
+const SCALE_TXT = { spot:T.scaleSpot, "30min":T.scale30, "1-2h":T.scale12,
+                    "2-3h":T.scale23, "half-day":T.scaleHalf, "full-day":T.scaleFull };
 const stars = n => "★".repeat(n||0) + `<i>${"★".repeat(Math.max(0,5-(n||0)))}</i>`;
 
 function thumb(p){
@@ -1277,9 +1616,9 @@ function thumb(p){
 function pickHTML(p){
   const c = p.choice;
   return `<div class="pick" data-id="${esc(p.id)}">
-    <button class="y" data-v="yes"   aria-pressed="${c==="yes"}">想去</button>
-    <button class="m" data-v="maybe" aria-pressed="${c==="maybe"}">待定</button>
-    <button class="n" data-v="no"    aria-pressed="${c==="no"}">不想去</button>
+    <button class="y" data-v="yes"   aria-pressed="${c==="yes"}">${T.yes}</button>
+    <button class="m" data-v="maybe" aria-pressed="${c==="maybe"}">${T.maybe}</button>
+    <button class="n" data-v="no"    aria-pressed="${c==="no"}">${T.no}</button>
   </div>`;
 }
 
@@ -1291,11 +1630,11 @@ function cardHTML(p, children){
   // 粗胚没有 tier/scale/ticket 这些研究型字段。不能走通用模板——
   // esc(undefined) 是空串，会剩下一排「◷ 」「◎ 」的空壳图标。
   const facts = stub
-    ? `<span>手动添加 · 详情待 AI 补全</span>${p.area ? `<span>${esc(p.area)}</span>` : ""}`
+    ? `<span>${T.stubFacts}</span>${p.area ? `<span>${esc(p.area)}</span>` : ""}`
     : `<span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
           <span class="tk">◎ ${esc(p.ticket)}</span>
-          <span>${p.indoor ? "▢ 室内" : "△ 户外"}</span>
-          ${p.night ? "<span>☾ 适合夜间</span>" : ""}
+          <span>${p.indoor ? T.indoor : T.outdoor}</span>
+          ${p.night ? `<span>${T.nightGood}</span>` : ""}
           <span>${esc(CATMAP[p.category] || p.category)}</span>`;
   return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
     <div class="card-in">
@@ -1303,10 +1642,10 @@ function cardHTML(p, children){
       <div class="body">
         <div class="hd">
           <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
-          ${stub ? `<span class="tier t-stub">待补全</span>`
+          ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
                  : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
-          <span class="stars" role="img" aria-label="出片指数 ${p.photo_index||0}/5"
-            title="出片指数 ${p.photo_index||0}/5"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
+          <span class="stars" role="img" aria-label="${tf("photoIdx",{n:p.photo_index||0})}"
+            title="${tf("photoIdx",{n:p.photo_index||0})}"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
         </div>
         ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
         <div class="facts">
@@ -1315,7 +1654,7 @@ function cardHTML(p, children){
         ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
         ${verifyBox(p)}
         ${pickHTML(p)}
-        <div class="why"${p.choice === "no" && p.choice_reason ? "" : " hidden"}>不去的理由：<span class="why-t">${esc(p.choice_reason || "")}</span></div>
+        <div class="why"${p.choice === "no" && p.choice_reason ? "" : " hidden"}>${T.whyNot}<span class="why-t">${esc(p.choice_reason || "")}</span></div>
         ${children.length ? spotsHTML(children) : ""}
       </div>
     </div>
@@ -1325,7 +1664,7 @@ function cardHTML(p, children){
 /* 打卡点折叠在主景点下面：既不淹没主景点，也不会漏掉顺路的小机位 */
 function spotsHTML(kids){
   return `<div class="spots">
-    <div class="spots-h">顺路打卡点 · ${kids.length} 个</div>
+    <div class="spots-h">${tf("spotsHeader", { n: kids.length })}</div>
     ${kids.map(k => `<div class="spot" data-id="${esc(k.id)}">
       <button class="bare sn" type="button" data-detail="${esc(k.id)}">${esc(k.name)}</button>
       <span class="sd">${rich(k.pitch)}</span>
@@ -1369,8 +1708,8 @@ function render(){
 
   const groups = new Map();
   for(const p of tops){
-    const key = ui.group === "area" ? (p.area || "其他")
-              : p.tier ? `${p.tier} 级` : "手动添加·待补全";
+    const key = ui.group === "area" ? (p.area || T.otherArea)
+              : p.tier ? tf("tierGroup", { t: p.tier }) : T.stubGroup;
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
@@ -1383,8 +1722,8 @@ function render(){
 
   const box = $("#groups");
   if(!vis.length){
-    box.innerHTML = `<div class="empty-state"><div class="big">没有符合条件的景点</div>
-      <div>调整一下搜索或筛选条件</div></div>`;
+    box.innerHTML = `<div class="empty-state"><div class="big">${T.emptyBig}</div>
+      <div>${T.emptySub}</div></div>`;
   }else{
     box.innerHTML = keys.map(k => {
       const list = groups.get(k).sort((a,b) =>
@@ -1394,7 +1733,7 @@ function render(){
       return `<section class="group">
         <div class="group-h">
           <h2>${esc(k)}</h2>
-          <span class="meta">${list.length} 个${kidCount ? ` + ${kidCount} 打卡点` : ""}</span>
+          <span class="meta">${tf("groupMeta", { n: list.length })}${kidCount ? tf("plusSpots", { k: kidCount }) : ""}</span>
         </div>
         <div class="cards">${list.map(p => cardHTML(p, kidsOf[p.id]||[])).join("")}</div>
       </section>`;
@@ -1415,7 +1754,7 @@ function renderChips(){
 
   const nUnv = PLACES.filter(p => p.verify && p.verify.state && p.verify.state !== "verified").length;
   $("#chips").innerHTML =
-    (nUnv ? `<button class="chip" data-unv="1" aria-pressed="false" title="官方信息没能查到的地点，需要你自己确认">⚠ 待你确认<span class="c">${nUnv}</span></button>` : "")
+    (nUnv ? `<button class="chip" data-unv="1" aria-pressed="false" title="${esc(T.unvChipTitle)}">${T.unvChip}<span class="c">${nUnv}</span></button>` : "")
     + CATS.filter(c => counts[c.id]).map(c =>
       `<button class="chip" data-cat="${esc(c.id)}" aria-pressed="false">${esc(c.label)}<span class="c">${counts[c.id]}</span></button>`).join("")
     + topTags.map(([t,n]) =>
@@ -1440,10 +1779,10 @@ function updateProgress(){
   // 数字必须带词。只放色点的话，含义全靠颜色承载——读屏听到的是四个裸数字，
   // 色觉障碍者看到的是四个点；而地图视图的同一组筛选按钮本来就带着这几个词。
   if(t) t.innerHTML =
-    `<span><i class="dot d-yes"></i>想去 ${n.yes}</span>
-     <span><i class="dot d-maybe"></i>待定 ${n.maybe}</span>
-     <span><i class="dot d-no"></i>不想去 ${n.no}</span>
-     <span><i class="dot d-none"></i>未表态 ${n.none}</span>`;
+    `<span><i class="dot d-yes"></i>${T.yes} ${n.yes}</span>
+     <span><i class="dot d-maybe"></i>${T.maybe} ${n.maybe}</span>
+     <span><i class="dot d-no"></i>${T.no} ${n.no}</span>
+     <span><i class="dot d-none"></i>${T.none} ${n.none}</span>`;
   $("#n-list").textContent = PLACES.length;
 }
 
@@ -1571,34 +1910,33 @@ function openDetail(id){
   const im = (p.images||[])[0];
   const fl = flags(p);
   const kv = [
-    ["开放时间", p.hours],
-    ["最后入场", p.last_entry],
-    ["闭馆", p.closed],
-    ["门票", p.ticket],
-    ["预约", { required:"必须预约才能进入", recommended:"可现场前往，但建议预约", none:"无需预约" }[p.booking]],
-    ["建议时长", p.duration_min ? `约 ${p.duration_min} 分钟` : ""],
-    ["所属区域", p.area],
-    ["出片指数", p.photo_index ? `${p.photo_index}/5` : ""],
+    [T.kvHours, p.hours],
+    [T.kvLastEntry, p.last_entry],
+    [T.kvClosed, p.closed],
+    [T.kvTicket, p.ticket],
+    [T.kvBooking, { required:T.bkRequiredLong, recommended:T.bkRecommendedLong, none:T.bkNone }[p.booking]],
+    [T.kvDuration, p.duration_min ? tf("aboutMin", { n: p.duration_min }) : ""],
+    [T.kvArea, p.area],
+    [T.kvPhoto, p.photo_index ? `${p.photo_index}/5` : ""],
   ].filter(([,v]) => v);
 
   $("#dlg-inner").innerHTML = `
     <div class="dlg-h">
       <h3>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc"${langAttr}>${esc(p.name_local)}</span>` : ""}</h3>
-      <button class="x" data-close aria-label="关闭">&times;</button>
+      <button class="x" data-close aria-label="${esc(T.close)}">&times;</button>
     </div>
     <div class="dlg-b">
       ${im && im.url ? `<img class="dlg-img" src="${esc(im.url)}" alt="${esc(p.name)}" onerror="this.remove()">
         ${im.credit ? `<div class="credit">${esc(im.credit)}</div>` : ""}` : ""}
       ${fl.length ? `<div class="flags" style="margin-bottom:14px">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
       ${verifyBox(p)}
-      ${isStubP(p) ? `<p>你在地图上手动添加的地点，开放时间、门票等信息还没研究。
-        下次让 AI 继续规划时，它会自动补全这里。</p>` : ""}
+      ${isStubP(p) ? `<p>${T.stubDetail}</p>` : ""}
       ${richP(p.detail || p.pitch)}
-      ${p.photo_note ? `<h4>拍摄建议</h4>${richP(p.photo_note)}` : ""}
-      <h4>实用信息</h4>
+      ${p.photo_note ? `<h4>${T.photoAdvice}</h4>${richP(p.photo_note)}` : ""}
+      <h4>${T.practicalInfo}</h4>
       <dl class="kv">${kv.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-      ${p.booking_url ? `<h4>预约</h4><ul class="srcs"><li><a href="${esc(p.booking_url)}" target="_blank" rel="noopener">${esc(p.booking_url)}</a></li></ul>` : ""}
-      <h4>信息来源</h4>
+      ${p.booking_url ? `<h4>${T.kvBooking}</h4><ul class="srcs"><li><a href="${esc(p.booking_url)}" target="_blank" rel="noopener">${esc(p.booking_url)}</a></li></ul>` : ""}
+      <h4>${T.sources}</h4>
       <ul class="srcs">${(p.sources||[]).map(s =>
         `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("") || "<li>—</li>"}</ul>
       <div class="dlg-f">${schedBtn(p)}${pickHTML(p)}</div>
@@ -1613,25 +1951,25 @@ function schedBtn(p){
   if(n == null || isLodging(p)) return "";
   const inDay = schedOf(p.id).some(s => s.n === n);
   return `<button class="btn sched" data-sched="${esc(p.id)}">${
-    inDay ? `从第 ${n} 天移出` : `加进第 ${n} 天`}</button>`;
+    inDay ? tf("schedRemove", { n }) : tf("schedAdd", { n })}</button>`;
 }
 
 /* ─────────────────────────────────────────────── 不去的理由 */
-const QUICK = ["太远了","人太多","不感兴趣","时间不够","门票太贵","去过了","那天不开门","和别处重复"];
+const QUICK = Array.isArray(T.quick) ? T.quick : I18N.en.quick;
 function askReason(id){
   const p = PLACES.find(x => x.id === id);
   if(!p) return;
   let picked = "";
   $("#rdlg-inner").innerHTML = `
-    <div class="dlg-h"><h3>为什么不去${esc(p.name)}？</h3>
-      <button class="x" data-rclose aria-label="关闭">&times;</button></div>
+    <div class="dlg-h"><h3>${tf("whyNotTitle", { name: esc(p.name) })}</h3>
+      <button class="x" data-rclose aria-label="${esc(T.close)}">&times;</button></div>
     <div class="dlg-b">
-      <p style="font-size:13px">记下理由，之后回看清单时能快速判断要不要把它捡回来。可以跳过。</p>
+      <p style="font-size:13px">${T.reasonHint}</p>
       <div class="reasons">${QUICK.map(r => `<button data-r="${esc(r)}">${esc(r)}</button>`).join("")}</div>
-      <textarea id="rtext" placeholder="或者自己写…"></textarea>
+      <textarea id="rtext" placeholder="${esc(T.reasonPh)}"></textarea>
       <div class="dlg-f">
-        <button class="btn" data-rskip>跳过</button>
-        <button class="btn primary" data-rok>确定</button>
+        <button class="btn" data-rskip>${T.skip}</button>
+        <button class="btn primary" data-rok>${T.ok}</button>
       </div>
     </div>`;
   const dlg = $("#rdlg");
@@ -1700,8 +2038,9 @@ function shortCode(){
     L.push(`D${d.n} ${d.date || "-"} ` + d.places
       .map(e => e.id + (e.note ? `(${e.note})` : "")).join(" "));
   }
-  L.push(`# 想去 ${yes.length} · 待定 ${maybe.length} · 不想去 ${no.length} · 未表态 ${PLACES.length-yes.length-maybe.length-no.length}`
-    + (days.length ? ` · 日程 ${days.length} 天共 ${items} 项（D 行按顺序，即当天路线）` : " · 尚未排日程"));
+  L.push(tf("scSummary", { y: yes.length, m: maybe.length, n: no.length,
+                           u: PLACES.length - yes.length - maybe.length - no.length })
+    + (days.length ? tf("scDays", { d: days.length, i: items }) : T.scNoDays));
   return L.join("\n");
 }
 
@@ -1713,7 +2052,7 @@ function shortCode(){
    两个节奏拆开：places.json 3 秒去抖（AI 读的真相，越新越好，125KB），
    trip.html 由服务端延到 12 秒空闲才重建（只服务于双击/分享，晚点无所谓）。 */
 const SERVED = location.protocol === "http:" || location.protocol === "https:";
-const SAVE_LABEL = SERVED ? "立即保存" : "保存选择和日程";
+const SAVE_LABEL = SERVED ? T.saveNow : T.saveBtn;
 let autoTimer = null, autoBusy = false, autoDirty = false;
 
 function scheduleAuto(){
@@ -1787,17 +2126,17 @@ function setSaveState(kind){
   if(!el) return;
   if(!SERVED){
     el.className = "hint";
-    el.textContent = "以本地文件方式打开，改动不会自动保存。点「" + SAVE_LABEL + "」写回 places.json"
-      + (BUILT_AT ? ` 页面数据生成于 ${BUILT_AT}。` : "");
+    el.textContent = tf("fileHint", { btn: SAVE_LABEL })
+      + (BUILT_AT ? tf("builtAt", { t: BUILT_AT }) : "");
     return;
   }
   const t = new Date().toTimeString().slice(0, 5);
   el.className = "hint" + (kind === "err" ? " bad" : "");
   el.textContent =
-    kind === "saving" ? "保存中…" :
-    kind === "err"    ? `自动保存失败。改动只在这个浏览器里，点「${SAVE_LABEL}」重试` :
-    kind === "ok"     ? `已保存 · ${t}` :
-                        "改动自动写回 places.json，不用手动保存";
+    kind === "saving" ? T.saving :
+    kind === "err"    ? tf("saveErr", { btn: SAVE_LABEL }) :
+    kind === "ok"     ? tf("savedAt", { t }) :
+                        T.autoSaveInfo;
 }
 
 /* 保存有三条路，按可靠性排序，任何一条失败都自动往下走——
@@ -1824,7 +2163,7 @@ async function saveViaPicker(){
     if(!fileHandle){
       fileHandle = await window.showSaveFilePicker({
         suggestedName:"places.json",
-        types:[{ description:"行程数据", accept:{ "application/json":[".json"] } }],
+        types:[{ description:T.pickerDesc, accept:{ "application/json":[".json"] } }],
       });
     }
     if(fileHandle.queryPermission){
@@ -1857,15 +2196,15 @@ function savedMsg(where){
   const done = PLACES.filter(p => p.choice).length;
   const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
   const items = days.reduce((a, d) => a + d.places.length, 0);
-  return `已保存到 ${where}：${done} 个已表态`
-    + (days.length ? ` · ${days.length} 天共 ${items} 项日程` : "，日程还没排")
-    + "，可以让 AI 写攻略了";
+  return tf("savedTo", { where, n: done })
+    + (days.length ? tf("savedDays", { d: days.length, i: items }) : T.savedNoDays)
+    + T.savedTail;
 }
 
 async function doSave(){
   const btn = $("#save");
   clearTimeout(autoTimer);            // 手动保存后不该再来一次自动的
-  btn.disabled = true; btn.textContent = "保存中…";
+  btn.disabled = true; btn.textContent = T.saving;
   try{
     const srv = await saveViaServer(true);
     if(srv){
@@ -1874,7 +2213,7 @@ async function doSave(){
       setSaveState("ok");
       // 页面本身是构建产物：不重新 build，双击打开或分享出去的 trip.html
       // 还停在上一次构建的状态，和刚写回的 places.json 对不上。
-      toast(savedMsg("places.json") + (srv.rebuilt ? "。页面也已同步重建" : ""));
+      toast(savedMsg("places.json") + (srv.rebuilt ? T.rebuiltToo : ""));
       return;
     }
     const pick = await saveViaPicker();
@@ -1897,33 +2236,30 @@ function download(isFallback){
   const a = document.createElement("a");
   a.href = URL.createObjectURL(b); a.download = "places.json"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast(isFallback
-    ? "这个浏览器不允许直接写文件，已改为下载。选择和日程都在里面，把 places.json 放回行程目录覆盖原文件即可"
-    : "已下载 places.json（含选择和日程），把它放回行程目录覆盖原文件");
+  toast(isFallback ? T.dlFallback : T.dlDone);
   if(isFallback) setTimeout(showCode, 900);   // 下载也可能被拦，再给一条兜底
 }
 
 function showCode(){
   const code = shortCode();
   $("#dlg-inner").innerHTML = `
-    <div class="dlg-h"><h3>把这段贴回对话</h3><button class="x" data-close aria-label="关闭">&times;</button></div>
+    <div class="dlg-h"><h3>${T.codeTitle}</h3><button class="x" data-close aria-label="${esc(T.close)}">&times;</button></div>
     <div class="dlg-b">
-      <p style="font-size:13px">Firefox 和 Safari 不允许网页直接写文件。
-      把下面这段复制给 AI，它能还原你的选择和日程。</p>
+      <p style="font-size:13px">${T.codeHint}</p>
       <pre class="code" id="code">${esc(code)}</pre>
       <div class="dlg-f">
-        <button class="btn" data-close>关闭</button>
-        <button class="btn primary" id="cp">复制</button>
+        <button class="btn" data-close>${T.close}</button>
+        <button class="btn primary" id="cp">${T.copy}</button>
       </div>
     </div>`;
   $("#dlg").showModal();
   $("#cp").onclick = async () => {
     // 实测内置浏览器 navigator.clipboard 抛 NotAllowedError，必须有选中兜底
-    try{ await navigator.clipboard.writeText(code); toast("已复制"); }
+    try{ await navigator.clipboard.writeText(code); toast(T.copied); }
     catch(e){
       const r = document.createRange(); r.selectNode($("#code"));
       getSelection().removeAllRanges(); getSelection().addRange(r);
-      toast("这个浏览器不允许自动复制，已帮你选中，按 ⌘C / Ctrl+C");
+      toast(T.copyFail);
     }
   };
 }
@@ -1994,11 +2330,11 @@ const MAP = (() => {
     "https://tiles.openfreemap.org/styles/" + (dark ? "dark" : "positron");
 
   const BASEMAPS = [
-    { id:"ofm", label:"简约", kind:"vector", schema:"openmaptiles",
+    { id:"ofm", label:T.bmSimple, kind:"vector", schema:"openmaptiles",
       style:ofmStyle(themeIsDark()),
       dark:themeIsDark(),
       attrib:'OpenFreeMap © OpenMapTiles Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' },
-    { id:"gb", label:"标准", kind:"vector", schema:"shortbread",
+    { id:"gb", label:T.bmStandard, kind:"vector", schema:"shortbread",
       style:() => (gbStyle ||= fetch(GRAYBEARD, { cache:"force-cache" })
         .then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(s => {
@@ -2009,8 +2345,8 @@ const MAP = (() => {
           return s;
         })
         .catch(e => { gbStyle = null; throw e; })),   // 失败不要缓存，下次还能重试
-      attrib: OSM_ATTRIB + ' · 矢量瓦片 <a href="https://vector.openstreetmap.org/" target="_blank" rel="noopener">vector.openstreetmap.org</a> · Style: VersaTiles graybeard' },
-    { id:"osm", label:"光栅", kind:"raster", httpOnly:true,
+      attrib: OSM_ATTRIB + ' · Vector tiles <a href="https://vector.openstreetmap.org/" target="_blank" rel="noopener">vector.openstreetmap.org</a> · Style: VersaTiles graybeard' },
+    { id:"osm", label:T.bmRaster, kind:"raster", httpOnly:true,
       tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       attrib: OSM_ATTRIB },
   ];
@@ -2215,7 +2551,7 @@ const MAP = (() => {
       const el = document.createElement(tag);
       Object.assign(el, attrs);
       el.onload  = () => { loaded.add(key); res(); };
-      el.onerror = () => rej(new Error("加载失败：" + key));
+      el.onerror = () => rej(new Error(T.loadFail + key));
       document.head.appendChild(el);
     });
   }
@@ -2282,9 +2618,9 @@ const MAP = (() => {
   const PROBES = {
     osm: {
       test: osmUsable,
-      offline: "本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。",
-      ok:   "OpenStreetMap 官方底图",
-      fail: "探测到 OSM 返回封禁瓦片（约 7KB 的「Access blocked」图），已停用",
+      offline: T.osmOffline,
+      ok:   T.osmOk,
+      fail: T.osmFail,
     },
   };
 
@@ -2297,7 +2633,7 @@ const MAP = (() => {
       btn.disabled = true; btn.title = cfg.offline; return;
     }
     btn.disabled = true;
-    btn.title = "正在探测是否可用…";
+    btn.title = T.probing;
     const ok = await cfg.test();
     if(st.degraded) return;                       // 降级后不要复活按钮
     const b2 = document.querySelector(sel);       // 探测期间按钮可能已被重绘
@@ -2326,9 +2662,8 @@ const MAP = (() => {
       deadBases.add(watching);
       const b = BASEMAPS.find(x => x.id === watching);
       const btn = document.querySelector(`#basemaps [data-base="${watching}"]`);
-      if(btn){ btn.disabled = true; btn.title = "瓦片持续加载失败，已停用：" + msg; }
-      note(`<b>「${b ? b.label : watching}」底图的瓦片加载失败</b>，已自动切回标准底图。`
-         + `控制台原始错误：<code>${esc(msg)}</code>`);
+      if(btn){ btn.disabled = true; btn.title = T.tilesDead + msg; }
+      note(tf("tilesDeadNote", { label: b ? b.label : watching, msg: esc(msg) }));
       if(watching !== "gb") switchBase("gb");
     });
   }
@@ -2473,7 +2808,7 @@ const MAP = (() => {
     $("#map-legend").innerHTML =
       `<button class="bare lg-toggle" type="button" aria-expanded="${st.legendOpen ? "true" : "false"}">`
     + `<span class="lg-chips">${feats.map(f => chip(f.properties)).join("")}</span>`
-    + `<span class="lg-hint">点击${st.legendOpen ? "收起" : (feats.length > 0 ? "展开线路名" : "")}</span>`
+    + `<span class="lg-hint">${st.legendOpen ? T.legendCollapse : (feats.length > 0 ? T.legendExpand : "")}</span>`
     + `</button>`
     + `<div class="lg-list">`
     + feats.map(f => {
@@ -2481,8 +2816,8 @@ const MAP = (() => {
         return `<div class="lg-row">${chip(p)}<span class="lg-nm" title="${esc(nm)}">${esc(nm)}</span></div>`;
       }).join("")
     + (guessed
-        ? `<div class="lg-foot">其中 ${guessed} 条 OSM 未标注官方配色，颜色为自动分配</div>`
-        : `<div class="lg-foot">配色取自 OSM 的 colour 标签，即官方线路色</div>`)
+        ? `<div class="lg-foot">${tf("legendGuessed", { n: guessed })}</div>`
+        : `<div class="lg-foot">${T.legendOfficial}</div>`)
     + `</div>`;
   }
 
@@ -2809,7 +3144,6 @@ const MAP = (() => {
      阈值取 5：日程栏高约 600–700px，一天四五个点占 200–260px，
      平铺到第三天就开始滚动，超过五天会退化成无限滚动列表。 */
   const FLAT_MAX = 5;
-  const WD = ["日", "一", "二", "三", "四", "五", "六"];
 
   // 都在正午构造，避开时区把日期整体推前/推后一天
   const parseISO = v => {
@@ -2835,15 +3169,17 @@ const MAP = (() => {
     const end   = parseISO((TRIP.dates || {}).end);
     if(start && end && end >= start){
       let cur = start, n = 1;
+      // label 不写进数据 —— 它是按 UI 语言现算的显示文案（见 dayLabel），
+      // 写进文件就把某一种语言固化进数据里了。
       while(cur <= end && n <= 60){
-        ITIN.push({ n, date:toISO(cur), label:`第 ${n} 天`, places:[] });
+        ITIN.push({ n, date:toISO(cur), places:[] });
         cur = new Date(cur); cur.setDate(cur.getDate() + 1); n++;
       }
     }else{
       // 日期缺失或格式不对：退回按天数建，date 留空。
       // 那时闭馆校验做不了，但容器仍然可用。
       const k = Math.max(1, Math.min(30, parseInt(TRIP.days, 10) || 1));
-      for(let n = 1; n <= k; n++) ITIN.push({ n, date:null, label:`第 ${n} 天`, places:[] });
+      for(let n = 1; n <= k; n++) ITIN.push({ n, date:null, places:[] });
     }
     DATA.itinerary = ITIN;
     buildSched();
@@ -2854,13 +3190,11 @@ const MAP = (() => {
     if(where === "zero"){
       if(ITIN.some(d => d.n === 0)) return;
       const first = ITIN.find(d => d.date);
-      ITIN.unshift({ n:0, date:first ? shiftISO(first.date, -1) : null,
-                     label:"第 0 天（抵达当晚）", places:[] });
+      ITIN.unshift({ n:0, date:first ? shiftISO(first.date, -1) : null, places:[] });
     }else{
       const maxN = ITIN.reduce((a, d) => Math.max(a, d.n), 0);
       const last = [...ITIN].reverse().find(d => d.date);
-      ITIN.push({ n:maxN + 1, date:last ? shiftISO(last.date, 1) : null,
-                  label:`第 ${maxN + 1} 天`, places:[] });
+      ITIN.push({ n:maxN + 1, date:last ? shiftISO(last.date, 1) : null, places:[] });
     }
     st.curDay = where === "zero" ? 0 : ITIN[ITIN.length - 1].n;
     commit();
@@ -2869,29 +3203,27 @@ const MAP = (() => {
   function removeDay(n){
     const i = ITIN.findIndex(d => d.n === n);
     if(i < 0) return;
-    if((ITIN[i].places || []).length){ toast("这一天还有地点，先清空再删。"); return; }
+    if((ITIN[i].places || []).length){ toast(T.removeDayBlocked); return; }
     ITIN.splice(i, 1);
     if(st.curDay === n) st.curDay = ITIN.length ? ITIN[0].n : null;
     commit();
   }
 
-  const dayLabel = d => d.label || (d.n === 0 ? "第 0 天" : `第 ${d.n} 天`);
+  const dayLabel = d => d.label || (d.n === 0 ? T.day0Label : tf("dayN", { n: d.n }));
   // 住宿不计入「几个景点」——每天首尾都有它，算进去这个数字就没意义了
   const dayCount = d => (d.places || []).filter(e => !isLodging(BY_ID[e.id])).length;
 
   function dayDateTxt(d){
     if(!d.date) return "";
     const t = new Date(d.date + "T12:00:00");   // 正午构造，避开时区把日期推前一天
-    return isNaN(t) ? d.date : `${d.date.slice(5)}(周${WD[t.getDay()]})`;
+    return isNaN(t) ? d.date : `${d.date.slice(5)}(${wdName(t)})`;
   }
 
   /* 空容器不该只说「还没放地点」—— 用户面对一个空框并不知道该怎么操作。
      而且当前天和非当前天要说不同的话：点圆点只会加进「当前天」，
      对非当前天说「点圆点」是错的。 */
   function emptyHint(d){
-    return d.n === st.curDay
-      ? `把左边的景点<b>拖进来</b><br>或点它左边的<b>圆点</b>`
-      : `把左边的景点<b>拖进来</b><br>点标题可把这天设为当前天`;
+    return d.n === st.curDay ? T.emptyHintCur : T.emptyHintOther;
   }
 
   function dayBox(d){
@@ -2906,22 +3238,22 @@ const MAP = (() => {
           <span class="n" style="background:${lod ? "var(--lodging)" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
           <button class="bare dnm" type="button" title="${esc(p.name)}${note ? " — " + esc(note) : ""}">${esc(p.name)}</button>
           <span class="dops">
-            <button class="dop" data-op="up"   title="上移" aria-label="上移">${ICON.up}</button>
-            <button class="dop" data-op="down" title="下移" aria-label="下移">${ICON.down}</button>
-            <button class="dop" data-op="del"  title="移出这一天" aria-label="移出">${ICON.del}</button>
+            <button class="dop" data-op="up"   title="${esc(T.moveUp)}" aria-label="${esc(T.moveUp)}">${ICON.up}</button>
+            <button class="dop" data-op="down" title="${esc(T.moveDown)}" aria-label="${esc(T.moveDown)}">${ICON.down}</button>
+            <button class="dop" data-op="del"  title="${esc(T.removeFromDay)}" aria-label="${esc(T.removeFromDay)}">${ICON.del}</button>
           </span>
         </div>`;
     }).join("");
     return `<div class="dbox${d.n === st.curDay ? " cur" : ""}" data-day="${d.n}">
         <div class="dhead">
           <button class="bare dh-btn" type="button" aria-pressed="${d.n === st.curDay}"
-            aria-label="${esc(dayLabel(d))}${d.date ? "，" + esc(dayDateTxt(d)) : ""}，${dayCount(d)} 个地点。设为当前天">
+            aria-label="${esc(tf("dayAria", { label: dayLabel(d), date: d.date ? ", " + dayDateTxt(d) : "", n: dayCount(d) }))}">
             <span class="swatch" style="background:${dayColor(d.n)}"></span>
             <b>${esc(dayLabel(d))}</b>
-            <span class="sub">${esc(dayDateTxt(d))}${d.date ? " · " : ""}${dayCount(d)} 个</span>
+            <span class="sub">${esc(dayDateTxt(d))}${d.date ? " · " : ""}${esc(tf("nPlaces", { n: dayCount(d) }))}</span>
           </button>
           ${(d.places || []).length ? "" :
-            `<button class="dop d-del-day" data-delday="${d.n}" title="删除这一天" aria-label="删除这一天">${ICON.del}</button>`}
+            `<button class="dop d-del-day" data-delday="${d.n}" title="${esc(T.deleteDay)}" aria-label="${esc(T.deleteDay)}">${ICON.del}</button>`}
         </div>
         <div class="dlist">${rows || `<div class="dempty">${emptyHint(d)}</div>`}</div>
       </div>`;
@@ -2999,10 +3331,10 @@ const MAP = (() => {
     if(!ITIN.length){
       // 正常流程里到不了这里（autoItinerary 会按 trip.dates 建好）。
       // 只有 dates 和 days 都缺时才会落到这个兜底。
-      col.innerHTML = `<div class="dc-head">日程
-          <button id="day-add" class="lnk" title="加一天" aria-label="加一天">+</button></div>`
-        + (st.addOpen ? `<div class="addmenu"><button data-add="tail">＋ 加第一天</button></div>` : "")
-        + `<div class="dempty">行程没有日期信息，无法自动分天。<br>点右上角 <b>+</b> 手动加。</div>`;
+      col.innerHTML = `<div class="dc-head">${T.schedule}
+          <button id="day-add" class="lnk" title="${esc(T.addDayTitle)}" aria-label="${esc(T.addDayTitle)}">+</button></div>`
+        + (st.addOpen ? `<div class="addmenu"><button data-add="tail">${T.addFirst}</button></div>` : "")
+        + `<div class="dempty">${T.noDatesMsg}</div>`;
       return;
     }
     if(st.curDay == null || !ITIN.some(d => d.n === st.curDay)) st.curDay = ITIN[0].n;
@@ -3016,13 +3348,13 @@ const MAP = (() => {
     }).join("") + `</div>`;
 
     col.innerHTML =
-      `<div class="dc-head">日程<span class="sp">${ITIN.length} 天</span>
-         <button id="day-mode" class="lnk">${st.flat ? "收起" : "平铺"}</button>
-         <button id="day-add" class="lnk" title="加一天" aria-label="加一天">+</button></div>`
+      `<div class="dc-head">${T.schedule}<span class="sp">${tf("nDays", { n: ITIN.length })}</span>
+         <button id="day-mode" class="lnk">${st.flat ? T.collapseDays : T.flatDays}</button>
+         <button id="day-add" class="lnk" title="${esc(T.addDayTitle)}" aria-label="${esc(T.addDayTitle)}">+</button></div>`
       + (st.addOpen ? `<div class="addmenu">`
           + (ITIN.some(d => d.n === 0) ? "" :
-             `<button data-add="zero">＋ 第 0 天（抵达当晚）</button>`)
-          + `<button data-add="tail">＋ 在末尾加一天</button></div>` : "")
+             `<button data-add="zero">${T.addZero}</button>`)
+          + `<button data-add="tail">${T.addTail}</button></div>` : "")
       + caps
       + ITIN.filter(d => st.flat || d.n === st.curDay).map(dayBox).join("");
     wireSortable();
@@ -3058,13 +3390,13 @@ const MAP = (() => {
   };
   function pinLabel(p){
     const d = curDayObj();
-    if(!d) return `${p.name}：还没有日程可排`;
-    return `${inCurDay(p.id) ? "移出" : "加入"}${dayLabel(d)}：${p.name}`;
+    if(!d) return tf("pinNoSchedule", { name: p.name });
+    return tf(inCurDay(p.id) ? "pinRemove" : "pinAdd", { day: dayLabel(d), name: p.name });
   }
 
   function toggleInCurDay(id){
     const d = curDayObj();
-    if(!d){ toast("还没有日程。先建立分天，再往里放地点。"); return; }
+    if(!d){ toast(T.noScheduleToast); return; }
     d.places = d.places || [];
     const at = d.places.map(e => e.id).lastIndexOf(id);
     if(at >= 0){
@@ -3112,7 +3444,7 @@ const MAP = (() => {
     const list = pts().filter(shown);
     const byArea = new Map();
     list.forEach(p => {
-      const k = p.area || "其他";
+      const k = p.area || T.otherArea;
       if(!byArea.has(k)) byArea.set(k, []);
       byArea.get(k).push(p);
     });
@@ -3123,7 +3455,7 @@ const MAP = (() => {
              aria-pressed="${inCurDay(p.id)}" aria-label="${esc(pinLabel(p))}">${pinText(p)}</button>
            <button class="bare t" type="button"><b>${esc(p.name)}</b><span class="sub">${metaLine(p)}</span></button>
          </div>`).join("")).join("") ||
-      `<div class="empty-state" style="padding:34px 16px"><div>当前筛选下没有可显示的地点</div></div>`;
+      `<div class="empty-state" style="padding:34px 16px"><div>${T.sideEmpty}</div></div>`;
     wireSortable();
   }
 
@@ -3146,33 +3478,33 @@ const MAP = (() => {
     if(amt && free){
       const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
       return free.index < amt.index
-        ? `免费 / ${amt[0].replace(/\s+/g, "")}${many ? "起" : ""}`
-        : `${amt[0].replace(/\s+/g, "")}${many ? "起" : ""}`;
+        ? `${T.free} / ${amt[0].replace(/\s+/g, "")}${many ? T.fromSuffix : ""}`
+        : `${amt[0].replace(/\s+/g, "")}${many ? T.fromSuffix : ""}`;
     }
     if(amt){
       const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
-      return amt[0].replace(/\s+/g, "") + (many ? "起" : "");
+      return amt[0].replace(/\s+/g, "") + (many ? T.fromSuffix : "");
     }
-    return free ? "免费" : "";
+    return free ? T.free : "";
   }
 
   function warnOf(p){
-    if(p.status === "permanently_closed") return "已关闭";
-    if(p.status && p.status !== "open") return "非正常营业";
-    if(p.verify && p.verify.state && p.verify.state !== "verified") return "待确认";
-    if(p.booking === "required") return "须预约";
+    if(p.status === "permanently_closed") return T.wClosed;
+    if(p.status && p.status !== "open") return T.wAbnormal;
+    if(p.verify && p.verify.state && p.verify.state !== "verified") return T.wUnverified;
+    if(p.booking === "required") return T.wBooking;
     // 排进了它闭馆的那天 —— 这是硬冲突，优先级高于上面的软提示
     for(const s of schedOf(p.id)){
       const day = ITIN.find(d => d.n === s.n);
       const wd = day && day.date ? new Date(day.date + "T12:00:00").getDay() || 7 : null;
-      if(wd && Array.isArray(p.closed_days) && p.closed_days.includes(wd)) return "当天闭馆";
+      if(wd && Array.isArray(p.closed_days) && p.closed_days.includes(wd)) return T.wClosedThatDay;
     }
     return "";
   }
 
   function metaLine(p){
-    if(isLodging(p)) return `<em>住宿</em>`;
-    if(isStubP(p)) return `<em>手动添加 · 待补全</em>`;
+    if(isLodging(p)) return `<em>${T.lodging}</em>`;
+    if(isStubP(p)) return `<em>${T.stubFacts}</em>`;
     const bits = [SCALE_TXT[p.scale] || p.scale, shortPrice(p.ticket)].filter(Boolean);
     const w = warnOf(p);
     return bits.map(x => `<em>${esc(x)}</em>`).join(" · ")
@@ -3223,7 +3555,7 @@ const MAP = (() => {
   /* ---------- 引擎启动 ---------- */
   async function startMapLibre(){
     await Promise.all([loadCSS(MAPLIBRE_CSS), loadJS(MAPLIBRE_JS)]);
-    if(!window.maplibregl) throw new Error("MapLibre 未就绪");
+    if(!window.maplibregl) throw new Error(T.errMapLibre);
     const c = center();
     st.map = new maplibregl.Map({
       container:"map-canvas", style:await styleFor(st.base),
@@ -3243,7 +3575,7 @@ const MAP = (() => {
       const tick = setInterval(() => {
         if(document.hidden || settled) return;
         waited += 500;
-        if(waited >= 20000){ stop(); rej(new Error("矢量底图 20 秒未加载完成")); }
+        if(waited >= 20000){ stop(); rej(new Error(T.errVector20)); }
       }, 500);
       st.map.once("load", () => { if(!settled){ stop(); res(); } });
       // 只有「网络形态的失败」才算底图不可用。
@@ -3265,7 +3597,7 @@ const MAP = (() => {
         const networkish = (err && typeof err.status === "number")
                         || /Failed to fetch|NetworkError|Load failed|ERR_/.test(msg);
         if(!networkish) return;
-        stop(); rej(err || new Error("底图出错"));
+        stop(); rej(err || new Error(T.errBasemap));
       });
     });
     // 放在 await 之后：加载期间 st.engine 还不该是 maplibre，
@@ -3290,7 +3622,7 @@ const MAP = (() => {
 
   async function startLeaflet(){
     await Promise.all([loadCSS(LEAFLET_CSS), loadJS(LEAFLET_JS)]);
-    if(!window.L) throw new Error("Leaflet 未就绪");
+    if(!window.L) throw new Error(T.errLeaflet);
     const c = center();
     st.map = L.map("map-canvas", { attributionControl:false }).setView([c.lat, c.lon], 12);
     L.tileLayer(CARTO_RASTER[0], { maxZoom:19, referrerPolicy:"strict-origin-when-cross-origin" }).addTo(st.map);
@@ -3352,7 +3684,7 @@ const MAP = (() => {
       style = await styleFor(id);
     }catch(e){
       if(seq !== switchSeq) return;
-      note(`<b>「${(BASEMAPS.find(x => x.id === id) || {}).label || id}」底图加载失败</b>：${esc(e.message || e)}`);
+      note(`<b>${esc((BASEMAPS.find(x => x.id === id) || {}).label || id)}</b> ${T.loadFail}${esc(e.message || e)}`);
       return;
     }
     if(seq !== switchSeq) return;        // 期间又点了别的，这次作废
@@ -3417,15 +3749,15 @@ const MAP = (() => {
     const wait = 1100 - (Date.now() - lastSearch);
     if(wait > 0) await new Promise(r => setTimeout(r, wait));
     lastSearch = Date.now();
-    searchPanel(`<div class="sr-note">搜索中…</div>`);
-    msqSay("搜索中…");
+    searchPanel(`<div class="sr-note">${T.searching}</div>`);
+    msqSay(T.searching);
     try{
       const u = new URL(NOMINATIM);
       u.search = new URLSearchParams({
         q, format: "jsonv2", limit: "6", addressdetails: "1", namedetails: "1",
         // 展示名跟着行程页语言走；viewbox 只做偏置不做过滤（bounded 默认 0）——
         // 临时起意的点常在 bbox 外，比如大阪行程想去奈良
-        "accept-language": TRIP.output_language || "zh-CN",
+        "accept-language": TRIP.output_language || "en",
         ...(Array.isArray(TRIP.bbox) && TRIP.bbox.length === 4
             ? { viewbox: TRIP.bbox.join(",") } : {}),
       });
@@ -3433,21 +3765,20 @@ const MAP = (() => {
       if(!r.ok) throw new Error("HTTP " + r.status);
       const list = await r.json();
       if(!Array.isArray(list) || !list.length){
-        searchPanel(`<div class="sr-note">没找到「${esc(q)}」。<br>
-          中文俗名偶尔对不上地图数据，试试英文或当地语言名称。</div>`);
-        msqSay(`没找到「${q}」，试试英文或当地语言名称`);
+        searchPanel(`<div class="sr-note">${tf("notFound", { q: esc(q) })}</div>`);
+        msqSay(tf("notFoundSay", { q }));
         return;
       }
       results = list;
-      msqSay(`找到 ${list.length} 个结果，就在搜索框下方`);
+      msqSay(tf("foundSay", { n: list.length }));
       searchPanel(list.map((x, i) =>
         `<button class="sr" type="button" data-sr="${i}">
            <b>${esc(x.name || (x.display_name || "").split(",")[0])}</b>
            <span>${esc(x.display_name || "")}</span>
          </button>`).join(""));
     }catch(e){
-      searchPanel(`<div class="sr-note">搜索失败（${esc(e.message || e)}）。搜索需要联网，稍后再试。</div>`);
-      msqSay("搜索失败，稍后再试");
+      searchPanel(`<div class="sr-note">${tf("searchFail", { e: esc(e.message || e) })}</div>`);
+      msqSay(T.searchFailSay);
     }finally{ searching = false; }
   }
 
@@ -3498,11 +3829,11 @@ const MAP = (() => {
     div.innerHTML = `<b>${esc(cand.name)}</b>
       <div class="addr">${esc(cand.addr)}</div>
       <div class="row">
-        <button class="btn sm primary" data-cand="list">加入清单</button>
-        ${d ? `<button class="btn sm" data-cand="day">加入${esc(dayLabel(d))}</button>` : ""}
-        <button class="btn sm" data-cand="x">取消</button>
+        <button class="btn sm primary" data-cand="list">${T.addToList}</button>
+        ${d ? `<button class="btn sm" data-cand="day">${esc(tf("addToDay", { day: dayLabel(d) }))}</button>` : ""}
+        <button class="btn sm" data-cand="x">${T.cancel}</button>
       </div>
-      <div class="hint">先钉住位置和坐标，开放时间等详情之后让 AI 补全</div>`;
+      <div class="hint">${T.candHint}</div>`;
     document.querySelector(".map-main").appendChild(div);
   }
 
@@ -3511,7 +3842,7 @@ const MAP = (() => {
     const stub = {
       id: "u-" + Date.now().toString(36),
       name: cand.name,
-      area: cand.area || "手动添加",
+      area: cand.area || T.manualArea,
       coord: { lon: cand.lon, lat: cand.lat },
       origin: "user",
       choice: "yes",   // 特意搜出来加的，「想去」不言自明
@@ -3528,7 +3859,7 @@ const MAP = (() => {
     else commit();
     render();                           // 清单视图的卡片与进度
     focus(stub.id, false);
-    toast(`已添加「${stub.name}」，详情待 AI 补全`);
+    toast(tf("addedToast", { name: stub.name }));
   }
 
   $("#msq")?.addEventListener("keydown", e => {
@@ -3566,8 +3897,8 @@ const MAP = (() => {
     renderSide();
 
     if(!pts().length){
-      $("#map-canvas").innerHTML = `<div class="empty-state"><div class="big">没有可定位的地点</div>
-        <div>景点缺少 coord 字段</div></div>`;
+      $("#map-canvas").innerHTML = `<div class="empty-state"><div class="big">${T.noCoords}</div>
+        <div>${T.noCoordsSub}</div></div>`;
       return;
     }
 
@@ -3575,26 +3906,26 @@ const MAP = (() => {
 
     const problems = [];
     const webgl = hasWebGL();
-    if(!webgl) problems.push("浏览器未启用 WebGL");
+    if(!webgl) problems.push(T.noWebgl);
 
     try{
-      if(!webgl) throw new Error("需要 WebGL");
+      if(!webgl) throw new Error(T.needWebgl);
       try{
         await startMapLibre();
       }catch(eGb){
         // 默认矢量源挂了不必直接跌到 Leaflet —— 还有第二个矢量源，
         // 而且它是另一家运营、另一套 schema，不会跟着一起挂。
         if(st.base === "ofm"){
-          problems.push("简约底图不可用（" + (eGb.message || eGb) + "），已改用标准");
+          problems.push(tf("ofmFail", { e: eGb.message || eGb }));
           if(st.map && st.map.remove){ try{ st.map.remove(); }catch(_){} }
           st.map = null;
           $("#map-canvas").innerHTML = "";
           st.base = "gb";
           $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === "gb"));
           const dead = document.querySelector('#basemaps [data-base="ofm"]');
-          if(dead){ dead.disabled = true; dead.title = "该底图当前不可用：" + (eGb.message || eGb); }
+          if(dead){ dead.disabled = true; dead.title = T.bmDead + (eGb.message || eGb); }
           await startMapLibre();
-          note(problems.join("；") + "。点位、联动、导出都不受影响。");
+          note(problems.join(T.listSep) + " " + T.unaffected);
         }else throw eGb;
       }
       watchTiles();
@@ -3603,10 +3934,10 @@ const MAP = (() => {
         $("#transit-group").hidden = false;
         paintLegend();
       }else if(st.transitBroken){
-        note(`地铁层未能加载（${esc(st.transitBroken)}），其余功能不受影响。`);
+        note(tf("transitFailNote", { e: esc(st.transitBroken) }));
       }
     }catch(e1){
-      problems.push("矢量底图不可用（" + (e1.message || e1) + "）");
+      problems.push(tf("vectorFail", { e: e1.message || e1 }));
       try{
         if(st.map && st.map.remove) { try{ st.map.remove(); }catch(_){} }
         st.map = null;
@@ -3614,15 +3945,15 @@ const MAP = (() => {
         await startLeaflet();
         st.degraded = true;
         fitAll(); st.fitted = true;
-        note(`<b>已降级</b>：${problems.join("；")}。当前使用 Leaflet + CARTO 光栅底图，点位、联动、导出都不受影响，只是不能切底图。`);
-        lockBaseButtons("降级模式下不可切换底图");
+        note(tf("degradedNote", { p: problems.join(T.listSep) }));
+        lockBaseButtons(T.degradedLock);
       }catch(e2){
-        problems.push("光栅底图也不可用（" + (e2.message || e2) + "）");
+        problems.push(tf("rasterFail", { e: e2.message || e2 }));
         st.degraded = true;
         st.engine = "static";
         st.map = null;
-        note(`<b>底图全部不可用</b>：${problems.join("；")}。下面是按经纬度换算的相对位置示意图——比例不准，但方位和聚集关系是对的，导出功能照常可用。`);
-        lockBaseButtons("无可用底图");
+        note(tf("allDead", { p: problems.join(T.listSep) }));
+        lockBaseButtons(T.noBasemap);
       }
     }
 
@@ -3646,9 +3977,9 @@ const MAP = (() => {
     for(const p of selected()){
       rows.push([
         p.name_en || p.name, p.coord.lat, p.coord.lon,
-        [p.name, p.name_local, p.pitch, p.hours && "开放 " + p.hours, p.ticket].filter(Boolean).join(" | "),
+        [p.name, p.name_local, p.pitch, p.hours && T.kvHours + " " + p.hours, p.ticket].filter(Boolean).join(" | "),
         CATMAP[p.category] || p.category,
-        { yes:"想去", maybe:"待定", no:"不想去" }[p.choice] || "未表态",
+        { yes:T.yes, maybe:T.maybe, no:T.no }[p.choice] || T.none,
         (p.sources || [])[0]?.url || "",
       ]);
     }
@@ -3658,11 +3989,11 @@ const MAP = (() => {
     const esc2 = s => String(s ?? "").replace(/[<>&]/g, c => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c]));
     return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2"><Document>
-<name>${esc2(TRIP.destination || "行程")}</name>
+<name>${esc2(TRIP.destination || T.trip)}</name>
 ${selected().map(p => `<Placemark>
-  <name>${esc2(p.name)}${p.name_local && p.name_local !== p.name ? "（" + esc2(p.name_local) + "）" : ""}</name>
-  <description>${esc2([p.pitch, p.hours && "开放时间：" + p.hours, p.ticket && "门票：" + p.ticket,
-                       p.closed && "闭馆：" + p.closed].filter(Boolean).join("\n"))}</description>
+  <name>${esc2(p.name)}${p.name_local && p.name_local !== p.name ? " (" + esc2(p.name_local) + ")" : ""}</name>
+  <description>${esc2([p.pitch, p.hours && T.kvHours + ": " + p.hours, p.ticket && T.kvTicket + ": " + p.ticket,
+                       p.closed && T.kvClosed + ": " + p.closed].filter(Boolean).join("\n"))}</description>
   <Point><coordinates>${p.coord.lon},${p.coord.lat},0</coordinates></Point>
 </Placemark>`).join("\n")}
 </Document></kml>`;
@@ -3672,7 +4003,7 @@ ${selected().map(p => `<Placemark>
     a.href = URL.createObjectURL(new Blob([text], { type:mime }));
     a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    toast(`已导出 ${name}（${selected().length} 个地点）`);
+    toast(tf("exported", { name, n: selected().length }));
   }
 
   /* ---------- hover 双向联动 ----------
@@ -3736,7 +4067,7 @@ ${selected().map(p => `<Placemark>
       const btn = lg.querySelector(".lg-toggle");
       if(btn) btn.setAttribute("aria-expanded", String(open));
       const hint = lg.querySelector(".lg-hint");
-      if(hint) hint.textContent = open ? "点击收起" : "点击展开线路名";
+      if(hint) hint.textContent = open ? T.legendCollapse : T.legendExpand;
       return;
     }
     const dm = e.target.closest("#day-mode");
@@ -3786,19 +4117,19 @@ const GUIDE = (() => {
   /* ---------- 天气 ----------
      Open-Meteo 免费、无需 key、支持跨域。
      ≤16 天用预报；超出预报范围则退回历史同期均值，并明确标注这不是预报。 */
-  const WMO = {
-    0:["☀️","晴"],1:["🌤","多云转晴"],2:["⛅","多云"],3:["☁️","阴"],
-    45:["🌫","雾"],48:["🌫","雾凇"],
-    51:["🌦","毛毛雨"],53:["🌦","小雨"],55:["🌧","中雨"],
-    56:["🌧","冻雨"],57:["🌧","冻雨"],
-    61:["🌦","小雨"],63:["🌧","中雨"],65:["🌧","大雨"],
-    66:["🌧","冻雨"],67:["🌧","冻雨"],
-    71:["🌨","小雪"],73:["🌨","中雪"],75:["❄️","大雪"],77:["🌨","雪粒"],
-    80:["🌦","阵雨"],81:["🌧","强阵雨"],82:["⛈","暴雨"],
-    85:["🌨","阵雪"],86:["❄️","强阵雪"],
-    95:["⛈","雷雨"],96:["⛈","雷雨伴冰雹"],99:["⛈","强雷雨伴冰雹"],
+  /* 图标是通用的，只有文字说明分语言 —— 说明从 T.wmo 取（en/zh 内置，
+     其他语言可由 ui.wmo 覆盖），缺哪个 code 落回英文。 */
+  const WMO_ICON = {
+    0:"☀️",1:"🌤",2:"⛅",3:"☁️",45:"🌫",48:"🌫",
+    51:"🌦",53:"🌦",55:"🌧",56:"🌧",57:"🌧",
+    61:"🌦",63:"🌧",65:"🌧",66:"🌧",67:"🌧",
+    71:"🌨",73:"🌨",75:"❄️",77:"🌨",
+    80:"🌦",81:"🌧",82:"⛈",85:"🌨",86:"❄️",
+    95:"⛈",96:"⛈",99:"⛈",
   };
-  const wmo = c => WMO[c] || ["·","—"];
+  const wmo = c => WMO_ICON[c]
+    ? [WMO_ICON[c], (T.wmo || {})[c] || I18N.en.wmo[c] || "—"]
+    : ["·","—"];
 
   function anchor(){
     const b = (TRIP.bases || [])[0];
@@ -3819,7 +4150,7 @@ const GUIDE = (() => {
       daily:"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum",
     });
     const r = await fetch(u);
-    if(!r.ok) throw new Error("预报接口返回 " + r.status);
+    if(!r.ok) throw new Error("HTTP " + r.status);
     return r.json();
   }
 
@@ -3876,7 +4207,7 @@ const GUIDE = (() => {
     const c = anchor();
     if(!c){ box.innerHTML = ""; return; }
 
-    box.innerHTML = `<div class="wx-src">正在获取天气…</div>`;
+    box.innerHTML = `<div class="wx-src">${T.wxLoading}</div>`;
     const today = new Date(); today.setHours(0,0,0,0);
     const lead = Math.round((DAYS[DAYS.length-1].date - today) / 864e5);
 
@@ -3889,28 +4220,25 @@ const GUIDE = (() => {
           const pp = d.precipitation_probability_max?.[i];
           const ps = d.precipitation_sum?.[i];
           const rain = pp != null && pp >= 30
-            ? `降水概率 <b>${pp}%</b>${ps ? ` · ${ps}mm` : ""}`
-            : `降水概率 ${pp ?? "—"}%`;
+            ? tf("precipProbHi", { p: pp, mm: ps ? ` · ${ps}mm` : "" })
+            : tf("precipProb", { p: pp ?? "—" });
           const wd = ((new Date(t + "T00:00:00").getDay() + 6) % 7) + 1;
-          return card(`${t.slice(5)} 周${WD[wd-1]} · ${desc}`, ic, desc, d.temperature_2m_max[i], d.temperature_2m_min[i], rain);
+          return card(`${t.slice(5)} ${WD_NAMES[wd]} · ${desc}`, ic, desc, d.temperature_2m_max[i], d.temperature_2m_min[i], rain);
         }).join("") + `</div>
-        <div class="wx-src">实时预报 · Open-Meteo · 每次打开本页都会重新获取</div>`;
+        <div class="wx-src">${T.wxLive}</div>`;
       }else{
         const n = await fetchNormals(c, DAYS);
         box.innerHTML = `<div class="wx">` + DAYS.map((d, i) => {
           const o = n[i] || {};
           const rain = o.wetRate == null ? "—"
-            : `历史降雨日占比 <b>${o.wetRate}%</b>`;
-          return card(`${d.iso.slice(5)} 周${WD[d.wd-1]} · 常年`, "📅", "历史同期均值",
+            : tf("wetRate", { p: o.wetRate });
+          return card(`${d.iso.slice(5)} ${WD_NAMES[d.wd]} · ${T.climate}`, "📅", T.climateDesc,
                       o.tmax, o.tmin, rain);
         }).join("") + `</div>
-        <div class="wx-src est">⚠ 出行日在 ${lead} 天后，超出 16 天预报范围。
-          以上是<b>过去 8 年同期的历史平均</b>，只能说明大致气候，<b>不是预报</b>。
-          临近出行请重新打开本页查看真实预报。</div>`;
+        <div class="wx-src est">${tf("wxEstWarn", { n: lead })}</div>`;
       }
     }catch(e){
-      box.innerHTML = `<div class="wx-src est">天气获取失败（${esc(e.message)}）。
-        联网后重新打开本页即可重试。</div>`;
+      box.innerHTML = `<div class="wx-src est">${tf("wxFail", { e: esc(e.message) })}</div>`;
     }
   }
 
@@ -3966,7 +4294,7 @@ const GUIDE = (() => {
         seen.add(p.id);
         list.push(p);
       }
-      if(list.length) groups.push([`第 ${d.n} 天${d.date ? " · " + d.date.slice(5) : ""}`, list]);
+      if(list.length) groups.push([tf("dayN", { n: d.n }) + (d.date ? " · " + d.date.slice(5) : ""), list]);
     }
     const byDay = groups.length > 0;
     if(!byDay){
@@ -3985,15 +4313,14 @@ const GUIDE = (() => {
     }).join("");
     const all = groups.flatMap(([, l]) => l);
     const cur = /[¥￥]|日元|円/.test(all.map(p => p.ticket).join("")) ? "¥" : "";
-    return `<h3>费用汇总</h3>
+    return `<h3>${T.costTitle}</h3>
       <div class="sum">
-        <div class="sum-h">门票与入场费<span>${byDay ? `已排进日程的 ${n} 个地点` : `${n} 个「想去」的地点`}</span></div>
+        <div class="sum-h">${T.costHead}<span>${byDay ? tf("costScheduled", { n }) : tf("costWanted", { n })}</span></div>
         ${html}
-        <div class="cost-total">已解析 ${parsed} 项，合计约 <b>${cur}${sum.toLocaleString()}</b></div>
-        ${byDay ? "" : `<div class="caveat">日程还没排，这里按「想去」的地点估算。排完之后会改成按每天实际要去的点计算。</div>`}
-        ${unparsed.length ? `<div class="caveat">以下 ${unparsed.length} 项的票价是文字描述，未计入合计：${esc(unparsed.join("、"))}。
-          特别展、体验项目、夜间加价通常另计，实际花费会高于此数。</div>`
-          : `<div class="caveat">仅含门票，不含交通、餐饮与特别展加价。</div>`}
+        <div class="cost-total">${tf("costTotal", { n: parsed, cur, sum: sum.toLocaleString() })}</div>
+        ${byDay ? "" : `<div class="caveat">${T.costNoSched}</div>`}
+        ${unparsed.length ? `<div class="caveat">${tf("costUnparsed", { n: unparsed.length, list: esc(unparsed.join(T.listSep)) })}</div>`
+          : `<div class="caveat">${T.costOnly}</div>`}
       </div>`;
   }
 
@@ -4005,7 +4332,7 @@ const GUIDE = (() => {
      前者是「那天走哪几个」，后者是「有没有漏掉什么」。 */
   function ckRow(p, mark, out, extra){
     // 住宿没有 scale，直接拼会留下一个孤零零的「·」
-    const scale = SCALE_TXT[p.scale] || p.scale || (isLodging(p) ? "住宿" : "");
+    const scale = SCALE_TXT[p.scale] || p.scale || (isLodging(p) ? T.lodging : "");
     return `<div class="ck${out ? " out" : ""}">
       <span class="m">${mark}</span>
       <span class="n">${esc(p.name)}<span class="sub">${esc(p.area)}${scale ? " · " + esc(scale) : ""}</span></span>
@@ -4014,7 +4341,7 @@ const GUIDE = (() => {
   }
 
   function renderChecklist(){
-    const MARK = { yes:["✅","想去"], maybe:["🔸","待定"], no:["❌","放弃"], none:["⬜","未表态"] };
+    const MARK = { yes:["✅",T.markYes], maybe:["🔸",T.markMaybe], no:["❌",T.markNo], none:["⬜",T.markNone] };
     const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
     const scheduled = new Set(days.flatMap(d => d.places.map(e => e.id)));
 
@@ -4032,11 +4359,11 @@ const GUIDE = (() => {
           return ckRow(p, lod ? "🏠" : seq,
             false, e.note ? `<span class="why">${esc(e.note)}</span>` : "");
         }).join("");
-        return `<div class="sum-d">第 ${d.n} 天${d.date ? " · " + d.date.slice(5) : ""}
-          <span>${d.places.length} 项</span></div>${rows}`;
+        return `<div class="sum-d">${tf("dayN", { n: d.n })}${d.date ? " · " + d.date.slice(5) : ""}
+          <span>${tf("nItems", { n: d.places.length })}</span></div>${rows}`;
       }).join("");
       html += `<div class="sum">
-        <div class="sum-h">按天的行程<span>${days.length} 天 · ${items} 项</span></div>
+        <div class="sum-h">${T.byDayTitle}<span>${tf("nDaysItems", { d: days.length, i: items })}</span></div>
         ${blocks}</div>`;
     }
 
@@ -4044,9 +4371,9 @@ const GUIDE = (() => {
     const missed = PLACES.filter(p => p.choice === "yes" && !isLodging(p) && !scheduled.has(p.id));
     if(days.length && missed.length){
       html += `<div class="sum">
-        <div class="sum-h">想去，但没排进任何一天<span>${missed.length} 个</span></div>
+        <div class="sum-h">${T.missedTitle}<span>${tf("nCount", { n: missed.length })}</span></div>
         ${missed.map(p => ckRow(p, "⚠️")).join("")}
-        <div class="caveat">要么加进某一天，要么改成「待定」——否则出发时才发现漏了。</div>
+        <div class="caveat">${T.missedCaveat}</div>
       </div>`;
     }
 
@@ -4056,15 +4383,14 @@ const GUIDE = (() => {
     const order = ["maybe", "none", "no"];
     if(rest.length){
       html += `<div class="sum">
-        <div class="sum-h">${days.length ? "没排进日程的" : "全部候选"}
+        <div class="sum-h">${days.length ? T.unscheduled : T.allCandidates}
           <span>${order.map(k => `${MARK[k][1]} ${(by[k] || []).length}`).join(" · ")}</span></div>
         ${order.flatMap(k => (by[k] || []).map(p => ckRow(p, MARK[k][0], k === "no"))).join("")}
       </div>`;
     }
 
-    return `<h3>全部景点对照表</h3>
-      <p>${days.length ? "上半部分是你排好的每天行程，下半部分是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。"
-                       : "包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。"}</p>
+    return `<h3>${T.checklistTitle}</h3>
+      <p>${days.length ? T.checklistIntroDays : T.checklistIntro}</p>
       ${html}`;
   }
 
@@ -4148,22 +4474,59 @@ function switchView(v){
 }
 
 /* ─────────────────────────────────────────────── 启动 */
+/* 静态 HTML 里的文案是英文兜底，这里统一按 T 表覆盖一遍 ——
+   en 是恒等操作，zh / ui 覆盖表则在首帧前就替换完毕。 */
+function applyStaticI18n(){
+  const txt = (sel, v) => { const el = $(sel); if(el) el.textContent = v; };
+  const attr = (sel, a, v) => { const el = $(sel); if(el) el.setAttribute(a, v); };
+  txt("#tab-list-txt", T.tabList);
+  txt("#tab-map", T.tabMap);
+  txt("#tab-guide", T.tabGuide);
+  attr("#tab-guide", "title", T.guideTabDisabled);
+  txt("#exp-csv", T.exportCsv);
+  txt("#exp-kml", T.exportKml);
+  txt("#csv-hint", T.csvHint);
+  attr("#q", "placeholder", T.searchPh);
+  attr("#q", "aria-label", T.searchAria);
+  attr("#seg-group", "aria-label", T.groupAria);
+  txt("#by-area", T.byArea);
+  txt("#by-tier", T.byTier);
+  attr("#seg-scope", "aria-label", T.scopeAria);
+  txt("#f-all", T.fAll);
+  txt("#f-todo", T.fTodo);
+  attr("#seg-mfil", "aria-label", T.filterAria);
+  for(const b of $$(".mfil")){
+    const c = b.querySelector(".c");
+    b.textContent = T[b.dataset.c] ?? b.dataset.c;
+    if(c) b.appendChild(c);
+  }
+  attr("#msq", "placeholder", T.msqPh);
+  attr("#msq", "aria-label", T.msqAria);
+  txt("#msq-go", T.msqGo);
+  txt("#transit-btn", T.transit);
+  txt("#save", T.saveBtn);
+  txt("#download", T.downloadBtn);
+  txt("#copy", T.copyBtn);
+  txt("#more", T.moreBtn);
+}
+
 function boot(){
-  document.title = `${TRIP.destination || "行程"} · 行程规划`;
+  document.title = tf("docTitle", { dest: TRIP.destination || T.trip });
   if(TRIP.output_language) document.documentElement.lang = TRIP.output_language;
+  applyStaticI18n();
   initTheme();
-  $("#title").innerHTML = esc(TRIP.destination || "行程")
+  $("#title").innerHTML = esc(TRIP.destination || T.trip)
     + (TRIP.destination_local && TRIP.destination_local !== TRIP.destination
         ? `（<span${langAttr}>${esc(TRIP.destination_local)}</span>）` : "");
 
   const bits = [];
   if(TRIP.dates && TRIP.dates.start) bits.push(`<b>${TRIP.dates.start} → ${TRIP.dates.end}</b>`);
-  if(TRIP.days)  bits.push(`${TRIP.days} 天`);
+  if(TRIP.days)  bits.push(tf("nDays", { n: TRIP.days }));
   if(TRIP.party) bits.push(esc(TRIP.party));
   if(TRIP.pace)  bits.push(esc(TRIP.pace));
   let sub = bits.join(" · ");
   const vd = TRIP.verified_at ? Math.round((Date.now() - new Date(TRIP.verified_at+"T00:00:00")) / 864e5) : null;
-  if(vd !== null && vd > 30) sub += ` <span class="stale">数据核验于 ${vd} 天前，开放时间可能已变</span>`;
+  if(vd !== null && vd > 30) sub += ` <span class="stale">${tf("staleNote", { n: vd })}</span>`;
   $("#subtitle").innerHTML = sub;
 
   const restoredAdded = loadAdded();   // 先于 loadItin：日程草稿可能引用粗胚的 id
@@ -4178,8 +4541,8 @@ function boot(){
     $("#tab-guide").disabled = false;
   }else{
     $("#guide-body").innerHTML = `<div class="empty-state">
-      <div class="big">攻略还没生成</div>
-      <div>先在清单里筛完景点，保存后告诉 AI，它会读回你的选择并设计路线。</div></div>`;
+      <div class="big">${T.noGuideBig}</div>
+      <div>${T.noGuideSub}</div></div>`;
   }
 
   // 不再靠「函数是否存在」下结论——实测函数存在也可能写不了。
@@ -4209,10 +4572,10 @@ function boot(){
     switchView(v);
   }
 
-  const msg = [restored && `${restored} 个之前的选择`,
-               restoredItin && `${restoredItin} 项日程安排`,
-               restoredAdded && `${restoredAdded} 个手动添加的地点`].filter(Boolean);
-  if(msg.length) toast(`从浏览器缓存恢复了 ${msg.join("、")}`);
+  const msg = [restored && tf("restoredChoices", { n: restored }),
+               restoredItin && tf("restoredItin", { n: restoredItin }),
+               restoredAdded && tf("restoredAdded", { n: restoredAdded })].filter(Boolean);
+  if(msg.length) toast(tf("restoredToast", { list: msg.join(T.listSep) }));
 
   layoutMapActions();
   layoutMap();
