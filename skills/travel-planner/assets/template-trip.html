@@ -925,8 +925,8 @@ pre.code{
   flex:1;min-width:132px;border:1px solid var(--line);border-radius:var(--r);
   background:var(--card);padding:11px 13px;
 }
-.wx-d .d{font:600 12px/1 var(--sans);color:var(--ink-3);margin-bottom:7px}
-.wx-d .ic{font-size:23px;line-height:1.15}
+/* 天气图标去掉之后，日期行和温度之间的呼吸靠这里补回来（原来是 7px + 一行图标） */
+.wx-d .d{font:600 12px/1.35 var(--sans);color:var(--ink-3);margin-bottom:9px}
 .wx-d .t{font:400 19px/1.25 var(--serif);margin-top:3px}
 .wx-d .t .sub{font-size:14px;color:var(--ink-3)}
 .wx-d .r{font-size:11.5px;color:var(--ink-3);margin-top:5px}
@@ -950,10 +950,20 @@ pre.code{
 }
 .sum-d span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
 .ck{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
-/* 按天列时序号取代 emoji，要对齐成一列数字 */
-.ck .m{font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-3)}
+/* 这一列里数字（按天排序号）和图标是混着的，所以既要 tabular-nums 让数字
+   对成一列，也要能把 SVG 居中。 */
+.ck .m{
+  width:17px;flex:none;text-align:center;
+  font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-3);
+}
 .ck:last-child{border-bottom:0}
-.ck .m{width:17px;flex:none;text-align:center}
+/* 图标靠 currentColor 取色，颜色与清单视图的表态按钮同源。
+   「未表态」和「放弃」都留在 --ink-3：一个是还没想，一个是想过了不去，
+   都不该在这一列里抢眼。 */
+.ck .m.yes{color:var(--ok)}
+.ck .m.maybe{color:var(--warn)}
+.ck .m.warn{color:var(--warn)}
+.ck .m.lod{color:var(--lodging)}
 .ck .n{flex:1;min-width:0}
 .ck .n .sub{color:var(--ink-3);font-size:11.5px;margin-left:7px}
 .ck .why{font-size:11.5px;color:var(--ink-3);font-style:italic}
@@ -1194,7 +1204,7 @@ en: {
   otherArea:"Other", tierGroup:"Tier {t}", stubGroup:"Added by hand · pending",
   emptyBig:"No places match", emptySub:"Adjust the search or filters",
   groupMeta:"{n} places", plusSpots:" + {k} stops",
-  unvChip:"⚠ Needs your check",
+  unvChip:"⚠︎ Needs your check",
   unvChipTitle:"Places whose official info couldn't be verified — confirm them yourself",
   kvHours:"Hours", kvLastEntry:"Last entry", kvClosed:"Closed", kvTicket:"Tickets",
   kvBooking:"Booking", kvDuration:"Suggested time", kvArea:"Area", kvPhoto:"Photogenic",
@@ -1288,7 +1298,7 @@ en: {
   wxLive:"Live forecast · Open-Meteo · refreshed every time this page opens",
   climate:"typical", climateDesc:"historical same-period average",
   wetRate:"historically rainy on <b>{p}%</b> of these days",
-  wxEstWarn:"⚠ The trip is {n} days out, beyond the 16-day forecast range. These are <b>8-year historical averages</b> for the same dates — rough climate, <b>not a forecast</b>. Reopen this page closer to departure for a real forecast.",
+  wxEstWarn:"⚠︎ The trip is {n} days out, beyond the 16-day forecast range. These are <b>8-year historical averages</b> for the same dates — rough climate, <b>not a forecast</b>. Reopen this page closer to departure for a real forecast.",
   wxFail:"Couldn't fetch weather ({e}). Reopen this page when online to retry.",
   costTitle:"Cost summary", costHead:"Tickets & admission",
   costScheduled:"{n} scheduled places", costWanted:"{n} places marked “Yes”",
@@ -1356,7 +1366,7 @@ zh: {
   otherArea:"其他", tierGroup:"{t} 级", stubGroup:"手动添加·待补全",
   emptyBig:"没有符合条件的景点", emptySub:"调整一下搜索或筛选条件",
   groupMeta:"{n} 个", plusSpots:" + {k} 打卡点",
-  unvChip:"⚠ 待你确认",
+  unvChip:"⚠︎ 待你确认",
   unvChipTitle:"官方信息没能查到的地点，需要你自己确认",
   kvHours:"开放时间", kvLastEntry:"最后入场", kvClosed:"闭馆", kvTicket:"门票",
   kvBooking:"预约", kvDuration:"建议时长", kvArea:"所属区域", kvPhoto:"出片指数",
@@ -1452,7 +1462,7 @@ zh: {
   wxLive:"实时预报 · Open-Meteo · 每次打开本页都会重新获取",
   climate:"常年", climateDesc:"历史同期均值",
   wetRate:"历史降雨日占比 <b>{p}%</b>",
-  wxEstWarn:"⚠ 出行日在 {n} 天后，超出 16 天预报范围。以上是<b>过去 8 年同期的历史平均</b>，只能说明大致气候，<b>不是预报</b>。临近出行请重新打开本页查看真实预报。",
+  wxEstWarn:"⚠︎ 出行日在 {n} 天后，超出 16 天预报范围。以上是<b>过去 8 年同期的历史平均</b>，只能说明大致气候，<b>不是预报</b>。临近出行请重新打开本页查看真实预报。",
   wxFail:"天气获取失败（{e}）。联网后重新打开本页即可重试。",
   costTitle:"费用汇总", costHead:"门票与入场费",
   costScheduled:"已排进日程的 {n} 个地点", costWanted:"{n} 个「想去」的地点",
@@ -1728,6 +1738,39 @@ const langAttr = LOCAL_LANG ? ` lang="${esc(LOCAL_LANG)}"` : "";
 const SCALE_TXT = { spot:T.scaleSpot, "30min":T.scale30, "1-2h":T.scale12,
                     "2-3h":T.scale23, "half-day":T.scaleHalf, "full-day":T.scaleFull };
 const stars = n => "★".repeat(n||0) + `<i>${"★".repeat(Math.max(0,5-(n||0)))}</i>`;
+
+/* ═══════════════ 单色图标 ═══════════════
+   页面里不用 emoji。两条理由，都踩过：
+     一、字形不由我们决定。同一个 ✅ 在 macOS / Windows / Android 上的形状、
+         字重、基线各不相同，和旁边的序号数字对不齐（地图的住宿 marker
+         就是因为这个从 emoji 换成 SVG 的）。
+     二、颜色不由我们决定。emoji 自带彩色，无法继承 currentColor，于是
+         「想去」的绿和页面的 --ok 不是同一个绿，深色主题下也不会跟着翻。
+   字体符号（◐ ✕ 之类）能解决第二条，但要赌用户的字体里有那个码位 ——
+   这个页面是要发给别人的，字体不由我们决定。所以一律内联 SVG。
+   viewBox 统一 16，用处不同只改 width/height。 */
+const SVG_ST = 'fill="none" stroke="currentColor" stroke-width="1.9" '
+             + 'stroke-linecap="round" stroke-linejoin="round"';
+const icon = (body, n = 13) =>
+  `<svg viewBox="0 0 16 16" width="${n}" height="${n}" aria-hidden="true" `
+  + `style="display:block;margin:auto;flex:none">${body}</svg>`;
+/* 住宿。viewBox 是 24 —— 这段 path 早就画好了，为了统一而重画一遍
+   不值得，尺寸参数照样管用。 */
+const house = (n = 13) => `<svg viewBox="0 0 24 24" width="${n}" height="${n}" `
+  + `fill="currentColor" aria-hidden="true" style="display:block;margin:auto;flex:none">`
+  + `<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>`;
+/* 「待定」画成半填充的圆：它在「空心圆＝未表态」和「实心对勾＝想去」
+   中间，形状本身就说明了这一点，不必靠颜色分辨。 */
+const MARK_ICON = {
+  yes:   icon(`<path d="M3 8.4 6.3 11.7 13 4.6" ${SVG_ST}/>`),
+  maybe: icon(`<circle cx="8" cy="8" r="5.2" ${SVG_ST}/>`
+            + `<path d="M8 2.8a5.2 5.2 0 0 1 0 10.4z" fill="currentColor"/>`),
+  no:    icon(`<path d="M4.3 4.3l7.4 7.4M11.7 4.3l-7.4 7.4" ${SVG_ST}/>`),
+  none:  icon(`<circle cx="8" cy="8" r="5.2" ${SVG_ST}/>`),
+  warn:  icon(`<path d="M8 2.4 14.8 13.6H1.2z" ${SVG_ST}/>`
+            + `<path d="M8 6.6v2.9" ${SVG_ST}/>`
+            + `<circle cx="8" cy="11.7" r=".95" fill="currentColor"/>`),
+};
 
 function thumb(p){
   const im = (p.images || [])[0];
@@ -3109,12 +3152,8 @@ const MAP = (() => {
 
      几何全部在 JS 里算，CSS 只管形状和过渡。否则 `.no:not(.placed)`
      这类组合会散落在两处，改一个忘一个。 */
-  /* 住宿图标。emoji 在不同系统上字形、字重、基线都不一样，和旁边的序号数字
-     对不齐；而且它无法继承颜色。统一用同一段 SVG，尺寸按用处传。 */
-  const house = (n = 13) => `<svg viewBox="0 0 24 24" width="${n}" height="${n}" `
-    + `fill="currentColor" aria-hidden="true" style="display:block">`
-    + `<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>`;
-
+  /* 住宿图标 house() 提到了顶层 —— 攻略页的清单也要用同一枚，
+     两处各画一段 SVG 迟早会分叉。 */
   const ICON = {
     up:   stroke("M8 12.5V4M4.2 7.8 8 4l3.8 3.8"),
     down: stroke("M8 3.5V12M4.2 8.2 8 12l3.8-3.8"),
@@ -4340,19 +4379,12 @@ const GUIDE = (() => {
   /* ---------- 天气 ----------
      Open-Meteo 免费、无需 key、支持跨域。
      ≤16 天用预报；超出预报范围则退回历史同期均值，并明确标注这不是预报。 */
-  /* 图标是通用的，只有文字说明分语言 —— 说明从 T.wmo 取（en/zh 内置，
-     其他语言可由 ui.wmo 覆盖），缺哪个 code 落回英文。 */
-  const WMO_ICON = {
-    0:"☀️",1:"🌤",2:"⛅",3:"☁️",45:"🌫",48:"🌫",
-    51:"🌦",53:"🌦",55:"🌧",56:"🌧",57:"🌧",
-    61:"🌦",63:"🌧",65:"🌧",66:"🌧",67:"🌧",
-    71:"🌨",73:"🌨",75:"❄️",77:"🌨",
-    80:"🌦",81:"🌧",82:"⛈",85:"🌨",86:"❄️",
-    95:"⛈",96:"⛈",99:"⛈",
-  };
-  const wmo = c => WMO_ICON[c]
-    ? [WMO_ICON[c], (T.wmo || {})[c] || I18N.en.wmo[c] || "—"]
-    : ["·","—"];
+  /* 天气只出文字，不出图标。原来每张卡片顶着一枚 emoji（☀️🌦⛈…），去掉是因为：
+     卡片标题里已经写着同一件事（「09-12 周六 · 小雨」），图标是同义反复；
+     而 emoji 的字形和配色由系统决定，一排卡片在不同机器上胖瘦不一。
+     文字说明从 T.wmo 取（en/zh 内置，其他语言可由 ui.wmo 覆盖），
+     缺哪个 code 落回英文。 */
+  const wmo = c => (T.wmo || {})[c] || I18N.en.wmo[c] || "—";
 
   function anchor(){
     const b = (TRIP.bases || [])[0];
@@ -4414,11 +4446,10 @@ const GUIDE = (() => {
     }));
   }
 
-  function card(label, icon, desc, tmax, tmin, rainLine){
+  function card(label, desc, tmax, tmin, rainLine){
     const t = v => v == null ? "—" : Math.round(v);
     return `<div class="wx-d">
-      <div class="d">${esc(label)}</div>
-      <div class="ic" title="${esc(desc)}">${icon}</div>
+      <div class="d" title="${esc(desc)}">${esc(label)}</div>
       <div class="t">${t(tmax)}°<span class="sub"> / ${t(tmin)}°</span></div>
       <div class="r">${rainLine}</div>
     </div>`;
@@ -4439,14 +4470,14 @@ const GUIDE = (() => {
         const j = await fetchForecast(c, DAYS[0].iso, DAYS[DAYS.length-1].iso);
         const d = j.daily || {};
         box.innerHTML = `<div class="wx">` + (d.time || []).map((t, i) => {
-          const [ic, desc] = wmo(d.weather_code[i]);
+          const desc = wmo(d.weather_code[i]);
           const pp = d.precipitation_probability_max?.[i];
           const ps = d.precipitation_sum?.[i];
           const rain = pp != null && pp >= 30
             ? tf("precipProbHi", { p: pp, mm: ps ? ` · ${ps}mm` : "" })
             : tf("precipProb", { p: pp ?? "—" });
           const wd = ((new Date(t + "T00:00:00").getDay() + 6) % 7) + 1;
-          return card(`${t.slice(5)} ${WD_NAMES[wd]} · ${desc}`, ic, desc, d.temperature_2m_max[i], d.temperature_2m_min[i], rain);
+          return card(`${t.slice(5)} ${WD_NAMES[wd]} · ${desc}`, desc, d.temperature_2m_max[i], d.temperature_2m_min[i], rain);
         }).join("") + `</div>
         <div class="wx-src">${T.wxLive}</div>`;
       }else{
@@ -4455,7 +4486,7 @@ const GUIDE = (() => {
           const o = n[i] || {};
           const rain = o.wetRate == null ? "—"
             : tf("wetRate", { p: o.wetRate });
-          return card(`${d.iso.slice(5)} ${WD_NAMES[d.wd]} · ${T.climate}`, "📅", T.climateDesc,
+          return card(`${d.iso.slice(5)} ${WD_NAMES[d.wd]} · ${T.climate}`, T.climateDesc,
                       o.tmax, o.tmin, rain);
         }).join("") + `</div>
         <div class="wx-src est">${tf("wxEstWarn", { n: lead })}</div>`;
@@ -4553,18 +4584,25 @@ const GUIDE = (() => {
   /* 对照表分两块：**排进日程的按天列**（这是真正要去的），
      剩下的按表态列。分开是因为这两块回答的是不同问题——
      前者是「那天走哪几个」，后者是「有没有漏掉什么」。 */
-  function ckRow(p, mark, out, extra){
+  function ckRow(p, mark, out, extra, cls){
     // 住宿没有 scale，直接拼会留下一个孤零零的「·」
     const scale = SCALE_TXT[p.scale] || p.scale || (isLodging(p) ? T.lodging : "");
     return `<div class="ck${out ? " out" : ""}">
-      <span class="m">${mark}</span>
+      <span class="m${cls ? " " + cls : ""}">${mark}</span>
       <span class="n">${esc(p.name)}<span class="sub">${esc(p.area)}${scale ? " · " + esc(scale) : ""}</span></span>
       ${extra || (p.choice_reason ? `<span class="why">${esc(p.choice_reason)}</span>` : "")}
     </div>`;
   }
 
   function renderChecklist(){
-    const MARK = { yes:["✅",T.markYes], maybe:["🔸",T.markMaybe], no:["❌",T.markNo], none:["⬜",T.markNone] };
+    // [图标, 文字, 颜色类]。颜色和清单视图的表态按钮同源（--ok/--warn/--ink-3），
+    // 换成 emoji 之前那三种彩色和页面其余部分是对不上的。
+    const MARK = {
+      yes:  [MARK_ICON.yes,   T.markYes,   "yes"],
+      maybe:[MARK_ICON.maybe, T.markMaybe, "maybe"],
+      no:   [MARK_ICON.no,    T.markNo,    "no"],
+      none: [MARK_ICON.none,  T.markNone,  ""],
+    };
     const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
     const scheduled = new Set(days.flatMap(d => d.places.map(e => e.id)));
 
@@ -4579,8 +4617,8 @@ const GUIDE = (() => {
           items++;
           const lod = isLodging(p);
           if(!lod) seq++;
-          return ckRow(p, lod ? "🏠" : seq,
-            false, e.note ? `<span class="why">${esc(e.note)}</span>` : "");
+          return ckRow(p, lod ? house(12) : seq,
+            false, e.note ? `<span class="why">${esc(e.note)}</span>` : "", lod ? "lod" : "");
         }).join("");
         return `<div class="sum-d">${tf("dayN", { n: d.n })}${d.date ? " · " + d.date.slice(5) : ""}
           <span>${tf("nItems", { n: d.places.length })}</span></div>${rows}`;
@@ -4590,12 +4628,18 @@ const GUIDE = (() => {
         ${blocks}</div>`;
     }
 
-    // 标了「想去」却没排进任何一天的——最容易被漏掉，单独提出来
-    const missed = PLACES.filter(p => p.choice === "yes" && !isLodging(p) && !scheduled.has(p.id));
-    if(days.length && missed.length){
+    /* 标了「想去」却没排进任何一天的——最容易被漏掉，单独提出来。
+       只在有日程时才算：没排过程的时候「没排进去」是全体的常态，不是遗漏，
+       挑出来毫无意义。而且这里必须跟着 days.length 一起判断 —— 下面的 rest
+       会把 missed 里的排除掉，原来无条件计算，于是还没排程时所有「想去」
+       既进不了这个（没渲染）也进不了 rest，在攻略里整个消失。 */
+    const missed = days.length
+      ? PLACES.filter(p => p.choice === "yes" && !isLodging(p) && !scheduled.has(p.id))
+      : [];
+    if(missed.length){
       html += `<div class="sum">
         <div class="sum-h">${T.missedTitle}<span>${tf("nCount", { n: missed.length })}</span></div>
-        ${missed.map(p => ckRow(p, "⚠️")).join("")}
+        ${missed.map(p => ckRow(p, MARK_ICON.warn, false, "", "warn")).join("")}
         <div class="caveat">${T.missedCaveat}</div>
       </div>`;
     }
@@ -4603,12 +4647,13 @@ const GUIDE = (() => {
     const rest = PLACES.filter(p => !isLodging(p) && !scheduled.has(p.id) && !missed.includes(p));
     const by = {};
     rest.forEach(p => (by[p.choice || "none"] = by[p.choice || "none"] || []).push(p));
-    const order = ["maybe", "none", "no"];
+    // 有日程时「想去」已经被上面两段接走了；没日程时它们全落在这儿，得排最前
+    const order = days.length ? ["maybe", "none", "no"] : ["yes", "maybe", "none", "no"];
     if(rest.length){
       html += `<div class="sum">
         <div class="sum-h">${days.length ? T.unscheduled : T.allCandidates}
           <span>${order.map(k => `${MARK[k][1]} ${(by[k] || []).length}`).join(" · ")}</span></div>
-        ${order.flatMap(k => (by[k] || []).map(p => ckRow(p, MARK[k][0], k === "no"))).join("")}
+        ${order.flatMap(k => (by[k] || []).map(p => ckRow(p, MARK[k][0], k === "no", "", MARK[k][2]))).join("")}
       </div>`;
     }
 
