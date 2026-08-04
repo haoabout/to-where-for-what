@@ -417,7 +417,9 @@ pre.code{
 /* 筛选模式两栏，排程模式三栏：清单 | 日程 | 地图。
    清单与日程相邻，从池子拖进某一天是一次约 260px 的横移；
    把地图夹在中间的话这个距离会变成约 1160px，鼠标要划过整张地图，触屏基本没法用。 */
-.map-wrap{display:grid;grid-template-columns:232px 212px 1fr;gap:14px;
+/* 栏宽最初按中文 2–4 字符的词定为 232/212。英文和 AI 现译语言（德语、俄语…）
+   词长 2–3 倍，加宽到 272/248；配合下面的 nowrap/折行规则，更长的语言也不裁字。 */
+.map-wrap{display:grid;grid-template-columns:272px 248px 1fr;gap:14px;
   height:var(--map-h,calc(100dvh - 260px));min-height:460px}
 
 .day-col{
@@ -430,7 +432,10 @@ pre.code{
   font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
   display:flex;align-items:center;gap:6px;
 }
-.day-col .dc-head .sp{margin-left:auto;font-weight:400;letter-spacing:0}
+/* 「2 days」是一个原子词组，flex 挤压下曾被压成上下两行叠着 —— nowrap 保住它，
+   空间实在不够时整个头部折行（flex-wrap 在 .dc-head 上）。 */
+.day-col .dc-head{flex-wrap:wrap}
+.day-col .dc-head .sp{margin-left:auto;font-weight:400;letter-spacing:0;white-space:nowrap}
 .lnk{
   background:none;border:0;color:var(--ink-3);font-size:11px;padding:2px 6px;border-radius:4px;letter-spacing:0;
   min-height:24px;min-width:24px;display:inline-flex;align-items:center;justify-content:center;
@@ -468,8 +473,11 @@ pre.code{
 .dhead:hover{background:var(--line)}
 .dbox.cur .dhead{background:color-mix(in srgb,var(--ink) 12%,var(--paper-2))}
 .dhead .swatch{width:9px;height:9px;border-radius:50%;flex:none}
-.dhead b{font:600 12.5px/1 var(--sans);color:var(--ink)}
-.dhead .sub{margin-left:auto;font-size:10.5px;color:var(--ink-3)}
+/* 「Day 1」「第 1 天」都是原子标题，不许内部断行；副信息（日期·计数）
+   过长时收缩出省略号 —— 完整信息在按钮的 aria-label 里。 */
+.dhead b{font:600 12.5px/1 var(--sans);color:var(--ink);white-space:nowrap}
+.dhead .sub{margin-left:auto;font-size:10.5px;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .dlist{padding:3px 0;min-height:34px}
 
 /* 日程栏的条目只有一行：序号 + 名称。四五个点就要占满这一列，不能再多 */
@@ -553,7 +561,10 @@ pre.code{
   padding:7px;border-bottom:1px solid var(--line);background:var(--paper-2);
   border-radius:var(--r) var(--r) 0 0;
 }
-.ms-head .seg{width:100%}
+/* flex-wrap：四个词放得下就一行，放不下（长词语言）折成 2×2。
+   .seg 自带 overflow:hidden，不折行的话溢出会被静默裁掉——英文版实测
+   「Undecided」时代最后一个按钮被裁了一半。 */
+.ms-head .seg{width:100%;flex-wrap:wrap}
 .ms-head .seg button{flex:1;padding:5px 2px;font-size:11px;white-space:nowrap;
   display:flex;align-items:center;justify-content:center;gap:3px}
 .ms-head .seg button .c{
@@ -938,7 +949,7 @@ pre.code{
       </div>
       <div class="seg" role="group" id="seg-scope" aria-label="Show">
         <button id="f-all"  aria-pressed="true">All</button>
-        <button id="f-todo" aria-pressed="false">Undecided</button>
+        <button id="f-todo" aria-pressed="false">Unrated</button>
       </div>
       <div class="tally" id="tally"></div>
     </div>
@@ -954,10 +965,10 @@ pre.code{
       <div class="map-side">
         <div class="ms-head">
           <div class="seg" role="group" id="seg-mfil" aria-label="Filter by choice">
-            <button class="mfil" data-c="yes"   aria-pressed="true">Want<span class="c">0</span></button>
+            <button class="mfil" data-c="yes"   aria-pressed="true">Yes<span class="c">0</span></button>
             <button class="mfil" data-c="maybe" aria-pressed="true">Maybe<span class="c">0</span></button>
-            <button class="mfil" data-c="none"  aria-pressed="true">Undecided<span class="c">0</span></button>
-            <button class="mfil" data-c="no"    aria-pressed="true">Skip<span class="c">0</span></button>
+            <button class="mfil" data-c="none"  aria-pressed="true">Unrated<span class="c">0</span></button>
+            <button class="mfil" data-c="no"    aria-pressed="true">No<span class="c">0</span></button>
           </div>
         </div>
         <div id="map-list"></div>
@@ -967,7 +978,7 @@ pre.code{
         <div id="map-canvas"></div>
         <div class="map-bar">
           <div class="mgroup msearch">
-            <input id="msq" type="search" placeholder="Search for a place to add…" autocomplete="off"
+            <input id="msq" type="search" placeholder="Add a place…" autocomplete="off"
               aria-label="Search for a place and add it to the trip" enterkeyhint="search">
             <button id="msq-go">Search</button>
           </div>
@@ -1052,10 +1063,10 @@ en: {
   csvHint:"CSV imports straight into Google My Maps",
   searchPh:"Search names, highlights, tags…", searchAria:"Search places",
   groupAria:"Group by", byArea:"By area", byTier:"By tier",
-  scopeAria:"Show", fAll:"All", fTodo:"Undecided",
+  scopeAria:"Show", fAll:"All", fTodo:"Unrated",
   filterAria:"Filter by choice",
-  yes:"Want", maybe:"Maybe", no:"Skip", none:"Undecided",
-  msqPh:"Search for a place to add…", msqAria:"Search for a place and add it to the trip",
+  yes:"Yes", maybe:"Maybe", no:"No", none:"Unrated",
+  msqPh:"Add a place…", msqAria:"Search for a place and add it to the trip",
   msqGo:"Search", transit:"Transit",
   saveBtn:"Save choices & schedule", saveNow:"Save now",
   downloadBtn:"Download places.json", copyBtn:"Copy for AI…", moreBtn:"Manual save…",
@@ -1092,7 +1103,7 @@ en: {
   whyNotTitle:"Why skip {name}?",
   reasonHint:"Note a reason so you can judge later whether to bring it back. You can skip this.",
   reasonPh:"Or write your own…", skip:"Skip", ok:"OK",
-  scSummary:"# want {y} · maybe {m} · skip {n} · undecided {u}",
+  scSummary:"# yes {y} · maybe {m} · no {n} · unrated {u}",
   scDays:" · schedule: {d} days, {i} items (each D line is that day's visit order)",
   scNoDays:" · no schedule yet",
   fileHint:"Opened as a local file — changes are not saved automatically. Click “{btn}” to write them back to places.json.",
@@ -1175,15 +1186,15 @@ en: {
   wxEstWarn:"⚠ The trip is {n} days out, beyond the 16-day forecast range. These are <b>8-year historical averages</b> for the same dates — rough climate, <b>not a forecast</b>. Reopen this page closer to departure for a real forecast.",
   wxFail:"Couldn't fetch weather ({e}). Reopen this page when online to retry.",
   costTitle:"Cost summary", costHead:"Tickets & admission",
-  costScheduled:"{n} scheduled places", costWanted:"{n} places marked “want”",
+  costScheduled:"{n} scheduled places", costWanted:"{n} places marked “Yes”",
   costTotal:"{n} parsed, total ≈ <b>{cur}{sum}</b>",
-  costNoSched:"The schedule isn't arranged yet, so this estimates from “want” picks. Once scheduled, it switches to the places actually planned per day.",
+  costNoSched:"The schedule isn't arranged yet, so this estimates from “Yes” picks. Once scheduled, it switches to the places actually planned per day.",
   costUnparsed:"{n} ticket prices are text-only and not counted: {list}. Special exhibitions, add-on experiences and night surcharges usually cost extra, so the real total will be higher.",
   costOnly:"Tickets only — no transport, meals, or special-exhibition surcharges.",
-  markYes:"want", markMaybe:"maybe", markNo:"dropped", markNone:"undecided",
+  markYes:"yes", markMaybe:"maybe", markNo:"dropped", markNone:"unrated",
   byDayTitle:"Day-by-day plan", nDaysItems:"{d} days · {i} items", nItems:"{n} items",
-  missedTitle:"Marked “want” but scheduled nowhere", nCount:"{n}",
-  missedCaveat:"Either add them to a day or downgrade them to “maybe” — otherwise you'll only notice the gap mid-trip.",
+  missedTitle:"Marked “Yes” but scheduled nowhere", nCount:"{n}",
+  missedCaveat:"Either add them to a day or downgrade them to “Maybe” — otherwise you'll only notice the gap mid-trip.",
   unscheduled:"Not in the schedule", allCandidates:"All candidates",
   checklistTitle:"All places at a glance",
   checklistIntroDays:"The top half is your day-by-day plan; the bottom half is everything unscheduled — dropped places included, so you can reconsider them.",
