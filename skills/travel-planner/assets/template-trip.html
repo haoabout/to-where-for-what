@@ -675,7 +675,14 @@ pre.code{
   font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
   border-bottom:1px solid var(--line);z-index:1;
 }
-.map-main{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper-2)}
+/* --bar-h 是 .map-bar 实测出来的高度（见 watchBar）。挂在图例和搜索结果面板
+   的 top 上 —— 原来两处都写死 52px，那等于假定工具栏永远只有一行。窄屏下
+   三个胶囊放不下会折行，工具栏变成两行，写死的 52px 就正好压住第二行的
+   底图/地铁按钮。默认值 34px 是单行时的实际高度（搜索框 29px 加边框内边距），
+   两个用它的元素首帧都是 hidden，所以 JS 接手前后不会有可见的跳动。
+   顺带一提，原来那个 52px 连宽屏都是错的 —— 单行工具栏的底边在 44px，
+   52 只留了 8px 间隙，比设计意图的 13px 窄。 */
+.map-main{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper-2);--bar-h:34px}
 #map-canvas{position:absolute;inset:0}
 /* right 给缩放控件留位：控件 29px 宽 + 10px 外边距，再留 8px 间隙 */
 .map-bar{
@@ -707,7 +714,7 @@ pre.code{
 /* 结果面板压在图例的位置上没关系——两者不会同时出现：面板是搜索后的瞬时态，
    点结果或点地图别处就收起 */
 #msq-panel{
-  position:absolute;top:52px;left:10px;z-index:22;width:min(320px,calc(100% - 20px));
+  position:absolute;top:calc(var(--bar-h) + 23px);left:10px;z-index:22;width:min(320px,calc(100% - 20px));
   background:color-mix(in srgb,var(--card) 96%,transparent);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);
   overflow:hidden auto;max-height:min(46vh,340px);
@@ -739,7 +746,7 @@ pre.code{
    12 条线的完整列表要 210×340px，占掉地图 14% 的面积，而且正好压在
    左上角的点位上 —— 常驻显示是不合适的。 */
 #map-legend{
-  position:absolute;top:52px;left:10px;z-index:20;max-width:212px;
+  position:absolute;top:calc(var(--bar-h) + 23px);left:10px;z-index:20;max-width:212px;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);
   border:1px solid var(--line);border-radius:8px;padding:7px 9px;
   box-shadow:var(--shadow);font-size:11.5px;line-height:1.5;
@@ -761,7 +768,13 @@ pre.code{
 #map-legend .lg-row{display:flex;align-items:center;gap:7px;color:var(--ink-2)}
 #map-legend .lg-row+.lg-row{margin-top:3px}
 #map-legend .lg-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#map-legend .lg-foot{margin-top:6px;padding-top:5px;border-top:1px solid var(--line);color:var(--ink-3);font-size:10.5px}
+/* 自动配色那行末尾跟着几个线号色块，flex 才能让它们和文字基线对齐、
+   数量多时整齐地折行 */
+#map-legend .lg-foot{
+  margin-top:6px;padding-top:5px;border-top:1px solid var(--line);
+  color:var(--ink-3);font-size:10.5px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:3px;
+}
 #map-legend .lg-hint{color:var(--ink-3);font-size:10px;margin-top:5px}
 .map-note{
   position:absolute;left:10px;bottom:10px;right:10px;z-index:20;
@@ -1201,7 +1214,7 @@ en: {
   tilesDead:"Tiles keep failing to load; disabled: ",
   tilesDeadNote:"<b>“{label}” basemap tiles failed to load</b>; switched back to Standard. Console error: <code>{msg}</code>",
   legendCollapse:"Click to collapse", legendExpand:"Click to show line names",
-  legendGuessed:"{n} line(s) carry no official colour in OSM; colors were auto-assigned",
+  legendGuessed:"Auto-assigned colors: ",
   legendOfficial:"Colors come from OSM's colour tag, i.e. the official line colors",
   day0Label:"Day 0 (arrival evening)", dayN:"Day {n}",
   removeDayBlocked:"This day still has places — empty it first.",
@@ -1362,7 +1375,7 @@ zh: {
   tilesDead:"瓦片持续加载失败，已停用：",
   tilesDeadNote:"<b>「{label}」底图的瓦片加载失败</b>，已自动切回标准底图。控制台原始错误：<code>{msg}</code>",
   legendCollapse:"点击收起", legendExpand:"点击展开线路名",
-  legendGuessed:"其中 {n} 条 OSM 未标注官方配色，颜色为自动分配",
+  legendGuessed:"自动配色：",
   legendOfficial:"配色取自 OSM 的 colour 标签，即官方线路色",
   day0Label:"第 0 天（抵达当晚）", dayN:"第 {n} 天",
   removeDayBlocked:"这一天还有地点，先清空再删。",
@@ -2887,7 +2900,7 @@ const MAP = (() => {
     if(!hasTransit()) return;
     const feats = [...TRANSIT.lines.features].sort((a, b) =>
       String(a.properties.ref).localeCompare(String(b.properties.ref), "en"));
-    const guessed = feats.filter(f => f.properties.guessed).length;
+    const guessed = feats.filter(f => f.properties.guessed);
     const chip = p => `<span class="lg-ref" style="background:${esc(p.colour)};color:${lineInk(p.colour)}" `
                     + `title="${esc(p.name || p.ref)}">${esc(p.ref)}</span>`;
     $("#map-legend").innerHTML =
@@ -2900,8 +2913,12 @@ const MAP = (() => {
         const p = f.properties, nm = p.name || p.ref;
         return `<div class="lg-row">${chip(p)}<span class="lg-nm" title="${esc(nm)}">${esc(nm)}</span></div>`;
       }).join("")
-    + (guessed
-        ? `<div class="lg-foot">${tf("legendGuessed", { n: guessed })}</div>`
+    /* 直接把线号列出来。原来是「其中 N 条 OSM 未标注官方配色，颜色为自动分配」——
+       读完只知道有几条，还得自己回去猜是哪几条，而「为什么是自动分配的」
+       对看图的人没有任何用。列出线号，一眼就知道哪几块颜色不能当真。 */
+    + (guessed.length
+        ? `<div class="lg-foot">${T.legendGuessed}`
+          + guessed.map(f => chip(f.properties)).join("") + `</div>`
         : `<div class="lg-foot">${T.legendOfficial}</div>`)
     + `</div>`;
   }
@@ -3764,6 +3781,18 @@ const MAP = (() => {
     if(!st.fitted){ fitAll(); st.fitted = true; }
   }
 
+  /* 把工具栏的实测高度写进 --bar-h，图例和搜索结果面板的 top 靠它避让。
+     不能用媒体查询代替：折不折行取决于三个胶囊的实际宽度，而搜索框里的
+     placeholder、底图按钮的个数、「地铁」按钮在不在，都随语言和数据变，
+     同一个断点在中文下一行、在德文下两行。只有量出来的才是对的。 */
+  function watchBar(){
+    const bar = document.querySelector(".map-bar"), main = document.querySelector(".map-main");
+    if(!bar || !main) return;
+    const sync = () => main.style.setProperty("--bar-h", `${Math.round(bar.getBoundingClientRect().height)}px`);
+    sync();
+    if(window.ResizeObserver) new ResizeObserver(sync).observe(bar);
+  }
+
   /* ResizeObserver 必须只在尺寸真的变了时才 resize。
      踩过的坑：重建侧栏 HTML 会让滚动条出现/消失，容器宽度变几像素就触发
      resize()，而 resize 会打断正在进行的相机动画——表现为「点侧栏地图不飞过去」，
@@ -4073,6 +4102,7 @@ const MAP = (() => {
     addMarkers();
     renderSide();
     renderDays();
+    watchBar();
     watchResize();
   }
 
