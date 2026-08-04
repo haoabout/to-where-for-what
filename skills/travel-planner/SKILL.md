@@ -42,16 +42,66 @@ fabrication — that discipline is on you.
 
 ---
 
-## Adapting to the runtime environment
+## Talking to the user
 
-- **Claude Code / environments with structured questioning**: use AskUserQuestion
-  for the opening questionnaire and stage confirmations.
-- **Codex / plain-chat environments**: just ask in normal conversation — **do not
-  assume a structured questioning tool exists**. Ask at most 1–3 of the most
-  critical questions at a time; when a gap doesn't block starting, make a
-  reasonable assumption and state it in your reply.
+Every question that asks the user to decide follows four beats, in this order.
+Drop one, or reorder them, and the question gets worse.
 
-Decide by whether you actually have the tool, not by guessing.
+| Beat | What it does | Without it | AskUserQuestion field |
+|---|---|---|---|
+| **1 Re-ground** | Say which step they're on | They haven't looked at the screen in 20 minutes and open to a question with no context | `header` (≤12 chars) + first line of `question` |
+| **2 Simplify** | Plain words for what's being asked | Internal names leak — "stage B", "the `choice` field" — and mean nothing to them | body of `question` |
+| **3 Recommend** | One clear pick, with the reason | A row of options with nothing recommended causes decision paralysis | first option, label ends `(recommended)`, reason in `description` |
+| **4 Options** | 2–4 clickable choices | Asking them to type is friction; they put it off | `options` — each label readable with the description covered |
+
+Worked example, asking for `trips_root` on first use:
+
+> **Where to store** ← 1
+> First run, so I need somewhere to keep trip files. I won't ask again. ← 2
+> I'd suggest `~/travel-plans/` — it stays findable when you're working from a
+> different project directory. ← 3
+> A) `~/travel-plans/` (recommended)
+> B) Here, in the current directory — "continue my Kyoto trip" asked from
+>    somewhere else won't find it
+> C) Let me pick a path ← 4
+
+Beats 1 and 2 apply even when there is nothing to choose. The handoff into
+stages B + C is the highest-stakes case: the user leaves the conversation to
+operate a page with three panes and dozens of markers.
+
+> **Step 2 of 4 — over to you**
+> The browser is open. Both of these happen on the page; you don't need to come
+> back to me:
+> 1. In the shortlist, mark each place want / maybe / skip
+> 2. Switch to the map and drag the ones you want into a day — detours show up
+>    the moment you do
+> Tell me when the schedule looks right and I'll write the guide.
+
+Four rules that decide *whether* to ask at all:
+
+- **Smart skip** — never ask what the user already told you. "Two of us, skip
+  Universal Studios, we're into architecture" answers three questions; asking
+  again reads as not listening.
+- **Merge** — questions with no dependency between them go in one interaction,
+  not three rounds.
+- **Don't ask what you can decide** — exploratory choices are yours. Decide,
+  then state the assumption in your reply. Only ask what you genuinely cannot
+  settle alone.
+- **will ≠ is** — saying "the page is generated" before `build.py` has run sends
+  the user to a link that isn't there. Say "I'll build it now" until it exists.
+
+| Anti-pattern | Fix |
+|---|---|
+| Question with no re-grounding | Lead with which step they're on |
+| Options with nothing recommended | Recommend one and say why |
+| Asking for a free-form typed answer | Give A/B/C |
+| Re-asking something already answered | Smart skip |
+| Reporting work that hasn't run | will ≠ is |
+
+**With no structured questioning tool** (Codex, plain chat), the four beats
+become prose — same content, written out. **Don't assume the tool exists**;
+decide by whether you actually have it. Ask at most 1–3 of the most critical
+things at a time, and when a gap doesn't block starting, assume and say so.
 
 ---
 
