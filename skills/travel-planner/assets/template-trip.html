@@ -628,8 +628,9 @@ pre.code{
 }
 .map-main{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper-2)}
 #map-canvas{position:absolute;inset:0}
+/* right 给缩放控件留位：控件 29px 宽 + 10px 外边距，再留 8px 间隙 */
 .map-bar{
-  position:absolute;top:10px;left:10px;right:10px;z-index:20;
+  position:absolute;top:10px;left:10px;right:57px;z-index:20;
   display:flex;gap:7px;flex-wrap:wrap;pointer-events:none;
 }
 .map-bar>*{pointer-events:auto}
@@ -3632,7 +3633,8 @@ const MAP = (() => {
     catch(e){ console.warn("地铁层加载失败（不影响底图）:", e); st.transitBroken = String(e.message || e); }
     // 顺序线加在地铁层之后 → 画在它上面。这是用户自己的路线，比参考用的轨道图重要。
     try{ addRoute(); }catch(e){ console.warn("顺序线加载失败（不影响底图）:", e); }
-    st.map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "bottom-right");
+    // 右上角：右下被 attribution 压着，缩小键会被挡掉半个
+    st.map.addControl(new maplibregl.NavigationControl({ showCompass:false }), "top-right");
     st.map.resize();          // 容器可能刚从 hidden 变可见，尺寸要重新量
     fitAll();
     st.fitted = true;
@@ -3642,7 +3644,9 @@ const MAP = (() => {
     await Promise.all([loadCSS(LEAFLET_CSS), loadJS(LEAFLET_JS)]);
     if(!window.L) throw new Error(T.errLeaflet);
     const c = center();
-    st.map = L.map("map-canvas", { attributionControl:false }).setView([c.lat, c.lon], 12);
+    // zoomControl 默认在左上，会压住搜索/底图那排按钮；跟 maplibre 一样挪到右上
+    st.map = L.map("map-canvas", { attributionControl:false, zoomControl:false }).setView([c.lat, c.lon], 12);
+    L.control.zoom({ position:"topright" }).addTo(st.map);
     L.tileLayer(CARTO_RASTER[0], { maxZoom:19, referrerPolicy:"strict-origin-when-cross-origin" }).addTo(st.map);
     st.engine = "leaflet";
     st.base = null;           // CARTO 不在 BASEMAPS 里，只服务于降级路径
