@@ -212,8 +212,12 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 .search::placeholder{color:var(--ink-3)}
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--card)}
-.seg button{background:none;border:0;padding:8px 13px;font-size:13px;color:var(--ink-3)}
+.seg button{background:none;border:0;padding:8px 13px;font-size:13px;color:var(--ink-3);transition:background .12s,color .12s}
 .seg button[aria-pressed=true]{background:var(--paper-2);color:var(--ink);font-weight:600}
+/* 未选中的 hover 只提墨色、不上底色 —— 上了底色就是选中态那个 --paper-2，
+   悬停会被读成「已经切过去了」。选中项的 hover 则往深一档，表示可以再点。 */
+.seg button:hover:not([aria-pressed=true]){color:var(--ink)}
+.seg button[aria-pressed=true]:hover{background:var(--line)}
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}
 .chip{
   border:1px solid var(--line);background:var(--card);color:var(--ink-2);
@@ -558,20 +562,65 @@ pre.code{
 /* 选择筛选并进清单栏顶部：它筛的就是下面这份列表，放在页面工具栏里等于把
    控件和它作用的对象拆开了。 */
 .ms-head{
-  padding:7px;border-bottom:1px solid var(--line);background:var(--paper-2);
+  padding:6px 7px;border-bottom:1px solid var(--line);background:var(--paper-2);
   border-radius:var(--r) var(--r) 0 0;
+  display:flex;flex-direction:column;gap:4px;
 }
+/* 这里刻意不用 .seg：.map-side 已经是一个描边圆角的盒子，.ms-head 是它的
+   标题带，里面再嵌一颗描边圆角的胶囊就是三层盒中盒 —— 而且那颗胶囊的底色
+   是 --card，等于从最外层的 card 走到 paper-2 又跳回 card，深→浅→深，
+   于是它看起来像一个浮在横条上的独立控件，而不是横条的一部分。
+   改成扁平 toggle：容器只剩 .ms-head 一层，按钮自己撑起可点的样子。 */
+.ms-fil{display:flex;flex-wrap:wrap;gap:2px}
 /* flex-wrap：四个词放得下就一行，放不下（长词语言）折成 2×2。
-   .seg 自带 overflow:hidden，不折行的话溢出会被静默裁掉——英文版实测
-   「Undecided」时代最后一个按钮被裁了一半。 */
-.ms-head .seg{width:100%;flex-wrap:wrap}
-.ms-head .seg button{flex:1;padding:5px 2px;font-size:11px;white-space:nowrap;
-  display:flex;align-items:center;justify-content:center;gap:3px}
-.ms-head .seg button .c{
+   原来靠 .seg 的 overflow:hidden 兜着，不折行的话溢出会被静默裁掉——
+   英文版实测「Undecided」时代最后一个按钮被裁了一半。 */
+.ms-fil button{
+  flex:1 1 auto;background:none;border:0;border-radius:6px;
+  padding:5px 4px;font-size:11px;color:var(--ink-3);white-space:nowrap;
+  display:flex;align-items:center;justify-content:center;gap:3px;
+  transition:background .12s,color .12s,box-shadow .12s;
+}
+/* hover 用半透明的 --card：选中态是不透明的 --card，两者同色系但深浅有别，
+   悬停不会被误读成「已经选上了」。 */
+.ms-fil button:hover:not([aria-pressed=true]){background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--ink-2)}
+/* 选中＝从 paper-2 的横条上「浮起来」一块 card。原来是反过来的
+   （card 胶囊里陷下去一块 paper-2），只有在那颗胶囊存在时才成立。
+   描边不能省：深色下 --card(#211c17) 和 --paper-2(#1d1915) 只差四级明度，
+   光靠底色差实测几乎看不出哪几个是开着的，阴影在深色底上也基本不起作用。
+   用 inset 而不是 border —— 描边不该改变按钮的盒子尺寸，否则未选中态
+   会跟着缩，四个按钮的宽度在开关之间跳。 */
+.ms-fil button[aria-pressed=true]{
+  background:var(--card);color:var(--ink);font-weight:600;
+  box-shadow:0 1px 2px var(--sh-1),inset 0 0 0 1px var(--line);
+}
+/* 选中态的 hover 必须单独写：四个筛选默认全开，如果只给未选中态做 hover，
+   那么最常见的情形（四个都亮着）反而一个都没有反馈——正是「筛选没有 hover」
+   这个感受的来源。这里只加深描边，不动底色，免得被读成取消了选中。 */
+.ms-fil button[aria-pressed=true]:hover{
+  box-shadow:0 1px 2px var(--sh-1),inset 0 0 0 1px var(--line-2);
+}
+/* 计数徽章两种状态用同一套颜色：--line 压在横条（--paper-2）和选中态
+   （--card）上都分得出来。原来选中态写死 rgba(255,255,255,.24)，那是给
+   深色填充配的，浅色主题下等于白压白，数字周围的圆底整个消失。 */
+.ms-fil .c{
   font:600 9.5px/13px var(--mono);min-width:13px;padding:0 3px;border-radius:7px;
   background:var(--line);color:var(--ink-3);
 }
-.ms-head .seg button[aria-pressed=true] .c{background:rgba(255,255,255,.24);color:inherit}
+/* 分组是低频的模式切换，视觉权重刻意压在筛选行之下：无边框、无底色，
+   只靠墨色和字重区分当前项。两行都做成描边控件，侧栏就头重脚轻了。 */
+.ms-grp{display:flex;flex-wrap:wrap;align-items:center;gap:1px;padding:0 1px}
+.ms-grp .lbl{
+  flex:none;margin-right:4px;letter-spacing:.5px;
+  font:600 10px/1 var(--sans);color:var(--ink-3);
+}
+.ms-grp button{
+  background:none;border:0;border-radius:5px;padding:3px 6px;
+  font-size:11px;color:var(--ink-3);white-space:nowrap;
+  transition:background .12s,color .12s;
+}
+.ms-grp button:hover{background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--ink-2)}
+.ms-grp button[aria-pressed=true]{color:var(--ink);font-weight:600}
 /* 这些规则刻意不写成 `.map-side .mi` —— SortableJS 会把 .mi 搬出清单栏
    （拖进日程列表、触屏下还会挂到 <body> 上做浮层）。一旦按容器限定作用域，
    节点一离开容器整条规则就失效：实测圆点丢掉 17px 尺寸后按默认 15px 字体
@@ -641,9 +690,11 @@ pre.code{
 .mgroup button{
   background:none;border:0;border-right:1px solid var(--line);
   padding:6px 11px;font-size:12px;color:var(--ink-3);white-space:nowrap;
+  transition:background .12s,color .12s;
 }
 .mgroup button:last-child{border-right:0}
 .mgroup button[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600}
+.mgroup button:hover:not(:disabled):not([aria-pressed=true]){background:var(--paper-2);color:var(--ink)}
 .mgroup button:disabled{opacity:.38;cursor:not-allowed}
 
 /* 地点搜索。输入框和「搜索」按钮共用一个 mgroup 胶囊，风格与底图切换一致 */
@@ -972,11 +1023,20 @@ pre.code{
     <div class="map-wrap" id="map-wrap">
       <div class="map-side">
         <div class="ms-head">
-          <div class="seg" role="group" id="seg-mfil" aria-label="Filter by choice">
+          <div class="ms-fil" role="group" id="seg-mfil" aria-label="Filter by choice">
             <button class="mfil" data-c="yes"   aria-pressed="true">Yes<span class="c">0</span></button>
             <button class="mfil" data-c="maybe" aria-pressed="true">Maybe<span class="c">0</span></button>
             <button class="mfil" data-c="none"  aria-pressed="true">Unrated<span class="c">0</span></button>
             <button class="mfil" data-c="no"    aria-pressed="true">No<span class="c">0</span></button>
+          </div>
+          <!-- 按区域分组是排路线用的（同一片＝少走路），按选择分组是查漏用的：
+               表完态之后确认「想去的都排进日程了吗」，不然想去的地点可能沉在
+               某个区域的末尾被忘掉。刻意不放「按推荐度」—— 到了这一步，
+               用户自己的表态已经取代了 AI 的先验评分。 -->
+          <div class="ms-grp" role="group" id="seg-mgrp" aria-label="Group by">
+            <span class="lbl" id="mgrp-lbl">Group</span>
+            <button class="mgrp" data-g="area"   aria-pressed="true">By area</button>
+            <button class="mgrp" data-g="choice" aria-pressed="false">By choice</button>
           </div>
         </div>
         <div id="map-list"></div>
@@ -1073,6 +1133,7 @@ en: {
   groupAria:"Group by", byArea:"By area", byTier:"By tier",
   scopeAria:"Show", fAll:"All", fTodo:"Unrated",
   filterAria:"Filter by choice",
+  groupLbl:"Group", byChoice:"By choice",
   yes:"Yes", maybe:"Maybe", no:"No", none:"Unrated",
   msqPh:"Add a place…", msqAria:"Search for a place and add it to the trip",
   msqGo:"Search", transit:"Transit",
@@ -1230,6 +1291,7 @@ zh: {
   groupAria:"分组方式", byArea:"按区域", byTier:"按推荐度",
   scopeAria:"显示范围", fAll:"全部", fTodo:"未表态",
   filterAria:"显示哪些选择",
+  groupLbl:"分组", byChoice:"按想去程度",
   yes:"想去", maybe:"待定", no:"不想去", none:"未表态",
   msqPh:"搜索想去的地点…", msqAria:"搜索地点并添加到行程",
   msqGo:"搜索", transit:"地铁",
@@ -2541,6 +2603,7 @@ const MAP = (() => {
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
                base:"ofm", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
+               grp:"area",   // 侧栏分组：area | choice。与清单视图的 ui.group 各记各的
                curDay:null, flat:null, addOpen:false, legendOpen:false };
 
   const geo = p => p && p.coord && typeof p.coord.lon === "number" && typeof p.coord.lat === "number";
@@ -3458,16 +3521,40 @@ const MAP = (() => {
   }
 
   /* ---------- 侧栏 ---------- */
+  /* 「不想去」排在最后而不是紧挨着「待定」：这个分组是用来查漏的
+     （想去的都排进日程了吗），已经否掉的东西不该占据视野上方。 */
+  const CHOICE_ORDER = ["yes", "maybe", "none", "no"];
+
+  function groupSide(list){
+    const g = new Map();
+    if(st.grp !== "choice"){
+      list.forEach(p => {
+        const k = p.area || T.otherArea;
+        if(!g.has(k)) g.set(k, []);
+        g.get(k).push(p);
+      });
+      return g;
+    }
+    // 先按固定顺序建空桶，再往里塞 —— 靠遇见的先后建桶会让分组顺序
+    // 跟着 PLACES 的排列走，用户改一次选择，整个侧栏的段落顺序就变了。
+    // 住宿单开一组放最前：它不参与这四类表态（见 shown 上方的说明），
+    // 而且它是一天的锚点，查漏时本来就该在视野最上方。
+    g.set(T.lodging, []);
+    for(const c of CHOICE_ORDER) g.set(T[c], []);
+    list.forEach(p => g.get(isLodging(p) ? T.lodging : T[kind(p)]).push(p));
+    for(const [k, v] of g){
+      if(!v.length){ g.delete(k); continue; }
+      // 组内按推荐度排。分组维度换成「想去程度」之后，组内就没有别的
+      // 排序依据了，保持 PLACES 的原始顺序等于随机。
+      v.sort((a, b) => (TIER_ORDER[a.tier] ?? 9) - (TIER_ORDER[b.tier] ?? 9));
+    }
+    return g;
+  }
+
   function renderSide(){
     const box = $("#map-list");
     const list = pts().filter(shown);
-    const byArea = new Map();
-    list.forEach(p => {
-      const k = p.area || T.otherArea;
-      if(!byArea.has(k)) byArea.set(k, []);
-      byArea.get(k).push(p);
-    });
-    box.innerHTML = [...byArea.entries()].map(([area, ps]) =>
+    box.innerHTML = [...groupSide(list).entries()].map(([area, ps]) =>
       `<div class="grp">${esc(area)} · ${ps.length}</div>` + ps.map(p =>
         `<div class="mi${st.focus === p.id ? " on" : ""}" data-card="${esc(p.id)}">
            <button class="bare pin" type="button" style="${pinStyle(p)}"
@@ -4109,6 +4196,15 @@ ${selected().map(p => `<Placemark>
       mf.setAttribute("aria-pressed", !on);
       on ? st.show.delete(mf.dataset.c) : st.show.add(mf.dataset.c);
       refresh();
+      return;
+    }
+    // 只重排侧栏：分组方式不影响 marker、日程、地图视野，走 refresh() 会
+    // 顺带重画一遍地图，白白丢掉当前的聚焦态。
+    const mg = e.target.closest(".mgrp");
+    if(mg && st.grp !== mg.dataset.g){
+      st.grp = mg.dataset.g;
+      for(const b of $$(".mgrp")) b.setAttribute("aria-pressed", b === mg);
+      renderSide();
     }
   });
 
@@ -4517,6 +4613,9 @@ function applyStaticI18n(){
   txt("#f-all", T.fAll);
   txt("#f-todo", T.fTodo);
   attr("#seg-mfil", "aria-label", T.filterAria);
+  attr("#seg-mgrp", "aria-label", T.groupAria);
+  txt("#mgrp-lbl", T.groupLbl);
+  for(const b of $$(".mgrp")) b.textContent = b.dataset.g === "area" ? T.byArea : T.byChoice;
   for(const b of $$(".mfil")){
     const c = b.querySelector(".c");
     b.textContent = T[b.dataset.c] ?? b.dataset.c;
