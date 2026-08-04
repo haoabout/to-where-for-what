@@ -418,8 +418,8 @@ pre.code{
    清单与日程相邻，从池子拖进某一天是一次约 260px 的横移；
    把地图夹在中间的话这个距离会变成约 1160px，鼠标要划过整张地图，触屏基本没法用。 */
 /* 栏宽最初按中文 2–4 字符的词定为 232/212。英文和 AI 现译语言（德语、俄语…）
-   词长 2–3 倍，加宽到 272/248；配合下面的 nowrap/折行规则，更长的语言也不裁字。 */
-.map-wrap{display:grid;grid-template-columns:272px 248px 1fr;gap:14px;
+   词长 2–3 倍，统一加宽到 248；配合 nowrap/折行规则，更长的语言也不裁字。 */
+.map-wrap{display:grid;grid-template-columns:248px 248px 1fr;gap:14px;
   height:var(--map-h,calc(100dvh - 260px));min-height:460px}
 
 .day-col{
@@ -611,7 +611,11 @@ pre.code{
   font-size:11.5px;color:var(--ink-3);
   overflow:hidden;white-space:nowrap;
 }
-.mi .t .sub em{font-style:normal;flex:none}
+/* 放不下时收缩的是时长/价格（省略号），警示标签永不裁 ——
+   原来全员 flex:none，溢出从尾部硬裁，「booking req.」正好是最后一个，
+   被裁成「bookin」的恰恰是最该看见的信息。 */
+.mi .t .sub em{font-style:normal;flex:0 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis}
 .mi .t .sub .w{
   flex:none;padding:0 5px;border-radius:4px;font-size:10.5px;line-height:15px;
   background:var(--warn-soft);color:var(--warn);
@@ -765,16 +769,19 @@ pre.code{
 .static-map .mk{position:absolute;transform:translate(-50%,-50%)}
 
 /* 窄屏降级。没做抽屉：抽屉会把两栏藏进隐藏状态，而排程时你恰恰要同时看见
-   池子、日程和地图。改成往下堆，地图始终留足高度。 */
-@media (max-width:1180px){
+   池子、日程和地图。
+
+   只有两种形态，尽量守住第一种：
+     ① 水平三栏 —— 地图是弹性的那一栏，宽度变化全由它吸收。两栏共 496px +
+        间隙 28px，视口 890px 时地图还剩约 330px，仍然可用；
+     ② 更窄才切「清单|日程 并排，地图整宽垫底」。
+   原来 1180px 就切叠放，实测内置浏览器/分屏下三栏动不动就散架 ——
+   实际是地图还有 600px 余量时就提前投降了。完全竖排（1×3）模式一并删除：
+   两栏并排到 375px 手机上每栏仍有 ~165px，名称省略号 + 筛选组 2×2 折行兜得住，
+   而竖排会把「拖进某一天」的横移变成跨屏滚动。 */
+@media (max-width:890px){
   .map-wrap{grid-template-columns:1fr 1fr;grid-template-rows:minmax(180px,34vh) 1fr;height:auto}
   .map-wrap .map-main{grid-column:1 / -1;height:min(56vh,540px)}
-}
-@media (max-width:860px){
-  .map-wrap{grid-template-columns:1fr;grid-template-rows:none;height:auto}
-  .map-side{max-height:250px}
-  .day-col{max-height:260px}
-  .map-wrap .map-main{height:440px}
 }
 
 /* ═══════════════════════════════════════════════ 攻略视图 */
