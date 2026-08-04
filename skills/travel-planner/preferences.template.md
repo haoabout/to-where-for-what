@@ -7,6 +7,13 @@
 >
 > Edit it by hand anytime. When the AI finds a missing section it will ask you,
 > then **append** — it never rewrites what's already here.
+>
+> **Durable preferences only** — things that would still be true for a different
+> trip next year. Never recorded here: passport or ID numbers, booking
+> references, flight or hotel confirmation codes, card and payment details,
+> home or work addresses, other people's contact details, or transcripts of
+> past conversations. If a fact is only useful for one trip, it belongs in that
+> trip's `brief.md`, not here.
 
 ---
 
