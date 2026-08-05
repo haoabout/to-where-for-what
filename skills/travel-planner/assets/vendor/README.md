@@ -1,28 +1,34 @@
 # vendor/
 
-第三方代码，原样存放、不做修改，由 `build.py` 内联进 `trip.html`。
+Third-party code, stored verbatim and unmodified, inlined into `trip.html` by
+`build.py`.
 
 ## sortable.min.js
 
 | | |
 |---|---|
-| 库 | [SortableJS](https://github.com/SortableJS/Sortable) 1.15.7 |
-| 许可 | MIT |
-| 依赖 | 无 |
-| 大小 | 44.4 KB（gzip 后约 15 KB） |
+| Library | [SortableJS](https://github.com/SortableJS/Sortable) 1.15.7 |
+| License | MIT |
+| Dependencies | none |
+| Size | 44.4 KB (~15 KB gzipped) |
 
-**为什么内联而不是走 CDN**：MapLibre 挂了有三级降级链，而且地图本来就要联网；
-排序不需要网 —— 因为 unpkg 挂掉就排不了序，是自己给自己找的故障点。
-用户可能几个月后才重新打开这个文件。
+**Why inlined rather than loaded from a CDN**: MapLibre has a three-tier
+fallback chain and the map needs the network anyway; sorting doesn't — losing
+drag-sort because unpkg is down would be a self-inflicted failure point. The
+user may reopen this file months later.
 
-**为什么用库而不是自己写**：`fallbackTolerance`（区分点击与拖拽）、
-`scrollSensitivity`（容器边缘自动滚动）、`pull:'clone'`（池子里拖走后原卡留下）
-正好覆盖自己写最难的几块，其中 clone 语义与「清单栏不移除、只标灰」完全对应。
+**Why a library rather than hand-rolling it**: `fallbackTolerance`
+(distinguishing a click from a drag), `scrollSensitivity` (auto-scroll at
+container edges) and `pull:'clone'` (the original card stays behind when
+dragged out of the pool) cover exactly the hardest parts to write yourself —
+and the clone semantics map precisely onto "the pool column doesn't remove,
+it only grays out".
 
-**更新方式**：
+**How to update**:
 
 ```bash
-curl -sL -o sortable.min.js https://unpkg.com/sortablejs@<版本>/Sortable.min.js
+curl -sL -o sortable.min.js https://unpkg.com/sortablejs@<version>/Sortable.min.js
 ```
 
-更新后要跑一遍 `dev/` 下的端到端，重点看跨容器拖拽与容器内排序。
+After updating, run the end-to-end checks under `dev/`, paying particular
+attention to cross-container dragging and within-container reordering.

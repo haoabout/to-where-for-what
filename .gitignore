@@ -4,11 +4,11 @@ __pycache__/
 .venv/
 node_modules/
 
-# 构建产物：可由 places.json + route.md + 模板重新生成
+# Build artifacts: regenerable from places.json + route.md + the template
 trips/*/trip.html
 trips/*/guide.html
 
-# 开发期临时文件
+# Development-time scratch files
 .tmp/
 trips/*/.server.pid
 trips/*/guide.html

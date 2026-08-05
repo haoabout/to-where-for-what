@@ -486,6 +486,7 @@ Run through **[references/checklist.md](references/checklist.md)**, especially:
 | Transit lines come from OSM; quality varies by city | Official line colors come from OSM's `colour` tag. Osaka measured 20/20 present; minor cities may lack them — the map falls back to auto-assigned colors and says so in the legend |
 | Weather beyond 16 days is not a forecast | Falls back to historical same-period averages; the UI labels this, but say it yourself too |
 | Features degrade once the server stops | `file://` still opens read-only fine — vector basemap and transit layer work — but no direct file write and no official OSM raster basemap (it requires a Referer) |
+| RTL languages render left-to-right | For `ar` / `he` / `fa` and similar, the `ui` override table translates every string, but the layout is not mirrored — columns, icons and the map toolbar stay LTR. Say so when delivering a trip in one of these languages |
 
 ---
 
