@@ -1,21 +1,26 @@
 #!/usr/bin/env python3
-"""给 places.json 补齐坐标与配图。
+"""Fill in coordinates and images for places.json.
 
-用法:
-    python3 enrich.py <places.json> --coords          # 补坐标（Nominatim）
-    python3 enrich.py <places.json> --images          # 补配图（Wikimedia Commons）
+Usage:
+    python3 enrich.py <places.json> --coords          # fill coordinates (Nominatim)
+    python3 enrich.py <places.json> --images          # fill images (Wikimedia Commons)
     python3 enrich.py <places.json> --coords --images
     python3 enrich.py <places.json> --coords --dry-run
 
-为什么这两件事不交给模型做：
-    它们是确定性的 API 调用。模型来做只会引入不确定性，而且这不是 token 大头。
-    坐标写错的代价极高——经纬度取错会让景点静默落到另一个半球，页面看起来还很正常。
+Why these two jobs aren't left to the model:
+    They're deterministic API calls. Having the model do them only injects
+    uncertainty, and they aren't where the tokens go anyway. A wrong
+    coordinate is very expensive — swapped lat/lon silently drops a place on
+    another hemisphere while the page still looks perfectly fine.
 
-已编码的实测教训：
-    · Nominatim 政策要求最多 1 req/s，且必须带能识别应用的 User-Agent
-    · 拿到坐标后必须用 trip.bbox 校验，这是发现「搜到了同名的另一个城市」的唯一方法
-    · Wikimedia 已不再按任意宽度即时生成缩略图（220/320/480/640/800/1024 全部 400，
-      仅 960/1280 可用）。必须用 API 的 iiurlwidth 让它返回真实存在的档位
+Lessons already encoded here:
+    · Nominatim's policy allows at most 1 req/s and requires a User-Agent
+      that identifies the application
+    · Coordinates must be validated against trip.bbox — the only way to catch
+      "found a same-named place in another city"
+    · Wikimedia no longer generates thumbnails at arbitrary widths on demand
+      (220/320/480/640/800/1024 all return 400; only 960/1280 work). The
+      API's iiurlwidth must be used so it returns a width that exists
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ import urllib.request
 from pathlib import Path
 
 UA = "travel-planner-enrich/1.0 (https://github.com/; trip planning skill)"
-NOMINATIM_QPS = 1.1          # 政策要求 ≤1 req/s，留一点余量
+NOMINATIM_QPS = 1.1          # policy demands ≤1 req/s; leave a little headroom
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 
 
@@ -42,7 +47,7 @@ def get_json(url: str, timeout: int = 25) -> dict:
         return json.load(r)
 
 
-# ------------------------------------------------------------------ 坐标
+# ------------------------------------------------------------------ coordinates
 
 def geocode(query: str, lang: str | None = None) -> dict | None:
     params = {"q": query, "format": "json", "limit": 3, "addressdetails": 1}
@@ -60,7 +65,8 @@ def in_bbox(lon: float, lat: float, bbox) -> bool:
     return bool(bbox) and bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]
 
 
-# 常见通名后缀。去掉后再比对，好让「大阪城天守閣」能匹配上「大阪城」。
+# Common generic suffixes. Stripped before comparing, so that e.g.
+# 大阪城天守閣 (Osaka Castle Keep) can match 大阪城 (Osaka Castle).
 _SUFFIX = (r"(天守閣|展望台|記念館|美術館|博物館|資料館|図書館|会館|神社|大社|"
            r"寺院|寺|城|公園|商店街|市場|渡船場|ビルヂング|ビル|タワー|横丁|"
            r"駅|通|筋|跡|場|館|店)+$")
@@ -68,20 +74,25 @@ _PUNCT = r"[\s·・（）()【】\[\]、,，。'\"’”—\-–~〜]"
 
 
 def name_matches(names: list[str], display_name: str) -> bool:
-    """景点的任一名称变体与返回结果对得上，就算匹配。
+    """A match if any of the place's name variants lines up with the result.
 
-    bbox 只能拦「搜错了城市」，拦不住「搜错了同城的另一个地点」——
-    实测 Nominatim 把「適塾」返回成大阪市立美術館的坐标，经纬度完全在
-    大阪 bbox 内、静默通过，marker 会插到错误的地方。
+    bbox only catches "wrong city"; it cannot catch "wrong place in the right
+    city" — measured, Nominatim returned the coordinates of the Osaka
+    Municipal Museum of Art for 適塾 (Tekijuku), squarely inside the Osaka
+    bbox, passing silently and planting the marker in the wrong spot.
 
-    但校验太严也会误杀，实测踩过三种：
-      · 「大阪城天守閣」← 返回「大阪城」        通名后缀不同
-      · 「萩ノ茶屋駅」  ← 返回「萩ノ茶屋」      同上
-      · 「Dotonbori (Glico Sign)」← 返回「道頓堀グリコサイン」  跨语言
-    所以：拿全部名称变体逐个比、双向包含都算、并剥掉通名后缀。
+    But over-strict validation produces false negatives; three were hit in
+    testing:
+      · 大阪城天守閣 ← returned 大阪城                    different generic suffix
+      · 萩ノ茶屋駅   ← returned 萩ノ茶屋                  same
+      · "Dotonbori (Glico Sign)" ← returned 道頓堀グリコサイン   cross-language
+    Hence: compare every name variant, accept containment in either
+    direction, and strip generic suffixes.
     """
-    # 必须先按逗号切出「地点主名」，再去标点——反过来会把逗号一起删掉，
-    # 于是整串地址被当成地点名，双向包含判断彻底失效。
+    # The place's main name must be split off at the comma *before* stripping
+    # punctuation — the reverse order deletes the commas too, so the whole
+    # address is treated as the place name and the two-way containment test
+    # collapses entirely.
     head = re.sub(_PUNCT, "", display_name.split(",")[0])
     d = re.sub(_PUNCT, "", display_name)
     dl, headl = d.lower(), head.lower()
@@ -96,15 +107,19 @@ def name_matches(names: list[str], display_name: str) -> bool:
                 return True
             core = re.sub(_SUFFIX, "", q)
             hcore = re.sub(_SUFFIX, "", head)
-            # 核心词只能比对「地点主名」，不能比对整个地址——
-            # 地址里必然含片区名，否则「中之島公園」会匹配上「大阪市立東洋陶磁美術館,
-            # 中之島一丁目」这种同片区的完全无关地点。
+            # The core word may only be compared against the place's main
+            # name, never the full address — an address always contains the
+            # district name, so 中之島公園 (Nakanoshima Park) would otherwise
+            # match "大阪市立東洋陶磁美術館, 中之島一丁目", a completely
+            # unrelated place in the same district.
             if len(core) >= 2 and core in head:
                 return True
             if len(hcore) >= 3 and (hcore in q or hcore in core):
                 return True
-            # 异体字容差：靱/靭、旧字体/新字体这类在日文地名里很常见。
-            # 只在长度 ≥3 且恰好差 1 个字时放行，避免误配。
+            # Variant-character tolerance: pairs like 靱/靭 and old/new kanji
+            # forms are common in Japanese place names. Allowed only at
+            # length ≥3 and exactly one differing character, to avoid
+            # mismatches.
             if len(q) >= 3 and len(q) == len(head) and sum(a != b for a, b in zip(q, head)) == 1:
                 return True
         else:
@@ -130,7 +145,8 @@ def fill_coords(doc: dict, dry: bool) -> int:
     print(f"Coordinates: {len(todo)} to fill (Nominatim, {NOMINATIM_QPS}s interval)")
     ok = 0
     for p in todo:
-        # 当地语言名命中率最高，其次英文名，最后用户语言名
+        # The local-language name has the best hit rate, then the English
+        # name, and the user-language name last
         names = [n for n in (p.get("name_local"), p.get("name_en"), p.get("name")) if n]
         hit = None
         for nm in names:
@@ -166,10 +182,11 @@ def fill_coords(doc: dict, dry: bool) -> int:
     return ok
 
 
-# ------------------------------------------------------------------ 配图
+# ------------------------------------------------------------------ images
 
 def commons_thumb(title: str, width: int = 960) -> dict | None:
-    """按 File: 标题取缩略图。用 API 的 iiurlwidth，它会吸附到真实存在的档位。"""
+    """Fetch a thumbnail by File: title. Uses the API's iiurlwidth, which
+    snaps to a width that actually exists."""
     q = {"action": "query", "titles": f"File:{title}", "prop": "imageinfo",
          "iiprop": "url|extmetadata", "iiurlwidth": str(width),
          "format": "json", "formatversion": "2"}
@@ -189,7 +206,8 @@ def commons_thumb(title: str, width: int = 960) -> dict | None:
 
 
 def wiki_lead_image(title: str, lang: str) -> str | None:
-    """取维基条目的主图文件名。条目主图通常是最有代表性的一张，不易张冠李戴。"""
+    """Get the filename of a Wikipedia article's lead image. The lead image is
+    usually the most representative one and rarely mislabeled."""
     q = {"action": "query", "titles": title, "prop": "pageimages",
          "piprop": "name", "format": "json", "formatversion": "2"}
     try:
@@ -232,21 +250,24 @@ def fill_images(doc: dict, dry: bool) -> int:
     return ok
 
 
-# ------------------------------------------------------------------ 轨道交通
+# ------------------------------------------------------------------ rail transit
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
 
-# 只要城市轨道，不要公交。公交线路密到会把画面糊死，而且旅行者极少按公交线规划。
-# monorail / light_rail 收进来是因为大阪的南港ポートタウン線、大阪モノレール
-# 这类线路在出行体验上跟地铁没区别。
+# Urban rail only, no buses. Bus networks are dense enough to smear the whole
+# picture, and travelers almost never plan around bus routes.
+# monorail / light_rail are included because lines like Osaka's Nankō Port
+# Town Line and the Osaka Monorail are indistinguishable from the metro in
+# terms of the travel experience.
 RAIL_ROUTES = ("subway", "light_rail", "monorail", "tram")
 
-# 简化容差，约 13m。城市尺度下肉眼看不出差别，但点数能降到 1/4。
+# Simplification tolerance, about 13m. Invisible at city scale, but it cuts
+# the point count to a quarter.
 RDP_EPS = 0.00012
 
 
 def _rdp(pts: list[tuple[float, float]], eps: float) -> list[tuple[float, float]]:
-    """Douglas-Peucker 抽稀。"""
+    """Douglas-Peucker simplification."""
     if len(pts) < 3:
         return pts
 
@@ -264,8 +285,10 @@ def _rdp(pts: list[tuple[float, float]], eps: float) -> list[tuple[float, float]
     return [pts[0], pts[-1]]
 
 
-# Overpass 是公共免费服务，限流和过载是常态而非异常 —— 实测连着跑两次
-# 第二次就吃到 504。退避重试，不要让用户自己去猜「要不要再跑一遍」。
+# Overpass is a free public service where throttling and overload are the
+# norm, not the exception — measured, running it twice back to back gets a
+# 504 on the second call. Back off and retry rather than leaving the user to
+# guess whether to run it again.
 OVERPASS_MIRRORS = ("https://overpass-api.de/api/interpreter",
                     "https://overpass.kumi.systems/api/interpreter")
 RETRY_STATUS = {429, 502, 503, 504}
@@ -284,7 +307,7 @@ def overpass(query: str, timeout: int = 180, tries: int = 4) -> dict:
             last = e
             if e.code not in RETRY_STATUS:
                 raise
-        except Exception as e:  # noqa: BLE001  超时、连接重置都值得重试
+        except Exception as e:  # noqa: BLE001  timeouts and connection resets are worth retrying
             last = e
         if i < tries - 1:
             wait = 5 * 2 ** i          # 5s, 10s, 20s
@@ -293,22 +316,25 @@ def overpass(query: str, timeout: int = 180, tries: int = 4) -> dict:
     raise last
 
 
-# OSM 里线路的 colour 缺失时的兜底色板。刻意选高区分度、且与点位配色
-# （绿/琥珀/灰）不撞的颜色。用到它时会在图例里注明「非官方配色」。
+# Fallback palette for lines whose colour tag is missing in OSM. Deliberately
+# high-contrast and chosen not to collide with the marker palette
+# (green/amber/gray). When used, the legend says the colors are unofficial.
 FALLBACK_COLORS = ["#E5171F", "#0078BE", "#019A66", "#522886", "#EE7B1A",
                    "#E44D93", "#814721", "#00A0DE", "#7A8B1F", "#B02A8F"]
 
 
 def fetch_transit(doc: dict) -> dict:
-    """抓目的地范围内的轨道交通线路与车站，产出一份 GeoJSON。"""
+    """Fetch rail lines and stations within the destination's bounds and
+    produce a GeoJSON document."""
     bbox = doc.get("trip", {}).get("bbox")
     if not bbox or len(bbox) != 4:
         sys.exit("trip.bbox missing or malformed; cannot determine the fetch area")
-    s, w, n, e = bbox[1], bbox[0], bbox[3], bbox[2]      # Overpass 用 (南,西,北,东)
+    s, w, n, e = bbox[1], bbox[0], bbox[3], bbox[2]      # Overpass uses (south,west,north,east)
     area = f"({s},{w},{n},{e})"
 
-    # 线路和车站合成一个请求。分两次发实测会被限流打中第二次：
-    # Overpass 按 IP 分配执行槽，连发两条几乎必然吃 429/504。
+    # Lines and stations go in one request. Sending two separate ones gets
+    # the second throttled in practice: Overpass allocates execution slots per
+    # IP, and back-to-back requests almost always draw a 429/504.
     print(f"→ Overpass query for rail lines and stations {area}")
     q = f'''[out:json][timeout:180];
 relation["route"~"^({"|".join(RAIL_ROUTES)})$"]{area};
@@ -326,10 +352,11 @@ out tags center;'''
               "The transit layer is skipped; everything else is unaffected.", file=sys.stderr)
         return {}
 
-    # 同一条线的往返两个方向几何几乎一样，按 ref+colour 归并只留一份
+    # A line's two directions have near-identical geometry, so merge by
+    # ref+colour and keep one copy
     lines: dict[tuple, dict] = {}
     for el in data.get("elements", []):
-        if el.get("type") != "relation":      # 同一个响应里还有车站节点
+        if el.get("type") != "relation":      # the same response also carries station nodes
             continue
         tags = el.get("tags", {})
         ref = tags.get("ref") or tags.get("name", "")
@@ -353,9 +380,10 @@ out tags center;'''
             rec["seen"].add(sig)
             rec["segs"].append(_rdp(pts, RDP_EPS))
 
-    # 兜底色必须避开已被官方色占用的那些，否则会出现两条线同色。
-    # 实测大阪：阪堺電気軌道没有 colour 标签，色板第一个 #E5171F 正好
-    # 撞上御堂筋線的官方红，图上完全分不出来。
+    # Fallback colors must avoid those already taken by official ones, or two
+    # lines end up identical. Measured in Osaka: the Hankai Tramway has no
+    # colour tag, and the palette's first entry #E5171F collided exactly with
+    # the Midōsuji Line's official red — indistinguishable on the map.
     used = {(r["colour"] or "").upper() for r in lines.values() if r["colour"]}
     palette = iter([c for c in FALLBACK_COLORS if c.upper() not in used])
 
@@ -376,14 +404,18 @@ out tags center;'''
             "geometry": {"type": "MultiLineString", "coordinates": rec["segs"]},
         })
 
-    # 车站来自同一个响应里的 node 元素。
+    # Stations come from the node elements in the same response.
     #
-    # 不要按站名去重。同名的多个节点**不是重复录入**，而是各条线自己的站台，
-    # 物理上确实分开：实测本町有 3 个节点、最远相隔 354m（御堂筋・中央・四つ橋
-    # 三条线的本町站本来就不在同一处），天王寺 2 个相隔 404m。
-    # 早先按名字只留第一个，等于随机保留其中一条线的站台，另外两条线上就没点了 ——
-    # 用户一眼就看出「本町连着三条线，却只有红线上有点」。
-    # 152 个原始节点里有 23 个属于这种情况，占 15%。
+    # Do NOT deduplicate by station name. Multiple nodes sharing a name are
+    # **not** duplicate entries — they are each line's own platforms, and they
+    # really are physically separate: measured, Hommachi has 3 nodes up to
+    # 354m apart (the Midōsuji, Chūō and Yotsubashi lines' Hommachi stations
+    # were never in the same place), and Tennōji has 2 that are 404m apart.
+    # Keeping only the first by name, as an earlier version did, effectively
+    # picks one line's platform at random and leaves the other lines without
+    # a dot — the user immediately notices "Hommachi serves three lines but
+    # only the red one has a marker".
+    # 23 of the 152 raw nodes fall into this category, 15% of them.
     stations = []
     for el in data.get("elements", []):
         if el.get("type") != "node":
@@ -393,9 +425,10 @@ out tags center;'''
         name = t.get("name") or t.get("name:en") or ""
         if lon is None or lat is None or not name:
             continue
-        # 空值直接不写这个键。写成 "" 的话，页面里 MapLibre 的 coalesce
-        # 会把空字符串当成有效值 —— 实测 129 个站名里有 120 个的 name:zh 是空串，
-        # 结果站名标签全渲染成空白，图上什么都看不见。
+        # Omit the key entirely when empty. Written as "", MapLibre's coalesce
+        # in the page treats the empty string as a valid value — measured, 120
+        # of 129 station names had an empty name:zh, so every station label
+        # rendered blank and nothing was visible on the map.
         props = {"name": name}
         for key, tag in (("name_en", "name:en"), ("name_zh", "name:zh")):
             v = (t.get(tag) or "").strip()
@@ -447,10 +480,12 @@ def main() -> int:
         out = Path(args.path).with_name("transit.geojson")
         tr = fetch_transit(doc)
         if tr and not args.dry_run:
-            # Overpass 会分别限流两条查询。若这次只拿到线路、车站空了，
-            # 而磁盘上已有一份带车站的，就保留旧的 —— 部分失败绝不能让
-            # 已有数据变差。（实测踩过：重试耗尽后写了个 0 车站的文件，
-            # 把上一次好不容易抓到的 152 个站覆盖没了。）
+            # Overpass throttles the two queries independently. If this run
+            # returned lines but no stations while the disk already holds a
+            # copy with stations, keep the old one — a partial failure must
+            # never degrade existing data. (Hit in practice: after the retries
+            # were exhausted, a file with 0 stations was written, wiping the
+            # 152 stations painstakingly fetched the time before.)
             if out.exists():
                 try:
                     old = json.loads(out.read_text(encoding="utf-8"))

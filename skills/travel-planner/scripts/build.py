@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""把 places.json + route.md 注入模板，生成单文件 trip.html。
+"""Inject places.json + route.md into the template to produce a single-file trip.html.
 
-用法:
-    python3 build.py <trip-dir>                 # 生成 trip.html
-    python3 build.py <trip-dir> --serve         # 生成并起后台服务，打印 URL 后立即返回
-    python3 build.py <trip-dir> --stop          # 停掉该目录的后台服务
-    python3 build.py <trip-dir> --standalone    # 只输出攻略页 guide.html（用于分享/部署）
+Usage:
+    python3 build.py <trip-dir>                 # generate trip.html
+    python3 build.py <trip-dir> --serve         # generate, start a background server, print the URL and return
+    python3 build.py <trip-dir> --stop          # stop that directory's background server
+    python3 build.py <trip-dir> --standalone    # output only the guide page guide.html (for sharing/deployment)
 
-为什么把 JSON 内联进 HTML 而不是让页面 fetch()：
-    file:// 下 fetch 会被 CORS 拦死。内联后双击打开和 http 打开都能用。
+Why the JSON is inlined into the HTML instead of fetch()ed by the page:
+    Under file://, fetch is killed by CORS. Inlined, both double-click opening
+    and http work.
 
-为什么默认建议配 --serve：
-    file:// 不发 Referer，OSM 官方瓦片会返回「Access blocked」图片（HTTP 200，
-    肉眼才看得出来）。走 http://localhost 则完全合规。
-    注意：保存文件的能力与协议无关（实测 file:// 下 showSaveFilePicker 同样可用），
-    只取决于浏览器是不是 Chromium 系。
+Why --serve is the recommended default:
+    file:// sends no Referer, so OSM's official tiles return an "Access
+    blocked" image (HTTP 200 — only the eye catches it). Over http://localhost
+    everything is compliant.
+    Note: the ability to save files is unrelated to the protocol (measured:
+    showSaveFilePicker works under file:// too) and depends only on whether
+    the browser is Chromium-based.
 """
 
 from __future__ import annotations
@@ -44,9 +47,11 @@ PID_FILE = ".server.pid"
 # ------------------------------------------------------------------ markdown
 
 def md_to_html(md: str) -> str:
-    """极简 Markdown → HTML。攻略正文由 AI 写在 route.md 里，只需要常用子集。
+    """Minimal Markdown → HTML. The guide body is written by the AI in
+    route.md and only needs the common subset.
 
-    刻意不引第三方库：skill 要能在任何只有 python3 的环境里跑。
+    Deliberately no third-party library: the skill must run in any
+    environment that has nothing but python3.
     """
     if not md.strip():
         return ""
@@ -56,11 +61,12 @@ def md_to_html(md: str) -> str:
     in_ul = in_ol = False
     in_code = False
     in_table = False
-    para: list[str] = []      # 累积当前段落
-    quote: list[str] = []     # 累积当前引用块
+    para: list[str] = []      # accumulates the current paragraph
+    quote: list[str] = []     # accumulates the current blockquote
 
-    # Markdown 的段落由空行分隔，而不是由换行分隔。
-    # 不做累积的话，写在同一自然段里的连续几行会被拆成好几个 <p>，正文看起来支离破碎。
+    # Markdown paragraphs are separated by blank lines, not by newlines.
+    # Without accumulation, consecutive lines belonging to one paragraph would
+    # each become their own <p> and the body would read as fragments.
     def flush_para() -> None:
         nonlocal para
         if para:
@@ -84,9 +90,11 @@ def md_to_html(md: str) -> str:
             out.append("</tbody></table></div>"); in_table = False
 
     def inline(t: str) -> str:
-        # 引号也要转义。route.md 的正文由 AI 写，而素材来自联网搜到的第三方网页 ——
-        # 等于把不可信文本喂进了一个 HTML 生成器。& < > 挡住了裸标签，但
-        # [x](a"onfocus=…) 这种不含空格和右括号的串能从 href 的引号里逸出去。
+        # Quotes must be escaped too. route.md's body is written by the AI
+        # from material found on third-party web pages — i.e. untrusted text
+        # fed into an HTML generator. & < > block bare tags, but a string like
+        # [x](a"onfocus=…), containing no space or closing paren, can escape
+        # out of href's quotes.
         t = (t.replace("&", "&amp;").replace("<", "&lt;")
               .replace(">", "&gt;").replace('"', "&quot;"))
         t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
@@ -96,15 +104,17 @@ def md_to_html(md: str) -> str:
         t = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, t)
         return t
 
-    # 协议白名单。不在名单里的不给链接，但原样保留文字和地址 ——
-    # 悄悄吞掉一条来源，比渲染成纯文本更糟。
+    # Protocol allowlist. Anything not on it doesn't become a link, but the
+    # text and address are kept verbatim — silently swallowing a source is
+    # worse than rendering it as plain text.
     SAFE_URL = re.compile(r"(?:https?://|mailto:|#|\./|\.\./|/)", re.I)
 
     def link(m: "re.Match[str]") -> str:
         text, url = m.group(1), m.group(2)
         if not SAFE_URL.match(url):
             return f"{text}（{url}）"
-        # 页内锚点不开新标签页——那是同一篇攻略里的跳转，不是外链
+        # In-page anchors don't open a new tab — that's a jump within the same
+        # guide, not an external link
         if url.startswith("#"):
             return f'<a href="{url}">{text}</a>'
         return f'<a href="{url}" target="_blank" rel="noopener">{text}</a>'
@@ -125,18 +135,19 @@ def md_to_html(md: str) -> str:
             close_lists()
             continue
 
-        # 表格
+        # Tables
         if line.lstrip().startswith("|") and line.rstrip().endswith("|"):
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             if all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
-                continue  # 分隔行
+                continue  # separator row
             if not in_table:
                 close_lists()
                 out.append('<div class="table-wrap"><table>')
-                in_table = "head"          # markdown 表格的第一行永远是表头
+                in_table = "head"          # a markdown table's first row is always the header
             if in_table == "head":
-                # 表头必须是 th：渲染成 td 的话，「区间/方式/时长/费用」和数据行
-                # 长得一模一样，读者要靠猜才知道哪行是表头
+                # The header must be th: rendered as td, a row like
+                # "segment/mode/duration/fare" looks identical to the data
+                # rows and the reader has to guess which one is the header
                 out.append("<thead><tr>"
                            + "".join(f"<th>{inline(c)}</th>" for c in cells)
                            + "</tr></thead><tbody>")
@@ -150,10 +161,12 @@ def md_to_html(md: str) -> str:
         m = re.match(r"^(#{1,4})\s+(.*)$", line)
         if m:
             close_lists()
-            # 整体降一级：页面本身已经有一个 <h1>（顶栏的目的地名），
-            # route.md 的 `#` 再渲染成 h1 就成了同一篇文档里的第二个一级标题，
-            # 读屏按标题跳转时会看到两个并列的顶层。攻略是页面的一块内容，
-            # 不是另一篇文档，所以它的标题从 h2 起。
+            # Demote everything one level: the page already has an <h1> (the
+            # destination name in the header), so rendering route.md's `#` as
+            # h1 would create a second top-level heading in the same document,
+            # and screen readers navigating by heading would find two parallel
+            # tops. The guide is a block of content within the page, not a
+            # separate document, so its headings start at h2.
             lv = min(len(m.group(1)) + 1, 6)
             out.append(f"<h{lv}>{inline(m.group(2))}</h{lv}>")
             continue
@@ -179,7 +192,8 @@ def md_to_html(md: str) -> str:
         if re.fullmatch(r"\s*([-*_])\s*(\1\s*){2,}", line):
             close_lists(); out.append("<hr>"); continue
 
-        # 普通正文：累积进当前段落，等空行或块级元素再吐出
+        # Ordinary body text: accumulate into the current paragraph and emit
+        # it at the next blank line or block element
         if in_ul or in_ol or in_table:
             close_lists()
         para.append(line)
@@ -209,7 +223,8 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     if route_path.exists():
         route_md = route_path.read_text(encoding="utf-8")
 
-    # 轨道交通图层。没有就没有——地铁层是加分项，不该阻塞出图。
+    # Rail transit layer. Absent is fine — it's a bonus and must never block
+    # producing the page.
     transit = None
     transit_path = trip_dir / "transit.geojson"
     if transit_path.exists():
@@ -220,8 +235,10 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 
     html = TEMPLATE.read_text(encoding="utf-8")
 
-    # 第三方拖拽库内联进来。不走 CDN：地图挂了有降级链且本来就要联网，
-    # 而排序不需要网——因为 unpkg 挂掉就排不了序，是自找的故障点。
+    # The third-party drag library is inlined, not loaded from a CDN: the map
+    # has a fallback chain and needs the network anyway, but sorting doesn't —
+    # losing drag-sort because unpkg is down would be a self-inflicted failure
+    # point.
     vendor = SKILL_ROOT / "assets" / "vendor" / "sortable.min.js"
     sortable = vendor.read_text(encoding="utf-8") if vendor.exists() else ""
     if not sortable:
@@ -231,7 +248,7 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
         if mark not in html:
             sys.exit(f"Template is missing placeholder {mark}")
 
-    # </script> 出现在 JSON 字符串里会提前关闭标签；转义掉。
+    # A </script> inside a JSON string would close the tag early; escape it.
     data_js = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     route_js = json.dumps(md_to_html(route_md), ensure_ascii=False).replace("</", "<\\/")
     transit_js = json.dumps(transit, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
@@ -278,13 +295,15 @@ _timer = None
 
 
 def rebuild():
-    """写回 places.json 后重建 trip.html。
+    """Rebuild trip.html after writing places.json back.
 
-    不重建的话页面就和数据脱节了：磁盘上的 trip.html 还停在上一次构建的状态，
-    之后双击打开、或者把这个 html 分享给同行的人，看到的都是保存**之前**的
-    选择和日程——而且没有任何迹象表明它是旧的。
+    Without the rebuild the page falls out of step with the data: the
+    trip.html on disk still shows the previous build, so double-clicking it —
+    or sharing that html with a travel companion — shows the choices and
+    schedule from *before* the save, with nothing to indicate it's stale.
 
-    重建失败不能让保存失败：places.json 已经落盘了，那才是真相。
+    A failed rebuild must not fail the save: places.json is already on disk,
+    and that's the truth.
     """
     try:
         r = subprocess.run([sys.executable, BUILD_PY, str(ROOT)],
@@ -296,10 +315,12 @@ def rebuild():
 
 
 def rebuild_soon(delay=12.0):
-    """自动保存每几秒就来一次，没必要每次都重建 360KB 的页面。
+    """Auto-save fires every few seconds; rebuilding a 360KB page each time
+    is unnecessary.
 
-    trip.html 只服务于「双击打开 / 分享给别人」，晚十几秒毫无影响；
-    places.json 才是 AI 读的那份，那个每次都立刻写。
+    trip.html only serves "double-click to open / share with others", where a
+    dozen extra seconds change nothing; places.json is the copy the AI reads,
+    and that one is written immediately every time.
     """
     global _timer
     if _timer is not None:
@@ -310,11 +331,14 @@ def rebuild_soon(delay=12.0):
 
 
 def merge(incoming):
-    """页面只回传 choice / choice_reason / itinerary，其余一律以磁盘为准。
+    """The page sends back only choice / choice_reason / itinerary; for
+    everything else the disk wins.
 
-    整份覆盖是不行的：页面内存里那份 DATA 是**构建那一刻**的快照。
-    用户开着页面时 AI 跑一次 enrich.py 补了坐标或配图，页面一保存就把它抹掉，
-    而且两边都不会察觉。实测确认过这个行为，所以页面发的是补丁不是全文。
+    Wholesale replacement won't do: the page's in-memory DATA is a snapshot
+    from *build time*. If the AI runs enrich.py to fill in coordinates or
+    images while the page is open, one save would wipe them — and neither side
+    would notice. This behavior was confirmed by testing, which is why the
+    page sends a patch rather than the full document.
     """
     base = json.loads(TARGET.read_text(encoding="utf-8"))
     if not isinstance(base, dict) or not isinstance(base.get("places"), list):
@@ -325,14 +349,16 @@ def merge(incoming):
     for p in base["places"]:
         c = ch.get(p.get("id"))
         if c is None:
-            continue             # AI 新加的点，页面还不知道它 —— 保持原样
+            continue             # a place the AI just added that the page doesn't know about — leave it alone
         p["choice"] = c[1] if len(c) > 1 else None
         p["choice_reason"] = (c[2] if len(c) > 2 else "") or ""
 
-    # 用户在地图上搜索添加的粗胚（origin=user）。页面每次保存都全量带上，
-    # 靠「磁盘已有同 id 则跳过」保证幂等——AI 补全过的版本在磁盘上，不能被
-    # 页面里那份未补全的旧粗胚盖掉。字段走白名单：补丁来自浏览器，
-    # 不能让它往数据集里塞任意键。
+    # Stubs the user added via map search (origin=user). The page sends the
+    # full set on every save, and "skip if the id already exists on disk"
+    # keeps it idempotent — the AI-completed version lives on disk and must
+    # not be overwritten by the page's older, uncompleted stub. Fields go
+    # through an allowlist: the patch comes from a browser and must not be
+    # able to inject arbitrary keys into the dataset.
     stub_fields = {"id", "name", "name_local", "area", "coord",
                    "origin", "choice", "sources"}
     have = {p.get("id") for p in base["places"]}
@@ -347,8 +373,10 @@ def merge(incoming):
         have.add(stub["id"])
 
     if "itinerary" in incoming:
-        # 日程里可能留着 AI 已经删掉的点，带着写回去会让校验器报 P0。
-        # alive 在粗胚追加之后取——刚添加的点要能出现在日程里
+        # The schedule may still reference places the AI has since deleted,
+        # and writing those back would make the validator report P0.
+        # alive is computed after the stubs are appended — a just-added point
+        # must be allowed to appear in the schedule.
         alive = {p.get("id") for p in base["places"]}
         days = []
         for d in incoming.get("itinerary") or []:
@@ -363,11 +391,12 @@ def merge(incoming):
 
 
 def write_atomic(text):
-    """写临时文件再 rename。
+    """Write a temp file, then rename.
 
-    自动保存把「写到一半被打断」的暴露窗口放大了几千倍，直接 write_text
-    留下的会是半个 JSON——那时 places.json 既读不了也没有备份。
-    Windows 上杀毒软件扫描会短暂锁住文件，所以要重试。
+    Auto-save widens the "interrupted mid-write" exposure window by orders of
+    magnitude, and a plain write_text would leave half a JSON file — at which
+    point places.json is neither readable nor backed up.
+    On Windows, antivirus scanning briefly locks files, hence the retries.
     """
     tmp = TARGET.with_name(TARGET.name + ".tmp")
     err = None
@@ -387,11 +416,12 @@ def write_atomic(text):
 
 
 class H(SimpleHTTPRequestHandler):
-    """静态服务 + 一个 /__save__ 写回端点。
+    """Static file server plus one /__save__ write-back endpoint.
 
-    为什么需要这个端点：File System Access API 在多数内置浏览器里
-    「函数存在但写入被拒」（createWritable 抛 NotAllowedError），
-    剪贴板也常被禁。POST 回本地服务是唯一在所有浏览器里都可靠的回传方式。
+    Why the endpoint is needed: in most embedded browsers the File System
+    Access API is "function present, write refused" (createWritable throws
+    NotAllowedError), and the clipboard is often blocked too. POSTing back to
+    a local server is the only transport that works reliably everywhere.
     """
     def __init__(self, *a, **k):
         super().__init__(*a, directory=str(ROOT), **k)
@@ -404,7 +434,7 @@ class H(SimpleHTTPRequestHandler):
         if path.rstrip("/") != "/__save__":
             self.send_error(404)
             return
-        now = "now=1" in query          # 手动保存：立刻重建，别让用户等 12 秒
+        now = "now=1" in query          # manual save: rebuild at once, don't make the user wait 12s
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n <= 0 or n > 8 * 1024 * 1024:
@@ -412,7 +442,8 @@ class H(SimpleHTTPRequestHandler):
             doc = json.loads(self.rfile.read(n).decode("utf-8"))
             if not isinstance(doc, dict) or not doc.get("patch"):
                 raise ValueError("not a valid patch structure")
-            # 写的永远是 ROOT 下这一个文件名，不接受来自页面的任意路径
+            # Always writes this one filename under ROOT; arbitrary paths
+            # from the page are never accepted
             with LOCK:
                 out = merge(doc)
                 write_atomic(json.dumps(out, ensure_ascii=False, indent=2))
@@ -429,15 +460,16 @@ class H(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-# 只绑 127.0.0.1，不对局域网暴露写接口
+# Bind 127.0.0.1 only; never expose the write endpoint to the LAN
 ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 '''
 
 
 def _detach() -> dict:
-    """让服务活过父进程。start_new_session 是 POSIX 专有的，
-    Windows 上被静默忽略（CPython 里参数名就叫 unused_start_new_session），
-    得改用 creationflags 才真的脱离控制台。"""
+    """Let the server outlive the parent process. start_new_session is
+    POSIX-only and silently ignored on Windows (CPython even names the
+    parameter unused_start_new_session); creationflags is what actually
+    detaches from the console there."""
     if hasattr(os, "setsid"):
         return {"start_new_session": True}
     flags = (getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
@@ -458,8 +490,9 @@ def serve(trip_dir: Path, page: Path, port: int) -> None:
 
     url = f"http://localhost:{port}/{page.name}"
     print(f"✓ Local server running: {url}")
-    # 打印当前解释器而不是写死 python3——Windows 上 python.org 的安装包
-    # 不装 python3.exe，而系统自带的同名别名会去打开微软商店。
+    # Print the current interpreter rather than a hardcoded python3 — on
+    # Windows the python.org installer doesn't install python3.exe, and the
+    # system's alias of that name opens the Microsoft Store.
     print(f"  Stop it: {Path(sys.executable).name} {Path(__file__).name} {trip_dir} --stop")
     print("  Page edits auto-save back to places.json (this server merges, writes, and rebuilds)")
     print("  (http also keeps the official OSM raster basemap compliant; the vector basemap works under file:// too)")
@@ -477,14 +510,16 @@ def stop(trip_dir: Path, quiet: bool = False) -> None:
         return
     try:
         pid, port = f.read_text().split()
-        # os.killpg / os.getpgid 在 Windows 上根本不存在。原来直接调，抛的
-        # AttributeError 不在捕获列表里 → 崩栈，而 finally 照样删掉 pid 文件：
-        # 服务还在跑，记录它的东西没了，再也停不掉。serve() 开头就会调本函数，
-        # 所以残留一个 pid 文件连启动都会崩。
+        # os.killpg / os.getpgid simply don't exist on Windows. Calling them
+        # directly raised an AttributeError that wasn't in the except list →
+        # stack trace, while finally deleted the pid file anyway: the server
+        # kept running, its record was gone, and it could never be stopped
+        # again. serve() calls this function at startup, so a leftover pid
+        # file would even crash starting up.
         if hasattr(os, "killpg"):
-            os.killpg(os.getpgid(int(pid)), signal.SIGTERM)   # 连整个进程组一起
+            os.killpg(os.getpgid(int(pid)), signal.SIGTERM)   # the whole process group
         else:
-            os.kill(int(pid), signal.SIGTERM)                 # Windows：只能杀进程本身
+            os.kill(int(pid), signal.SIGTERM)                 # Windows: only the process itself
         if not quiet:
             print(f"✓ Stopped the server on port {port}")
     except (OSError, ValueError):

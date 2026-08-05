@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""places.json 校验器 —— 防幻觉与数据完整性的主闸门。
+"""places.json validator — the main gate for anti-hallucination and data integrity.
 
-用法:
+Usage:
     python3 validate.py <places.json> [--check-links] [--json] [--quiet]
 
-分级:
-    P0  拒绝  —— 数据不可用，退出码 1
-    P1  警告  —— 可以继续，但很可能有问题
-    P2  提示  —— 质量建议
+Levels:
+    P0  reject  — the data is unusable; exit code 1
+    P1  warn    — you can proceed, but something is very likely wrong
+    P2  note    — quality suggestions
 
-契约见 references/data-schema.md。只依赖标准库。
+Contract: references/data-schema.md. Standard library only.
 """
 
 from __future__ import annotations
@@ -32,8 +32,9 @@ BOOKINGS = {"required", "recommended", "none"}
 CHOICES = {None, "yes", "maybe", "no"}
 VERIFY_STATES = {"verified", "partial", "blocked"}
 
-# 契约允许的全部字段。多出来的字段说明 AI 自己发明了 schema，
-# 而模板不会渲染它们——静默丢失比报错更糟，所以要提示。
+# Every field the contract allows. Extra fields mean the AI invented its own
+# schema, and the template won't render them — silent loss is worse than an
+# error, hence the notice.
 KNOWN_PLACE_FIELDS = {
     "id", "name", "name_local", "name_en", "kind", "category", "tier", "scale",
     "parent_id", "area", "coord", "hours", "last_entry", "closed_days",
@@ -45,14 +46,16 @@ KNOWN_PLACE_FIELDS = {
 KINDS = {"attraction", "lodging"}
 ORIGINS = {"user"}
 
-# 住宿走一套精简的必填集：它不是"景点"，没有 tier / 门票 / 闭馆日 / 摄影机位这些概念，
-# 硬套景点的契约只会逼着人往里填假数据。
+# Lodging uses a reduced required set: it isn't an "attraction" and has no
+# notion of tier / tickets / closure days / photo spots, so forcing the
+# attraction contract onto it would only coerce fake data.
 LODGING_REQUIRED_STR = {"id", "name", "area"}
 LODGING_REQUIRED_ANY = {"coord"}
 
-# 用户在地图上搜索添加的粗胚（origin=user）：只有名称+坐标+OSM 来源，
-# 研究型字段（hours / tier / category …）等 AI 事后补全。逼着页面端造这些
-# 数据只会得到假数据，所以走最小必填集。
+# Stubs the user added via map search (origin=user): name + coordinates + OSM
+# source only, with the research fields (hours / tier / category …) left for
+# the AI to complete later. Forcing the page to invent that data would only
+# produce fake data, hence the minimal required set.
 STUB_REQUIRED_STR = {"id", "name"}
 STUB_REQUIRED_ANY = {"coord", "sources"}
 KNOWN_TRIP_FIELDS = {
@@ -61,26 +64,31 @@ KNOWN_TRIP_FIELDS = {
     "pace", "bases", "generated_at", "verified_at", "note",
 }
 
-# 必填且不可为空字符串
+# Required, and must not be an empty string
 REQUIRED_STR = ["id", "name", "category", "area", "hours", "closed",
                 "ticket", "pitch", "detail"]
 REQUIRED_ANY = ["tier", "scale", "status", "booking", "coord",
                 "duration_min", "photo_index",
                 "indoor", "night", "sources"]
-# closed_days 允许为 null，表示「查不到或来源互相矛盾」。
-# 实测：某老喫茶店的周日营业情况，食べログ说休、大楼官方商户页说不休，且无独立官网可仲裁。
-# 这种情况下逼着填一个值，比留空危险得多——用户会按错误的信息安排行程。
-# 代价是无法做闭馆日冲突校验，因此降级为 P1 提醒用户自行确认。
+# closed_days may be null, meaning "unfindable, or sources contradict".
+# Measured: for an old kissaten's Sunday hours, Tabelog said closed while the
+# building's official tenant page said open, with no independent site to
+# arbitrate. Forcing a value in that situation is far more dangerous than
+# leaving it empty — the user would plan around wrong information.
+# The cost is that closure-conflict validation becomes impossible, so it's
+# downgraded to a P1 asking the user to confirm.
 
-# 用浏览器形状的 UA：实测通天阁官网对纯工具 UA 直接拒连，
-# 用工具 UA 会把大量正常官网误判成死链。
+# A browser-shaped UA: measured, Tsūtenkaku's official site refuses tool-shaped
+# UAs outright, and using one would misreport plenty of healthy official sites
+# as dead links.
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/140.0 Safari/537.36 travel-planner-validate/1.0")
 STALE_DAYS = 30
 DUPE_METERS = 25
 
-# 这些状态码说明「站点活着但拒绝自动访问」，不等于死链。
-# 实测：黑门市场官网对任何 UA 都回 403（反爬），但网页本身完全正常。
+# These status codes mean "the site is alive but refuses automated access",
+# which is not a dead link. Measured: Kuromon Market's official site returns
+# 403 to every UA (anti-bot) while the page itself is perfectly fine.
 BOT_BLOCKED = {401, 403, 405, 429, 503}
 
 
@@ -124,7 +132,7 @@ def _parse_date(s):
 
 
 def _trip_weekdays(trip) -> set[int] | None:
-    """行程覆盖的 ISO 周几集合。无日期时返回 None。"""
+    """The set of ISO weekdays the trip covers. Returns None without dates."""
     dates = trip.get("dates") or {}
     start, end = _parse_date(dates.get("start")), _parse_date(dates.get("end"))
     if not start or not end or end < start:
@@ -161,10 +169,12 @@ def check_top_level(doc, rep: Report) -> None:
     if unknown_trip:
         rep.add("P2", "trip", f"fields outside the contract: {sorted(unknown_trip)}")
 
-    # 界面文案覆盖表（可选）。模板内置 en/zh，按 output_language 选；
-    # 其他语言由 AI 把模板 I18N.en 的 key 逐条译好写在这里。模板对未知 key
-    # 静默忽略、缺 key 落回英文，所以这里只把住类型——值类型错了页面会渲染出
-    # undefined/[object Object]。
+    # UI string override table (optional). The template ships en/zh built in,
+    # selected by output_language; for other languages the AI translates the
+    # template's I18N.en keys one by one into this object. The template
+    # silently ignores unknown keys and falls back to English for missing
+    # ones, so only the types are guarded here — a wrong value type would
+    # render undefined/[object Object] on the page.
     ui = doc.get("ui")
     if ui is not None:
         if not isinstance(ui, dict):
@@ -207,12 +217,14 @@ def check_place(p, idx, doc, rep: Report) -> None:
     origin = p.get("origin")
     if origin is not None and origin not in ORIGINS:
         rep.add("P0", where, f"origin={origin!r} is invalid; must be one of {sorted(ORIGINS)}")
-    # 粗胚的判定是 origin=user 且还没有 tier——AI 一旦补全（填上 tier 等），
-    # 它就要按普通景点的完整必填集来验，不能一直躲在精简集后面。
+    # A stub is origin=user with no tier yet — once the AI completes it (fills
+    # in tier and the rest), it must be validated against the full attraction
+    # required set and can no longer hide behind the reduced one.
     is_stub = origin == "user" and p.get("tier") is None
 
-    # 核实被拦截时，这几个字段允许为空——那正是「查不到」的含义。
-    # 逼着填反而会让用户把猜测当成已核实的信息。
+    # When verification is blocked these fields may be empty — that's exactly
+    # what "couldn't find out" means. Forcing them to be filled would make the
+    # user treat a guess as verified information.
     vstate = (p.get("verify") or {}).get("state")
     excused = {"hours", "ticket", "status", "closed", "last_entry"} if vstate in ("blocked", "partial") else set()
 
@@ -240,7 +252,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
                 f"verify.state={vstate} exempts {sorted(excused)} from the required check"
                 + (f"; of those, {got} actually have values" if got else "; all are empty"))
 
-    # 枚举
+    # Enums
     for field, allowed in (("tier", TIERS), ("scale", SCALES),
                            ("status", STATUSES), ("booking", BOOKINGS)):
         v = p.get(field)
@@ -249,12 +261,13 @@ def check_place(p, idx, doc, rep: Report) -> None:
     if "choice" in p and p["choice"] not in CHOICES:
         rep.add("P0", where, f"choice={p['choice']!r} is invalid")
 
-    # 住宿不属于任何景点分类，不参与配额，也就不必落在 categories 里
+    # Lodging belongs to no attraction category and takes part in no quota, so
+    # it needn't appear in categories
     cat_ids = {c.get("id") for c in doc.get("categories") or []}
     if kind != "lodging" and p.get("category") and p["category"] not in cat_ids:
         rep.add("P0", where, f"category={p['category']!r} is not defined in categories")
 
-    # 坐标
+    # Coordinates
     c = p.get("coord")
     if not isinstance(c, dict) or not isinstance(c.get("lon"), (int, float)) \
             or not isinstance(c.get("lat"), (int, float)):
@@ -268,8 +281,10 @@ def check_place(p, idx, doc, rep: Report) -> None:
             if isinstance(bbox, list) and len(bbox) == 4:
                 if not (bbox[0] <= lon <= bbox[2] and bbox[1] <= lat <= bbox[3]):
                     if origin == "user":
-                        # 临时起意的点常在 bbox 边缘外（大阪行程加奈良），
-                        # 坐标又来自 OSM 而非 AI 之手，写反/搜错的先验低得多
+                        # Spontaneous additions often sit just outside the
+                        # bbox (adding Nara to an Osaka trip), and their
+                        # coordinates come from OSM rather than the AI, so the
+                        # prior for a swap or mis-search is far lower
                         rep.add("P1", where,
                                 f"user-added point ({lon}, {lat}) is outside the destination bbox; "
                                 f"confirm it isn't a same-named place elsewhere")
@@ -278,7 +293,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
                                 f"coordinates ({lon}, {lat}) fall outside the destination bbox — "
                                 f"very likely swapped lon/lat or a same-named place elsewhere")
 
-    # 来源（防幻觉主闸门）
+    # Sources (the main anti-hallucination gate)
     srcs = p.get("sources")
     if not isinstance(srcs, list) or not srcs:
         rep.add("P0", where, "sources is empty — entries not verified online must not enter the dataset")
@@ -287,11 +302,12 @@ def check_place(p, idx, doc, rep: Report) -> None:
             if not isinstance(s, dict) or not _is_url(s.get("url")):
                 rep.add("P0", where, f"sources[{i}] lacks a valid http(s) url")
 
-    # 状态
+    # Status
     if p.get("status") and p["status"] != "open" and _blank(p.get("status_note")):
         rep.add("P0", where, f"status={p['status']} but status_note is missing (state the dates)")
 
-    # 核实状态。与 status 正交：status 说场馆开不开，verify 说我们查没查清。
+    # Verification state. Orthogonal to status: status says whether the venue
+    # is open, verify says how far we got confirming it.
     v = p.get("verify")
     if v is not None:
         if not isinstance(v, dict):
@@ -311,7 +327,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
                         f"verification blocked or incomplete ({st}): {str(v.get('note'))[:60]}…"
                         f" — the page will flag it for the user to confirm")
 
-    # closed_days。住宿没有「闭馆日」这个概念，不参与。
+    # closed_days. Lodging has no notion of a "closure day" and is exempt.
     cd = p.get("closed_days")
     if cd is None:
         if kind != "lodging" and not is_stub:
@@ -329,9 +345,11 @@ def check_place(p, idx, doc, rep: Report) -> None:
                         f"closure days cover the whole trip (trip spans {names}; the place is shut on all of them) — "
                         f"the user should never see it as selectable")
 
-    # spot 归属。parent_id 是可选的——实测发现有些微景点（渡船口、街边小神社）
-    # 在它所在片区里本来就没有主景点，强行指定 parent 会造出假的从属关系。
-    # 没有 parent 的 spot 在清单里作为独立小卡片渲染，这是可接受的。
+    # Spot parentage. parent_id is optional — in practice some micro-spots
+    # (ferry piers, small roadside shrines) have no major place in their area
+    # at all, and forcing a parent would fabricate a false hierarchy.
+    # A parentless spot renders as its own small card in the list, which is
+    # acceptable.
     if p.get("scale") == "spot":
         parent = p.get("parent_id")
         if _blank(parent):
@@ -342,7 +360,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
             if parent not in all_ids:
                 rep.add("P0", where, f"parent_id={parent!r} points at a nonexistent place")
 
-    # 数值
+    # Numeric fields
     for f in ("duration_min", "photo_index"):
         v = p.get(f)
         if v is not None and not isinstance(v, int):
@@ -354,7 +372,8 @@ def check_place(p, idx, doc, rep: Report) -> None:
             rep.add("P0", where, f"{f} must be a boolean, got {p[f]!r}")
 
     # ---- P1
-    # 粗胚豁免：name_local 是研究产物，页面端只有 OSM namedetails 里碰巧有才填得上
+    # Stubs are exempt: name_local is a research product, and the page can
+    # only supply it when OSM's namedetails happens to carry one
     if (not is_stub and trip.get("local_language") and trip.get("output_language")
             and trip["local_language"] != trip["output_language"]
             and _blank(p.get("name_local"))):
@@ -367,8 +386,10 @@ def check_place(p, idx, doc, rep: Report) -> None:
                 f"If a new field is truly needed, change data-schema.md and validate.py first")
 
     # ---- P2
-    # 住宿和粗胚不参与这几条：摄影机位、配图、长篇介绍都是研究后的质量要求。
-    # 对着酒店或刚钉下的粗胚提"缺少拍摄建议"只会制造噪声，把真正该看的提示淹掉。
+    # Lodging and stubs are exempt from these: photo spots, images and a long
+    # write-up are post-research quality requirements. Telling a hotel or a
+    # just-pinned stub that it "lacks shooting advice" only creates noise and
+    # drowns the notices that matter.
     if kind != "lodging" and not is_stub:
         if _blank(p.get("photo_note")):
             rep.add("P2", where, "missing photo_note (shot description and shooting advice)")
@@ -393,7 +414,7 @@ def check_cross(doc, rep: Report) -> None:
         else:
             seen[pid] = i
 
-    # 分类配额
+    # Category quotas
     counts: dict[str, int] = {}
     for p in places:
         counts[p.get("category")] = counts.get(p.get("category"), 0) + 1
@@ -408,7 +429,7 @@ def check_cross(doc, rep: Report) -> None:
         if isinstance(hi, int) and n > hi:
             rep.add("P1", "categories", f"\"{label}\" has {n}, above the maximum {hi}")
 
-    # 坐标重合
+    # Nearly identical coordinates
     pts = [(i, p) for i, p in enumerate(places) if isinstance(p.get("coord"), dict)
            and isinstance(p["coord"].get("lon"), (int, float))
            and isinstance(p["coord"].get("lat"), (int, float))]
@@ -435,12 +456,14 @@ WEEK_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def check_itinerary(doc, rep: Report) -> None:
-    """校验排程结果 itinerary。
+    """Validate the scheduling result, itinerary.
 
-    顶层叫 itinerary 而不是 days，是为了避开 trip.days（天数，整数）——
-    同名不同层不同类型，写 JSON 的人和读代码的人都会搞混。
+    The top-level key is itinerary rather than days to avoid colliding with
+    trip.days (an integer count) — the same name at a different level with a
+    different type confuses both the JSON author and the code reader.
 
-    没有 itinerary 就整段跳过：排程是可选阶段，老文件必须继续能用。
+    No itinerary means the whole section is skipped: scheduling is an optional
+    stage and older files must keep working.
     """
     it = doc.get("itinerary")
     if it is None:
@@ -453,7 +476,7 @@ def check_itinerary(doc, rep: Report) -> None:
     by_id = {p.get("id"): p for p in places if p.get("id")}
 
     seen_n: dict[int, int] = {}
-    assigned: dict[str, list[int]] = {}      # place id -> 出现在哪几天
+    assigned: dict[str, list[int]] = {}      # place id -> which days it appears on
 
     for di, day in enumerate(it):
         dwhere = f"itinerary[{di}]"
@@ -470,7 +493,7 @@ def check_itinerary(doc, rep: Report) -> None:
         else:
             seen_n[n] = di
 
-        # 日期用来做闭馆冲突判断；第 0 天可以没有独立日期
+        # The date drives closure-conflict checks; Day 0 may have no date of its own
         d = _parse_date(day.get("date")) if day.get("date") else None
         if day.get("date") and not d:
             rep.add("P0", dwhere, f"date should be YYYY-MM-DD, got {day.get('date')!r}")
@@ -495,7 +518,7 @@ def check_itinerary(doc, rep: Report) -> None:
 
             assigned.setdefault(pid, []).append(n if isinstance(n, int) else di)
 
-            # ---- 闭馆冲突：这不是判断题，是那天去不了 ----
+            # ---- Closure conflict: not a judgment call; you can't go that day ----
             if d is not None:
                 wd = d.isoweekday()
                 cds = p.get("closed_days")
@@ -506,17 +529,20 @@ def check_itinerary(doc, rep: Report) -> None:
             if p.get("status") == "permanently_closed":
                 rep.add("P0", ewhere, f"{p.get('name')} is permanently closed and cannot be scheduled")
 
-    # ---- 跨天的检查 ----
+    # ---- Cross-day checks ----
     for pid, days_in in assigned.items():
         p = by_id.get(pid) or {}
-        # 住宿每天都出现是常态，不是可疑的重复 —— 实测样本里酒店一天出现两次
-        # （早上出发、晚上回来）、两天共四次，被误报成「确认不是误操作」。
+        # Lodging appearing every day is normal, not a suspicious duplicate —
+        # in the test sample the hotel appeared twice a day (leaving in the
+        # morning, returning at night), four times over two days, and was
+        # falsely flagged as "confirm this isn't a mistake".
         if (p.get("kind") or "attraction") == "lodging":
             continue
         distinct = sorted(set(days_in))
         if len(distinct) > 1:
-            # 同一地点去两次通常是有意的（白天夜景各一次、世博会连着两天），
-            # 但也可能是拖拽误操作。写了 note 就当是有意的。
+            # Visiting the same place twice is usually deliberate (daytime and
+            # night views, two consecutive Expo days), but it can also be a
+            # drag mistake. A note means deliberate.
             has_note = any(
                 (ent.get("note") or "").strip()
                 for day in it if isinstance(day, dict)
@@ -537,7 +563,8 @@ def check_itinerary(doc, rep: Report) -> None:
 # ---------------------------------------------------------------- links
 
 def _fetch(url: str) -> tuple[str, int | str]:
-    """先 HEAD，被拒则退回 GET 首字节。返回状态码或异常名。"""
+    """HEAD first, falling back to a first-byte GET when refused. Returns the
+    status code or the exception name."""
     def _try(method: str) -> int:
         headers = {"User-Agent": UA}
         if method == "GET":
@@ -549,7 +576,7 @@ def _fetch(url: str) -> tuple[str, int | str]:
     try:
         return url, _try("HEAD")
     except urllib.error.HTTPError as e:
-        if e.code in (403, 405, 501):  # 不少站点禁 HEAD
+        if e.code in (403, 405, 501):  # plenty of sites forbid HEAD
             try:
                 return url, _try("GET")
             except urllib.error.HTTPError as e2:
@@ -582,7 +609,8 @@ def check_links(doc, rep: Report) -> None:
             if isinstance(status, int) and status < 400:
                 continue
             if status in BOT_BLOCKED:
-                # 站点活着，只是拒绝自动访问——不能算死链，但值得人工点一下确认
+                # The site is alive, just refusing automated access — not a
+                # dead link, but worth a manual click to confirm
                 for where in targets[url]:
                     rep.add("P2", where, f"can't verify automatically (likely bot-blocked, HTTP {status}); check manually: {url}")
             else:
