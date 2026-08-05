@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""validate.py 的回归测试：故意造坏数据，断言校验器能抓到。
+"""Regression tests for validate.py: deliberately corrupt the data and
+assert the validator catches it.
 
     python3 dev/test_validate.py
 """
@@ -14,7 +15,7 @@ import validate  # noqa: E402
 
 
 def base_doc() -> dict:
-    """一份最小的、应当完全通过的文档。"""
+    """A minimal document that should pass cleanly."""
     return {
         "schema_version": 1,
         "trip": {
@@ -22,7 +23,7 @@ def base_doc() -> dict:
             "bbox": [135.35, 34.55, 135.65, 34.80],
             "timezone": "Asia/Tokyo",
             "output_language": "zh-CN", "local_language": "ja",
-            "dates": {"start": "2026-09-12", "end": "2026-09-13"},  # 周六、周日
+            "dates": {"start": "2026-09-12", "end": "2026-09-13"},  # Saturday, Sunday
             "days": 2, "party": "情侣 2 人", "pace": "中等",
             "generated_at": str(validate.date.today()),
             "verified_at": str(validate.date.today()),
@@ -76,7 +77,8 @@ def run(doc: dict) -> validate.Report:
 
 
 def with_itinerary(doc: dict, **kw) -> None:
-    """给基准文档加一份两天的排程。行程日期是 09-12(周六) 与 09-13(周日)。"""
+    """Attach a two-day schedule to the baseline document. The trip dates are
+    09-12 (Sat) and 09-13 (Sun)."""
     doc["itinerary"] = [
         {"n": 1, "date": "2026-09-12", "label": "第 1 天",
          "places": [{"id": "os-001"}]},
@@ -88,11 +90,12 @@ def with_itinerary(doc: dict, **kw) -> None:
 
 
 def hotel(doc: dict, **kw) -> dict:
-    """往 places 里加一个住宿条目，返回它。"""
+    """Append a lodging entry to places and return it."""
     h = {"id": "os-h1", "name": "梅田某酒店", "name_local": "梅田のホテル",
          "kind": "lodging",
          "area": "梅田", "coord": {"lon": 135.4980, "lat": 34.7025},
-         # 住宿同样要过防幻觉闸门：AI 得真去查一下确认它存在、拿到地址
+         # Lodging passes the anti-hallucination gate too: the AI must
+         # actually look it up to confirm it exists and get its address
          "sources": [{"title": "官网", "url": "https://example.org/hotel"}]}
     h.update(kw)
     doc["places"].append(h)
@@ -108,187 +111,191 @@ results: list[bool] = []
 
 
 def case(name: str, mutate, level: str, needle: str) -> None:
-    """断言方式由 needle 决定：
+    """The needle decides how the assertion works:
 
-        "文字"    该级别必须包含这段文字
-        ""        该级别一条都不能有
-        "!文字"   该级别必须**不**包含这段文字（其他告警可以有）
+        "text"    the level must contain this text
+        ""        the level must have no findings at all
+        "!text"   the level must **not** contain this text (other findings ok)
 
-    空串不能走 `needle in got`——`"" in s` 恒为真，那样的用例永远通过、
-    等于没写。而只想验证"某条误报消失了"时，往往不能要求整级为空——
-    基准文档本身就带着「样本量太小」这类预期内的告警。"""
+    An empty string can't go through `needle in got` — `"" in s` is always
+    true, so such a case would always pass and amount to no test at all. And
+    when verifying that "a particular false positive is gone", requiring the
+    whole level to be empty usually won't work — the baseline document itself
+    carries expected findings like "sample too small"."""
     doc = base_doc()
     mutate(doc)
     rep = run(doc)
     got = messages(rep, level)
     if needle == "":
-        ok, expect = (not got), "一条都没有"
+        ok, expect = (not got), "no findings at all"
     elif needle.startswith("!"):
-        ok, expect = (needle[1:] not in got), f"不含 {needle[1:]!r}"
+        ok, expect = (needle[1:] not in got), f"must not contain {needle[1:]!r}"
     else:
         ok, expect = (needle in got), repr(needle)
     results.append(ok)
     print(f"  {PASS if ok else FAIL} {name}")
     if not ok:
-        print(f"      期望 {level} {expect}")
-        print(f"      实际 {level}: {got or '(无)'}")
+        print(f"      expected {level} {expect}")
+        print(f"      actual   {level}: {got or '(none)'}")
 
 
 def main() -> int:
-    print("\n基准文档：零 P0，且唯一的 P1 是「样本太小」这个预期内的提醒")
+    print("\nBaseline document: zero P0, and the only P1 is the expected \"sample too small\" notice")
     rep = run(base_doc())
     p1s = [m for _, _, m in rep.of("P1")]
     expected_p1 = [m for m in p1s if "only 2 places in total" in m]
     clean = (not rep.of("P0")) and len(p1s) == 1 and len(expected_p1) == 1
     results.append(clean)
-    print(f"  {PASS if clean else FAIL} 基准文档干净（仅剩预期内的样本量提醒）")
+    print(f"  {PASS if clean else FAIL} baseline is clean (only the expected sample-size notice remains)")
     if not clean:
         for lv, w, m in rep.items:
             if lv in ("P0", "P1"):
                 print(f"      [{lv}] {w}: {m}")
 
-    print("\nP0 · 必须拦下的")
-    case("缺 sources（防幻觉主闸门）",
+    print("\nP0 · must be blocked")
+    case("missing sources (the main anti-hallucination gate)",
          lambda d: d["places"][1].pop("sources"), "P0", "sources is empty")
-    case("sources 里是非 http 的假链接",
+    case("a non-http fake link in sources",
          lambda d: d["places"][1].update(sources=[{"title": "x", "url": "内部资料"}]),
          "P0", "valid http(s) url")
-    case("坐标写成数组（经纬度易写反）",
+    case("coord written as an array (invites lon/lat swaps)",
          lambda d: d["places"][1].update(coord=[135.49, 34.69]), "P0", "arrays are forbidden")
-    case("经纬度写反 → 落到 bbox 外",
+    case("lon/lat swapped → falls outside the bbox",
          lambda d: d["places"][1].update(coord={"lon": 34.6914, "lat": 135.4914}),
          "P0", "out of range")
-    case("坐标搜错了同名地点（东京的点混进大阪）",
+    case("wrong same-named place (a Tokyo point in an Osaka trip)",
          lambda d: d["places"][1].update(coord={"lon": 139.767, "lat": 35.681}),
          "P0", "outside the destination bbox")
-    case("闭馆日覆盖整个行程（周末去，但周末闭馆）",
+    case("closure days cover the whole trip (weekend trip, closed weekends)",
          lambda d: d["places"][1].update(closed_days=[6, 7]), "P0", "closure days cover the whole trip")
-    case("status 非 open 却不说明",
+    case("status is not open but unexplained",
          lambda d: d["places"][1].update(status="renovating"), "P0", "status_note is missing")
-    case("id 重复",
+    case("duplicate id",
          lambda d: d["places"][1].update(id="os-001"), "P0", "duplicates")
-    case("tier 枚举非法",
+    case("illegal tier enum",
          lambda d: d["places"][1].update(tier="SS"), "P0", "tier='SS' is invalid")
-    case("parent_id 指向不存在的景点",
+    case("parent_id points at a nonexistent place",
          lambda d: d["places"][1].update(scale="spot", parent_id="os-999"),
          "P0", "points at a nonexistent place")
-    case("category 未定义",
+    case("undefined category",
          lambda d: d["places"][1].update(category="ufo"), "P0", "not defined in categories")
-    case("photo_index 越界",
+    case("photo_index out of range",
          lambda d: d["places"][1].update(photo_index=9), "P0", "should be 1–5")
-    case("bbox min/max 写反",
+    case("bbox min/max reversed",
          lambda d: d["trip"].update(bbox=[135.65, 34.80, 135.35, 34.55]), "P0", "order is reversed")
 
-    print("\nP1 · 应当警告的")
-    case("当地语言不同却缺 name_local",
+    print("\nP1 · should warn")
+    case("local language differs but name_local is missing",
          lambda d: d["places"][1].pop("name_local"), "P1", "name_local")
-    case("分类数量低于保底",
+    case("category count below minimum",
          lambda d: d["categories"].append({"id": "food", "label": "餐饮", "min": 2, "max": 5}),
          "P1", "below the minimum")
-    case("两个景点坐标几乎重合",
+    case("two places with nearly identical coordinates",
          lambda d: d["places"][1].update(coord={"lon": 135.52591, "lat": 34.68731}),
          "P1", "possible duplicate")
-    case("verified_at 过期",
+    case("verified_at is stale",
          lambda d: d["trip"].update(verified_at=str(validate.date.today() - validate.timedelta(days=45))),
          "P1", "is 45 days old")
 
-    print("\nP2 · 应当提示的")
-    case("缺 photo_note",
+    print("\nP2 · should note")
+    case("missing photo_note",
          lambda d: d["places"][1].pop("photo_note"), "P2", "photo_note")
-    case("需预约却没给预约地址",
+    case("booking required but no booking_url",
          lambda d: d["places"][1].pop("booking_url"), "P2", "booking_url")
-    case("detail 太短",
+    case("detail too short",
          lambda d: d["places"][1].update(detail="很好看"), "P2", "thin")
-    # 端到端实测改的规则：微景点在片区里本来就没有主景点是常态（渡船口、街边小神社），
-    # 强制 parent_id 会造出假的从属关系，故降级为提示。
-    case("spot 没有 parent_id（应只提示，不拒绝）",
+    # Rule changed after end-to-end testing: micro-spots with no major place
+    # in their area are normal (ferry piers, small roadside shrines), and
+    # forcing parent_id would fabricate a false hierarchy — downgraded to a note.
+    case("spot without parent_id (should note, not reject)",
          lambda d: d["places"][1].update(scale="spot"), "P2", "renders as a standalone card")
 
-    print("\nverify · 核实被拦截的处理")
+    print("\nverify · handling blocked verification")
     def blocked(d, **kw):
         p = d["places"][1]
         p["verify"] = {"state": "blocked", "note": "官网 404，专用域名连不上",
                        "check": ["营业时间", "票价"]}
         p.update(**kw)
-    case("blocked 时 hours/ticket/status 允许为空",
+    case("blocked allows hours/ticket/status to be empty",
          lambda d: blocked(d, hours=None, ticket=None, status=None), "P1", "verification blocked")
-    case("blocked 但没写 note —— 必须拒绝",
+    case("blocked without a note — must be rejected",
          lambda d: d["places"][1].update(verify={"state": "blocked"}), "P0", "note is missing")
-    case("verify.state 非法值",
+    case("illegal verify.state value",
          lambda d: d["places"][1].update(verify={"state": "maybe", "note": "x"}), "P0", "is invalid")
-    case("verified 时不豁免必填",
+    case("verified grants no exemption from required fields",
          lambda d: d["places"][1].update(verify={"state": "verified"}, hours=None),
          "P0", "missing required field hours")
 
-    print("\nitinerary · 排程结果")
-    case("排程干净时不该有 P0",
+    print("\nitinerary · scheduling result")
+    case("a clean schedule should produce no P0",
          lambda d: with_itinerary(d), "P0", "")     # needle 为空串 → 只要不崩就算过
-    case("排到不存在的 id",
+    case("scheduled a nonexistent id",
          lambda d: (with_itinerary(d),
                     d["itinerary"][0]["places"].append({"id": "os-999"})),
          "P0", "does not exist in places")
-    case("排到当天闭馆的日子（中之岛美术馆周一休，排进周一）",
+    case("scheduled on a closure day (Nakanoshima museum closes Mondays, scheduled on Monday)",
          lambda d: (with_itinerary(d),
                     d["itinerary"][0].update(date="2026-09-14"),   # 周一
                     d["itinerary"][0]["places"].append({"id": "os-002"})),
          "P0", "closed that day")
-    case("n 重复",
+    case("duplicate n",
          lambda d: (with_itinerary(d), d["itinerary"][1].update(n=1)),
          "P0", "duplicates itinerary[0]")
-    case("某一天空着",
+    case("a day left empty",
          lambda d: (with_itinerary(d), d["itinerary"][1].update(places=[])),
          "P1", "has no places at all")
-    case("条目不是对象（写成了裸 id）",
+    case("entry is not an object (written as a bare id)",
          lambda d: (with_itinerary(d), d["itinerary"][0].update(places=["os-001"])),
          "P0", "of the form")
-    case("date 格式非法",
+    case("illegal date format",
          lambda d: (with_itinerary(d), d["itinerary"][0].update(date="2026/09/12")),
          "P0", "date should be YYYY-MM-DD")
-    case("永久关闭的地点被排进行程",
+    case("a permanently closed place was scheduled",
          lambda d: (with_itinerary(d),
                     d["places"][0].update(status="permanently_closed",
                                           status_note="2025 年拆除")),
          "P0", "permanently closed")
-    case("同一地点排进两天却没写 note",
+    case("same place on two days without a note",
          lambda d: (with_itinerary(d),
                     d["itinerary"][1]["places"].append({"id": "os-001"})),
          "P2", "without a note")
-    case("写了 note 就不再提示",
+    case("a note silences the notice",
          lambda d: (with_itinerary(d),
                     d["itinerary"][1]["places"].append({"id": "os-001", "note": "夜景"})),
          "P2", "")
-    # 酒店一天出现两次（早上出发、晚上回来）、两天共四次是常态，不该被当成误操作
-    case("住宿天天出现不该被当成重复误操作",
+    # A hotel appearing twice a day (leaving in the morning, returning at
+    # night), four times over two days, is normal and not a mistake
+    case("daily lodging must not be treated as a duplicate mistake",
          lambda d: (hotel(d), with_itinerary(d),
                     d["itinerary"][0]["places"].insert(0, {"id": "os-h1"}),
                     d["itinerary"][0]["places"].append({"id": "os-h1"}),
                     d["itinerary"][1]["places"].insert(0, {"id": "os-h1"}),
                     d["itinerary"][1]["places"].append({"id": "os-h1"})),
          "P2", "")
-    case("住宿没被排进任何一天",
+    case("lodging scheduled on no day",
          lambda d: (hotel(d), with_itinerary(d)),
          "P1", "appears on no day")
-    case("itinerary 不是数组",
+    case("itinerary is not an array",
          lambda d: d.update(itinerary={"n": 1}), "P0", "must be an array")
 
-    print("\nkind · 住宿走精简必填集")
-    case("住宿缺 tier/门票/闭馆日等不该报错",
+    print("\nkind · lodging uses the reduced required set")
+    case("lodging missing tier/tickets/closure days must not error",
          lambda d: (hotel(d), with_itinerary(d),
                     d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),
          "P0", "")
-    case("住宿不该被问「闭馆日为什么是 null」",
+    case("lodging must not be asked why closed_days is null",
          lambda d: (hotel(d), with_itinerary(d),
                     d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),
          "P1", "!closed_days is null")
-    case("住宿仍然要有坐标",
+    case("lodging still needs coordinates",
          lambda d: (hotel(d, coord=None), with_itinerary(d),
                     d["itinerary"][0]["places"].insert(0, {"id": "os-h1"})),
          "P0", "missing required field coord")
-    case("kind 非法值",
+    case("illegal kind value",
          lambda d: d["places"][1].update(kind="hostel"), "P0", "kind='hostel' is invalid")
 
     ok, total = sum(results), len(results)
-    print(f"\n{'\033[92m' if ok == total else '\033[91m'}{ok}/{total} 通过\033[0m")
+    print(f"\n{'\033[92m' if ok == total else '\033[91m'}{ok}/{total} passed\033[0m")
     return 0 if ok == total else 1
 
 
