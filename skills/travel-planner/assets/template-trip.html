@@ -671,7 +671,20 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
   position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line-soft);
   padding:17px 20px 13px;display:flex;align-items:flex-start;gap:12px;z-index:2;
 }
+/* The heading takes tabindex="-1" + autofocus so that showModal() lands the
+   initial focus here instead of on the ✕. Left to the spec's default, focus
+   goes to the dialog's first focusable element, which is the close button —
+   and Chrome's :focus-visible heuristic then draws a ring on it the first time
+   a dialog is opened after a page load (before that first open, no click has
+   yet landed on a focusable element, so the browser can't attribute the focus
+   move to a pointer and treats it as keyboard-ish). Every later open looked
+   clean, so the ✕ appeared to be pre-pressed exactly once per session.
+   The ring is suppressed here because the heading is a reading anchor, not a
+   control — the dialog's own frame is what says "you are in a dialog". Focus
+   still enters the dialog, so Esc and the focus trap keep working, and Tab
+   walks the content from the top in document order. */
 .dlg-h h3{font:500 21px/1.3 var(--serif);margin:0;flex:1}
+.dlg-h h3:focus,.dlg-h h3:focus-visible{outline:none}
 .dlg-h .x{
   background:none;border:0;font-size:22px;color:var(--ink-3);line-height:1;border-radius:6px;
   width:32px;height:32px;flex:none;display:grid;place-items:center;padding:0;
@@ -2644,7 +2657,7 @@ function openDetail(id){
 
   $("#dlg-inner").innerHTML = `
     <div class="dlg-h">
-      <h3>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc"${langAttr}>${esc(p.name_local)}</span>` : ""}</h3>
+      <h3 tabindex="-1" autofocus>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc"${langAttr}>${esc(p.name_local)}</span>` : ""}</h3>
       <button class="x" data-close aria-label="${esc(T.close)}">${xmark()}</button>
     </div>
     <div class="dlg-b">
@@ -2685,7 +2698,7 @@ function askReason(id){
   if(!p) return;
   let picked = "";
   $("#rdlg-inner").innerHTML = `
-    <div class="dlg-h"><h3>${tf("whyNotTitle", { name: esc(p.name) })}</h3>
+    <div class="dlg-h"><h3 tabindex="-1" autofocus>${tf("whyNotTitle", { name: esc(p.name) })}</h3>
       <button class="x" data-rclose aria-label="${esc(T.close)}">${xmark()}</button></div>
     <div class="dlg-b">
       <p style="font-size:13px">${T.reasonHint}</p>
@@ -2994,7 +3007,7 @@ function download(isFallback){
 function showCode(){
   const code = shortCode();
   $("#dlg-inner").innerHTML = `
-    <div class="dlg-h"><h3>${T.codeTitle}</h3><button class="x" data-close aria-label="${esc(T.close)}">${xmark()}</button></div>
+    <div class="dlg-h"><h3 tabindex="-1" autofocus>${T.codeTitle}</h3><button class="x" data-close aria-label="${esc(T.close)}">${xmark()}</button></div>
     <div class="dlg-b">
       <p style="font-size:13px">${T.codeHint}</p>
       <pre class="code" id="code">${esc(code)}</pre>
