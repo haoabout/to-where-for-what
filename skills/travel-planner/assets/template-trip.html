@@ -1640,7 +1640,7 @@ pre.code{
   .card:hover{transform:none}
 }
 @media print{
-  .top,.actionbar,.toolbar,.chips,.pick,.pgnav{display:none!important}
+  .top,.actionbar,.toolbar,.chips,.pick,.pgnav,.tab-actions{display:none!important}
   .card{break-inside:avoid;box-shadow:none}
   /* On paper there is no scanning to do — one column reads better, and a
      3:2 photo per place across 47 places is most of a toner cartridge.
@@ -1665,7 +1665,21 @@ pre.code{
      browser's default 10mm on top of that would shrink every sheet to 96% and
      throw the measured layout away. */
   @page{size:A4;margin:0}
-  .pgwrap{position:static}
+  /* With a zero page margin the sheet *is* the page, so anything the app puts
+     around it prints too. Both of the layout's usual paddings did: main's 20px
+     top pushed the first sheet 20px down the first page — which is why its
+     footer sat lower than every other sheet's — and its 130px of bottom
+     breathing room (there for the last card in the list view) spilled past the
+     last sheet into an extra, blank page. */
+  body{margin:0}
+  /* !important because the standalone page sets main's bottom padding inline
+     (see the STANDALONE branch in start) — 60px, enough on its own to push a
+     ninth, blank page out of an eight-sheet guide. */
+  body,main{margin:0!important;padding:0!important}
+  main{max-width:none}
+  /* height is written inline by fit() and is the *scaled* height; unscaled for
+     print it would crop the sheets. */
+  .pgwrap{position:static;height:auto!important}
   .paged{position:static;left:auto;transform:none!important}
   .pg{
     margin:0;box-shadow:none;border-radius:0;
