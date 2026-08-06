@@ -494,16 +494,25 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .verify-box ul{margin:6px 0 0;padding-left:18px}
 .verify-box li{margin:2px 0}
 
-/* Tri-state. Full-width pill split in three equal segments: it is the card's
-   one action, so it gets the card's full measure rather than a fit-content
-   cluster floating at the left edge. */
+/* Tri-state. A centred pill sized to its own labels, not stretched to the
+   card: three short words spread across 347px put the buttons further apart
+   than the choice between them warrants, and it fought the centred fact strip
+   above it.
+   Grid rather than flex, and fit-content rather than a fixed width, so the
+   three segments come out equal without any measurement of our own: under
+   max-content sizing every 1fr column resolves to the widest label, and the
+   pill grows with it. Nothing here assumes the labels are two Chinese
+   characters — "Not interested", or a German compound, widens the pill on its
+   own; max-width caps it at the card and the labels wrap rather than
+   overflowing. */
 .pick{
-  display:flex;gap:0;margin-top:11px;border:1px solid var(--line);
-  border-radius:999px;overflow:hidden;width:100%;
+  display:grid;grid-template-columns:repeat(3,1fr);
+  margin:11px auto 0;width:fit-content;max-width:100%;
+  border:1px solid var(--line);border-radius:999px;overflow:hidden;
 }
 .pick button{
   background:var(--card);border:0;border-right:1px solid var(--line-soft);
-  flex:1;padding:8px 4px;font-size:12.5px;color:var(--ink-3);transition:.12s;
+  padding:8px 17px;font-size:12.5px;color:var(--ink-3);transition:.12s;
 }
 .pick button:last-child{border-right:0}
 .pick button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
@@ -525,12 +534,12 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .spot .sn:focus-visible{outline-offset:1px}
 .spot .sn:hover{color:var(--accent)}
 .spot .sd{color:var(--ink-3);font-size:11.5px}
-/* The card's .pick is a full-width pill; a photo stop is one line inside that
-   card, so its copy shrinks back to a fit-content cluster on the right. */
+/* A photo stop is one line inside a card, so its copy sits at the line's
+   right end rather than centred, and runs a size smaller. */
 .spot .pick{
-  margin:0 0 0 auto;width:auto;transform:scale(.88);transform-origin:right center;
+  margin:0 0 0 auto;transform:scale(.88);transform-origin:right center;
 }
-.spot .pick button{flex:none;padding:6px 13px}
+.spot .pick button{padding:6px 13px}
 
 /* ═══════════════════════════════════════════════ Bottom action bar */
 .actionbar{
@@ -618,10 +627,10 @@ textarea{
   color:var(--ink);padding:9px 11px;font:14px var(--sans);resize:vertical;min-height:66px;
 }
 .dlg-f{display:flex;gap:9px;justify-content:flex-end;margin-top:15px;flex-wrap:wrap;align-items:center}
-/* Same reason as .spot .pick: the pill is full-width on a card, but here it
-   shares a right-aligned footer row with the "add to day" button. */
-.dlg-f .pick{width:auto;margin-top:0}
-.dlg-f .pick button{flex:none;padding:7px 15px}
+/* Here the pill shares a right-aligned footer row with the "add to day"
+   button, so it takes that row's alignment instead of centring itself. */
+.dlg-f .pick{margin:0}
+.dlg-f .pick button{padding:7px 15px}
 /* The schedule button pushes left: it's a different matter from the
    yes/maybe/no group on the right */
 .btn.sched{margin-right:auto}
