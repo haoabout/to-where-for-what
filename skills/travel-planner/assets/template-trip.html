@@ -20,33 +20,78 @@
 :root{
   color-scheme:light;
 
-  --paper:#faf8f4;
-  --paper-2:#f2eee7;
-  --card:#fffefc;
+  /* ---- tweakcn "OpenProfile.me" (saas / brutalist / playful) ----
+     https://tweakcn.com/themes/cmnn98cgf000304l76gib2grt
+     The theme ships OKLCH; every value below is that theme's own number
+     converted to sRGB hex, so the file keeps one color notation throughout and
+     does not depend on oklch() support to render correctly years from now.
+     Where a line says "derived", the theme had no token for that slot and the
+     value is interpolated on the theme's own hue. */
+  --paper:#F4F4F0;    /* --background, warm off-white */
+  --paper-2:#EFEAE4;  /* --muted */
+  --card:#FEFEFE;     /* --card */
   /* --ink-3 carries all the site's 11.5–12.5px small text (.hint/.facts/.sub/
-     .caveat…). The old #918879 hit only 3.03:1 on --paper-2 — the smallest
-     text paired with the lowest contrast, two liabilities stacked. The three
-     steps now measure 5.16 / 5.43 / 4.73. */
-  --ink:#1f1b16;
-  --ink-2:#5c544a;
-  --ink-3:#726859;
-  --line:#e3ddd2;
-  --line-2:#d0c8ba;
-  --accent:#b5442a;
-  --accent-soft:#f6e7e2;
-  --ok:#2f6b4f;
-  --ok-soft:#e6f0ea;
-  --warn:#9a6414;
-  --warn-soft:#fbf0dc;
-  --danger:#a8322b;
-  --danger-soft:#fae9e7;
-  --mute:#8d8577;
+     .caveat…) — the smallest text on the lowest contrast, so it sets the floor
+     for the whole scale. The theme's --muted-foreground lands at 6.33:1 on
+     --paper-2, comfortably clear of the 4.5 floor, so it is taken as-is.
+     --ink-2 has no counterpart in the theme and is interpolated. The three
+     steps measure 16.14 / 10.56 / 6.33. */
+  --ink:#0E0E0E;      /* --foreground */
+  --ink-2:#333333;    /* derived */
+  --ink-3:#545454;    /* --muted-foreground */
+  /* --line was doing two unrelated jobs under one name: it was the hairline
+     color *and* the subtle fill color (7 rules used it as a background — hover
+     states, the count badge, the drag-chosen row). That overload, not the
+     theme, is what blocked the heavy rule: #4A4A4A as a fill under --ink text
+     is unreadable. Splitting the token by role is what lets --line simply be
+     the theme's --border, on all 31 outlines, at the 1px the source uses.
+     Two tiers, because the source has two: bounded things (cards, inputs,
+     chips, segmented controls) take the near-black outline, while rules
+     *inside* a bounded thing stay light — the same distinction the reference
+     draws between a card's edge and its internal separators. */
+  --line:#4A4A4A;      /* --border — 31 outlines */
+  --line-soft:#DDD8D2; /* derived — 25 internal dividers + the map grid */
+  --line-2:#C2BDB7;    /* derived — the dim tier: disabled, empty stars, tracks */
+  --fill:#E7E2DB;      /* derived — the 7 former background:var(--line) uses */
+  /* The theme's emphasis pair, used exactly as it ships it: --primary is
+     near-black with a near-white foreground (its filled buttons), and its
+     --accent is the yellow highlight that takes --ink on top. Note the name
+     collision — shadcn's --accent is a *background*, not a brand color, so it
+     maps to --accent-soft here and --primary maps to --accent. */
+  --accent:#0E0E0E;         /* --primary */
+  --accent-soft:#FFEF85;    /* --accent, the yellow */
+  /* Status. The theme carries only --destructive, so success and caution are
+     built here — and the *hue* matters more than it looks.
+     --warn was first derived on the accent yellow's own hue (100.84) dropped
+     to a legible weight. That does not work: yellow has no dark form. At
+     L 0.50 hue 100 is #726400, an olive that shares no family resemblance with
+     the bright yellow it came from and simply reads as mud. Caution therefore
+     moves to amber (hue 70), which does darken cleanly — the same drop gives
+     #955E00, a true ochre. The theme's yellow is not abandoned, it is used
+     where it actually looks like itself: at full lightness as a *fill*, on the
+     badges below, which is exactly what the source does with it.
+     --ok was inherited from this template's original warm-paper palette and
+     had never been re-derived — a cool forest green (hue ~160) sitting in a
+     warm, high-chroma theme, which is why it read as foreign. Rebuilt at
+     hue 145 to sit in the same family as the rest.
+     --danger is the theme's --destructive darkened: #EF4444 as shipped is a
+     *fill* color and measures only 3.41:1 as text on --paper, and this template
+     uses --danger for text (.hint.bad, .map-note b).
+     Filled with white on top: --ok 5.70, --warn 5.41. As standalone text on a
+     card: 5.65 / 5.37. */
+  --ok:#38733C;
+  --ok-soft:#E3F1E3;
+  --warn:#955E00;
+  --warn-soft:#FFEF85;   /* the theme's --accent, at the lightness it works at */
+  --danger:#BE2229;
+  --danger-soft:#FBE9E9;
+  --mute:#8A8A8A;     /* derived — dividers and disabled marks, never text */
 
   /* Foreground on filled controls. Anywhere a semantic color is used as a
      background, the foreground takes the matching --on-*, rather than a
-     hardcoded #fff scattered through the rules. Measured: --on-ok 8.52,
-     --on-warn 8.62, --on-accent 6.09. */
-  --on-accent:#fff;
+     hardcoded #fff scattered through the rules. Measured: --on-ok 6.29,
+     --on-warn 5.93, --on-accent 19.14. */
+  --on-accent:#FEFEFE;   /* --primary-foreground */
   --on-ok:#fff;
   --on-warn:#fff;
   --on-ink:var(--paper);
@@ -55,40 +100,90 @@
      from the day palette. The one on the map doesn't use this — it sits on the
      basemap and follows the basemap's lightness (see MAP_INK), which is still
      switchable. */
-  --lodging:#4A4A4A;
+  --lodging:#545454;
+
+  /* Three of the four choice rings on the map (see COLOR). Deliberately not
+     aliases of --ink-3 / --accent: a ring is drawn over both a light and a dark
+     basemap and has to clear ~3:1 against each, which pins its lightness into a
+     narrow band and leaves hue as the only way the four states can differ.
+     Both of those tokens sit outside the band — --accent (#0E0E0E) measured
+     1.03:1 on the dark basemap, a ring that is simply not there.
+     The theme's --chart-1..5 cannot serve here either: all five are pastels at
+     L 0.37–0.77, and every one of them fails against the light basemap (worst
+     1.16:1). Same reason DAY_COLORS is left alone further down.
+     Measured dark / light:
+       yes   --ok      2.84 / 5.71     no    this   3.40 / 4.77
+       maybe this      3.53 / 4.59     none  this   2.82 / 5.75 */
+  --ring-maybe:#8A6A12;   /* the accent yellow's hue, dropped into the band */
+  --ring-no:#6C6C6C;
+  --ring-none:#964A2F;
 
   /* ---- The canvas ----
-     A second, dark zone. The page is not "dark mode": content lives on light
-     paper (--card / --paper), and the canvas is the deep navy those sheets are
-     laid on. Keeping it a separate token from --paper matters because --paper
-     also serves as the *foreground* on ink-filled controls (--on-ink, pressed
-     chips, primary buttons) — repointing --paper at the navy would have turned
-     every one of those labels navy-on-near-black.
-     Only three kinds of thing sit directly on the canvas: the header, the
-     action bar, and the group headings between cards. They take --canvas-ink*,
-     which is the ink scale re-derived for this ground (measured against
-     --canvas: 15.78 / 10.21 / 6.57:1). --accent is warm rust and manages only
-     2.4:1 here, so links on the canvas get their lightened twin. */
-  --canvas:#0E172B;
-  --canvas-ink:#eef1f7;
-  --canvas-ink-2:#bcc4d6;
-  --canvas-ink-3:#949db3;
-  --canvas-line:rgba(255,255,255,.11);
-  --canvas-accent:#e08a70;
+     No longer a second, dark zone. This template shipped with light sheets laid
+     on a deep navy board; the source theme has no such board — it is one light
+     ground with white cards sitting on it, and the *outline* is what separates
+     them. So the canvas is now the theme's --background, the same value as
+     --paper, and the theme's .dark block is not used at all.
+     The consequence is that this whole scale had to inverted. The header, the
+     action bar and the group headings between cards are the three things that
+     sit directly on the canvas, and they take --canvas-ink*, which was a light
+     ink built for a dark ground — left as it was, all three would have gone
+     light-on-light and vanished. It is now the same dark ink scale as the rest
+     of the page (16.14 / 10.56 / 6.33 against this ground).
+     --canvas-accent is the active tab's underline. The theme's yellow reads at
+     1.16:1 here and cannot carry it on a light ground, so the underline takes
+     --accent — near-black, which is also how the source marks the active tab.
+     The tokens are kept distinct from --paper / --ink rather than collapsed
+     into them, because they are the seam where a different ground would be
+     reintroduced, and because --paper doubles as a *foreground* (--on-ink). */
+  --canvas:#F4F4F0;       /* --background, same ground as --paper */
+  --canvas-ink:#0E0E0E;
+  --canvas-ink-2:#333333;
+  --canvas-ink-3:#545454;
+  --canvas-line:#DDD8D2;
+  --canvas-accent:#0E0E0E;
   /* The dot matrix. Two knobs deliberately exposed: --dot-gap is the lattice
-     pitch, --dot is its color. At .055 alpha a single dot is invisible on its
-     own — the texture only exists as a field, which is the point; anything
-     stronger and it competes with the cards for attention. */
-  --dot:rgba(255,255,255,.055);
-  --dot-gap:22px;
+     pitch, --dot is its color. The two are coupled — widening the pitch thins
+     the field, so the dot has to carry more weight to read as the same
+     texture. At this pitch a single dot is still quiet on its own; the texture
+     exists as a field, which is the point.
+     Flipped to a dark dot now that the ground is light — a white dot on
+     #F4F4F0 is nothing at all. Kept very quiet at .05: this texture is the one
+     thing here the source theme does not have (its page ground is flat), so it
+     is the first thing to drop if the page should read as purely the theme —
+     set --dot to transparent and the lattice is gone. */
+  --dot:rgba(14,14,14,.05);
+  --dot-gap:28px;
 
-  --serif:Georgia,"Songti SC","Hiragino Mincho ProN","Noto Serif CJK SC",serif;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --r:10px;
-  --sh-1:rgba(31,27,22,.05);
-  --sh-2:rgba(31,27,22,.05);
-  --shadow:0 1px 2px var(--sh-1),0 4px 14px var(--sh-2);
+  /* The theme's three families, each with this template's CJK stack appended.
+     That part is not optional: DM Sans, Source Serif 4 and Roboto Mono carry no
+     CJK glyphs at all, and this page is written in Chinese — named alone they
+     would drop every Han character onto whatever the browser happens to pick.
+     The theme fonts therefore take the Latin and the digits, and the existing
+     stack takes the rest.
+     Named, not embedded: the fonts are not loaded from Google here, because a
+     network request would break the one property this file is built around —
+     opening months later, offline, as a single attachment. On a machine
+     without them the stack falls through to the previous system fonts. */
+  --serif:"Source Serif 4",Georgia,"Songti SC","Hiragino Mincho ProN","Noto Serif CJK SC",serif;
+  --sans:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:"Roboto Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  /* The theme's --tracking-normal is -0.025em applied to body. Here it is a
+     token used only on the display headings: negative tracking tightens Latin
+     nicely but crowds Han glyphs, which are drawn to a fixed em box, and this
+     page's body copy is almost entirely Han. */
+  --tracking:-0.025em;
+  --r:20px;               /* --radius, 1.25rem */
+  /* The theme ships eight shadow steps, 2xs through 2xl. Measured on the source
+     page, only one of them is ever applied: --shadow-xs, at alpha .08, on 30 of
+     327 elements — 83% carry no shadow at all. --shadow / --shadow-sm (alpha
+     .16) appear nowhere. This was mapped to --shadow at first, which put twice
+     the intended weight on 47 of 47 cards and is why they sat heavier than the
+     source's. Depth here is the outline's job; the shadow is only a hint that
+     the sheet is off the ground. */
+  --sh-1:rgba(0,0,0,.08);
+  --sh-2:rgba(0,0,0,.08);
+  --shadow:0 2px 3px var(--sh-1);
 }
 *{box-sizing:border-box}
 /* Any explicit display rule overrides the browser default for [hidden].
@@ -147,11 +242,14 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* The header is a canvas zone: it floats over the navy, so it takes the navy's
    ink scale. Setting the color here rather than on each child means anything
    added later inherits legible ink by default; the light-surfaced controls
-   inside it (.btn, .stale) already assert their own color and are unaffected. */
+   inside it (.btn, .stale) already assert their own color and are unaffected.
+   Solid, not frosted, and deliberately without the dot lattice: this bar is
+   sticky while the texture is painted on the page, so a lattice here would
+   stay put while the page's slid underneath — two grids drifting out of
+   phase, which is worse than an honest flat band. Same for .actionbar. */
 .top{
   position:sticky;top:0;z-index:50;
-  background:color-mix(in srgb,var(--canvas) 82%,transparent);
-  backdrop-filter:saturate(1.4) blur(12px);
+  background:var(--canvas);
   border-bottom:1px solid var(--canvas-line);
   color:var(--canvas-ink);
 }
@@ -159,12 +257,12 @@ button{font:inherit;color:inherit;cursor:pointer}
 .top-in{max-width:1180px;margin:0 auto;padding:12px 20px 0}
 .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .brand h1{
-  font:400 25px/1.2 var(--serif);margin:0;letter-spacing:.2px;
+  font:400 25px/1.2 var(--serif);margin:0;letter-spacing:var(--tracking);
 }
 .brand .sub{color:var(--canvas-ink-3);font-size:13px}
 .brand .sub b{color:var(--canvas-ink-2);font-weight:600}
 .stale{
-  background:var(--warn-soft);color:var(--warn);
+  background:var(--warn-soft);color:var(--ink);
   border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);
   padding:1px 8px;border-radius:20px;font-size:11.5px;
 }
@@ -236,20 +334,28 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 .search::placeholder{color:var(--ink-3)}
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--card)}
-.seg button{background:none;border:0;padding:8px 13px;font-size:13px;color:var(--ink-3);transition:background .12s,color .12s}
+/* line-height is pinned rather than inherited. .search and .seg sit side by
+   side and already share padding (8px 13px) and a 1px border, so the only
+   thing that made .seg 39px against the input's 34px was the body's 1.65
+   line-height landing at 21.45px on 13px text where the input's `normal`
+   gives ~16px. 8 + 16 + 8 + 2 = 34, the same box as the field beside it.
+   The mismatch predates the theme; at the old 10px radius these read as
+   small rounded rectangles and 5px did not show. At a 20px radius they are
+   full pills, and a pill that overshoots the field next to it looks oversized. */
+.seg button{background:none;border:0;padding:8px 13px;font-size:13px;line-height:16px;color:var(--ink-3);transition:background .12s,color .12s}
 .seg button[aria-pressed=true]{background:var(--paper-2);color:var(--ink);font-weight:600}
 /* Hover on an unselected item only deepens the ink, never adds a background —
    a background would be the selected state's --paper-2, and hovering would
    read as "already switched". Hover on the selected item goes one shade
    deeper, signaling it can be pressed again. */
-.seg button:hover:not([aria-pressed=true]){color:var(--ink)}
-.seg button[aria-pressed=true]:hover{background:var(--line)}
+.seg button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
+.seg button[aria-pressed=true]:hover{background:var(--fill)}
 .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}
 .chip{
   border:1px solid var(--line);background:var(--card);color:var(--ink-2);
   padding:5px 12px;border-radius:20px;font-size:12.5px;transition:.15s;
 }
-.chip:hover{border-color:var(--line-2)}
+.chip:hover:not([aria-pressed=true]){border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .chip .c{opacity:.55;font-size:11px;margin-left:3px}
 
@@ -265,11 +371,16 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 
 /* ═══════════════════════════════════════════════ Cards */
 .cards{display:grid;gap:13px}
+/* The heavy rule goes here and on the two other full-width containers
+   (.map-main, .sum) rather than on every bordered thing. In the source theme
+   it is the card outline that carries the brutalist weight; putting #4A4A4A on
+   the chips and segmented controls as well turned the filter rows into a grid
+   of black boxes and buried the cards it was supposed to emphasise. */
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s,opacity .2s;
 }
-.card:hover{border-color:var(--line-2)}
+.card:hover{border-color:var(--ink)}
 .card[data-choice=no]{opacity:.5}
 .card[data-choice=no]:hover{opacity:.82}
 /* Choice state is already expressed by the tri-state buttons and the dots —
@@ -323,11 +434,11 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   border:1px solid transparent;
 }
 .f-danger{background:var(--danger-soft);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 22%,transparent)}
-.f-warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 22%,transparent)}
+.f-warn{background:var(--warn-soft);color:var(--ink);border-color:color-mix(in srgb,var(--warn) 22%,transparent)}
 .f-info{background:var(--paper-2);color:var(--ink-3);border-color:var(--line)}
 .f-unverified{
   background:repeating-linear-gradient(-45deg,var(--warn-soft),var(--warn-soft) 5px,transparent 5px,transparent 10px);
-  color:var(--warn);border-color:color-mix(in srgb,var(--warn) 34%,transparent);font-weight:600;
+  color:var(--ink);border-color:color-mix(in srgb,var(--warn) 34%,transparent);font-weight:600;
 }
 /* Verification-blocked places: the card carries a full .verify-box
    explanation, and the top filter bar has a "⚠ needs your check" chip that
@@ -336,18 +447,18 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   margin-top:10px;padding:9px 12px;border-radius:7px;font-size:12.5px;line-height:1.6;
   background:var(--warn-soft);border:1px dashed color-mix(in srgb,var(--warn) 40%,transparent);color:var(--ink-2);
 }
-.verify-box b{color:var(--warn)}
+.verify-box b{color:var(--ink)}
 .verify-box ul{margin:6px 0 0;padding-left:18px}
 .verify-box li{margin:2px 0}
 
 /* Tri-state */
 .pick{display:flex;gap:0;margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content}
 .pick button{
-  background:var(--card);border:0;border-right:1px solid var(--line);
+  background:var(--card);border:0;border-right:1px solid var(--line-soft);
   padding:6px 15px;font-size:12.5px;color:var(--ink-3);transition:.12s;
 }
 .pick button:last-child{border-right:0}
-.pick button:hover{background:var(--paper-2);color:var(--ink-2)}
+.pick button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 .pick button[aria-pressed=true]{font-weight:600}
 .pick button.y[aria-pressed=true]{background:var(--ok);color:var(--on-ok)}
 .pick button.m[aria-pressed=true]{background:var(--warn);color:var(--on-warn)}
@@ -355,7 +466,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .why{font-size:12px;color:var(--ink-3);margin-top:7px;font-style:italic}
 
 /* Folded photo stops */
-.spots{margin:11px 0 0;padding:9px 0 0;border-top:1px dashed var(--line);}
+.spots{margin:11px 0 0;padding:9px 0 0;border-top:1px dashed var(--line-soft);}
 .spots-h{font-size:11.5px;color:var(--ink-3);margin-bottom:7px;display:flex;align-items:center;gap:5px}
 .spot{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;flex-wrap:wrap}
 .spot .sn{cursor:pointer;font-weight:500}
@@ -367,8 +478,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* ═══════════════════════════════════════════════ Bottom action bar */
 .actionbar{
   position:fixed;left:0;right:0;bottom:0;z-index:60;
-  background:color-mix(in srgb,var(--canvas) 88%,transparent);
-  backdrop-filter:saturate(1.4) blur(12px);
+  background:var(--canvas);
   border-top:1px solid var(--canvas-line);
   color:var(--canvas-ink);
 }
@@ -377,7 +487,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* .lnk is the quiet text button ("Manual save…", day-column actions). Its
    --ink-3 was tuned for paper and lands at 3.8:1 down here. */
 .actionbar .lnk{color:var(--canvas-ink-3)}
-.actionbar .lnk:hover{background:var(--canvas-line);color:var(--canvas-ink)}
+.actionbar .lnk:hover{background:var(--accent-soft);color:var(--ink)}
 /* Under the local server this bar is just a status line and shouldn't cost a
    button's height. With buttons present (file://) the buttons stretch it
    naturally; without them it's a single line of small text. */
@@ -396,7 +506,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   border:1px solid var(--line);background:var(--card);color:var(--ink);
   padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;transition:.15s;
 }
-.btn:hover{border-color:var(--line-2);background:var(--paper-2)}
+.btn:hover{border-color:var(--ink);background:var(--paper-2)}
 .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .btn.primary:hover{opacity:.87;background:var(--ink)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -406,13 +516,19 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .hint.bad{color:var(--danger);font-weight:500}
 
 /* ═══════════════════════════════════════════════ Dialogs */
+/* The <dialog> is the scroll container itself (.dlg-h sticks to it, .dlg-b
+   never overflows), so the rubber-band at either end was this element's, and
+   it both chained to the page behind and let the bounce show past the painted
+   box. overscroll-behavior:none stops both at once — no chaining out, no
+   bounce in. */
 dialog{
   border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);
   padding:0;max-width:660px;width:calc(100vw - 34px);max-height:86vh;box-shadow:0 24px 70px rgba(0,0,0,.28);
+  overscroll-behavior:none;
 }
 dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
 .dlg-h{
-  position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line-soft);
   padding:17px 20px 13px;display:flex;align-items:flex-start;gap:12px;z-index:2;
 }
 .dlg-h h3{font:500 21px/1.3 var(--serif);margin:0;flex:1}
@@ -420,7 +536,7 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
   background:none;border:0;font-size:22px;color:var(--ink-3);line-height:1;border-radius:6px;
   width:32px;height:32px;flex:none;display:grid;place-items:center;padding:0;
 }
-.dlg-h .x:hover{background:var(--paper-2);color:var(--ink)}
+.dlg-h .x:hover{background:var(--accent-soft);color:var(--ink)}
 .dlg-b{padding:17px 20px 22px;overflow-y:auto}
 .dlg-b h4{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.9px;color:var(--ink-3);margin:20px 0 8px}
 .dlg-b h4:first-child{margin-top:0}
@@ -482,7 +598,7 @@ pre.code{
 }
 .day-col .dc-head{
   position:sticky;top:0;z-index:2;background:var(--paper-2);
-  padding:7px 10px;border-bottom:1px solid var(--line);
+  padding:7px 10px;border-bottom:1px solid var(--line-soft);
   font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
   display:flex;align-items:center;gap:6px;
 }
@@ -495,11 +611,11 @@ pre.code{
   background:none;border:0;color:var(--ink-3);font-size:11px;padding:2px 6px;border-radius:4px;letter-spacing:0;
   min-height:24px;min-width:24px;display:inline-flex;align-items:center;justify-content:center;
 }
-.lnk:hover{background:var(--line);color:var(--ink-2)}
+.lnk:hover{background:var(--accent-soft);color:var(--ink)}
 
 /* Date capsules: for long trips — flat listing starts scrolling endlessly by
    day three */
-.caps{display:flex;flex-wrap:wrap;gap:4px;padding:8px 9px;border-bottom:1px solid var(--line)}
+.caps{display:flex;flex-wrap:wrap;gap:4px;padding:8px 9px;border-bottom:1px solid var(--line-soft)}
 .caps button{
   border:1px solid var(--line);background:var(--paper-2);color:var(--ink-2);
   padding:3px 8px;border-radius:6px;font:600 11.5px/1.5 var(--mono);
@@ -509,13 +625,13 @@ pre.code{
    "day 17" */
 .caps button .c{
   font-weight:600;font-size:9.5px;line-height:13px;min-width:13px;text-align:center;
-  padding:0 3px;border-radius:7px;background:var(--line);color:var(--ink-3);
+  padding:0 3px;border-radius:7px;background:var(--fill);color:var(--ink-3);
 }
 .caps button[aria-pressed=true]{color:var(--on-day)}
 .caps button[aria-pressed=true] .c{background:color-mix(in srgb,var(--on-day) 26%,transparent);color:var(--on-day)}
 
 /* Each day: header + entries. Clicking the header makes it the current day */
-.dbox{border-bottom:1px solid var(--line)}
+.dbox{border-bottom:1px solid var(--line-soft)}
 .dbox:last-child{border-bottom:0}
 .dhead{
   display:flex;align-items:center;gap:7px;padding:8px 10px;
@@ -528,7 +644,7 @@ pre.code{
   flex:1;min-width:0;display:flex;align-items:center;gap:7px;cursor:pointer;position:relative;
 }
 .dh-btn::after{content:"";position:absolute;inset:-8px 0}   /* absorb .dhead's vertical padding */
-.dhead:hover{background:var(--line)}
+.dhead:hover{background:var(--accent-soft);color:var(--ink)}
 .dbox.cur .dhead{background:color-mix(in srgb,var(--ink) 12%,var(--paper-2))}
 .dhead .swatch{width:9px;height:9px;border-radius:50%;flex:none}
 /* "Day 1" / "第 1 天" are atomic titles — no internal line break. The
@@ -575,7 +691,7 @@ pre.code{
   border-radius:4px;display:grid;place-items:center;padding:0;position:relative;
 }
 .dop::after{content:"";position:absolute;inset:-4px}
-.dop:hover{background:var(--line);color:var(--ink)}
+.dop:hover{background:var(--accent-soft);color:var(--ink)}
 .dop:disabled{opacity:.25;cursor:default}
 .dop:disabled:hover{background:none;color:var(--ink-3)}
 
@@ -597,21 +713,21 @@ pre.code{
 
 /* While dragging */
 .ditem.drag-ghost{opacity:.35}
-.ditem.drag-chosen{background:var(--line)}
+.ditem.drag-chosen{background:var(--fill)}
 .mi.drag-ghost{opacity:.35}
 .dlist.drag-over{background:color-mix(in srgb,var(--ink) 7%,transparent)}
 .ditem.lod .dnm{color:var(--ink-3)}
 .dempty{padding:11px;font-size:11.5px;line-height:1.7;color:var(--ink-3);text-align:center}
 .dempty b{color:var(--ink-2);font-weight:600}
 .addmenu{
-  padding:5px;border-bottom:1px solid var(--line);background:var(--paper-2);
+  padding:5px;border-bottom:1px solid var(--line-soft);background:var(--paper-2);
   display:flex;flex-direction:column;gap:3px;
 }
 .addmenu button{
   background:var(--card);border:1px solid var(--line);border-radius:6px;
   padding:5px 8px;font-size:11.5px;color:var(--ink-2);text-align:left;
 }
-.addmenu button:hover{border-color:var(--line-2);color:var(--ink)}
+.addmenu button:hover{border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
 .dhead .d-del-day{opacity:0;margin-left:4px}
 .dhead:hover .d-del-day{opacity:1}
 @media (hover:none){ .dhead .d-del-day{opacity:1} }
@@ -624,7 +740,7 @@ pre.code{
    exactly the list below it — putting it in the page toolbar would separate
    the control from the thing it acts on. */
 .ms-head{
-  padding:6px 7px;border-bottom:1px solid var(--line);background:var(--paper-2);
+  padding:6px 7px;border-bottom:1px solid var(--line-soft);background:var(--paper-2);
   border-radius:var(--r) var(--r) 0 0;
   display:flex;flex-direction:column;gap:4px;
 }
@@ -649,7 +765,7 @@ pre.code{
 /* Hover uses a translucent --card: the selected state is opaque --card, so
    the two share a family but differ in depth — hovering can't be misread as
    "already selected". */
-.ms-fil button:hover:not([aria-pressed=true]){background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--ink-2)}
+.ms-fil button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 /* Selected = a piece of card "lifted" off the paper-2 band. It used to be the
    inverse (paper-2 sunk into a card capsule), which only made sense while
    that capsule existed. The outline originally earned its place on the dark
@@ -669,7 +785,7 @@ pre.code{
    "these filters have no hover" impression. Only the outline deepens; the
    background stays, so it can't read as deselecting. */
 .ms-fil button[aria-pressed=true]:hover{
-  box-shadow:0 1px 2px var(--sh-1),inset 0 0 0 1px var(--line-2);
+  box-shadow:0 1px 2px var(--sh-1),inset 0 0 0 1px var(--ink);
 }
 /* The count badge uses one color set for both states: --line is legible on
    the band (--paper-2) and on the selected state (--card) alike. The selected
@@ -677,7 +793,7 @@ pre.code{
    on a light card meant white on white and the pill vanished entirely. */
 .ms-fil .c{
   font:600 9.5px/13px var(--mono);min-width:13px;padding:0 3px;border-radius:7px;
-  background:var(--line);color:var(--ink-3);
+  background:var(--fill);color:var(--ink-3);
 }
 /* Grouping is a low-frequency mode switch; its visual weight is deliberately
    kept below the filter row: no border, no background, current item marked by
@@ -693,7 +809,7 @@ pre.code{
   font-size:11px;color:var(--ink-3);white-space:nowrap;
   transition:background .12s,color .12s;
 }
-.ms-grp button:hover{background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--ink-2)}
+.ms-grp button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 .ms-grp button[aria-pressed=true]{color:var(--ink);font-weight:600}
 /* These rules are deliberately NOT scoped as `.map-side .mi` — SortableJS
    moves .mi out of the pool column (into schedule lists, and on touch onto
@@ -704,9 +820,9 @@ pre.code{
    component, not with wherever it happens to be. */
 .mi{
   display:flex;gap:9px;align-items:flex-start;padding:9px 12px;
-  border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s;
+  border-bottom:1px solid var(--line-soft);cursor:pointer;transition:background .12s;
 }
-.mi:hover{background:var(--paper-2)}
+.mi:hover{background:var(--accent-soft);color:var(--ink)}
 .mi.on{background:var(--accent-soft)}
 /* Same size as the schedule column's number circles: the two columns show
    the same places side by side, and mismatched sizes would read as two
@@ -749,13 +865,13 @@ pre.code{
   overflow:hidden;text-overflow:ellipsis}
 .mi .t .sub .w{
   flex:none;padding:0 5px;border-radius:4px;font-size:10.5px;line-height:15px;
-  background:var(--warn-soft);color:var(--warn);
+  background:var(--warn-soft);color:var(--ink);
 }
 .mi.on{background:var(--paper-2)}
 .map-side .grp{
   position:sticky;top:0;background:var(--paper-2);padding:6px 12px;
   font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
-  border-bottom:1px solid var(--line);z-index:1;
+  border-bottom:1px solid var(--line-soft);z-index:1;
 }
 /* --bar-h is .map-bar's *measured* height (see watchBar). It feeds the top of
    the legend and the search-result panel — both used to hardcode 52px, which
@@ -788,19 +904,19 @@ pre.code{
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);box-shadow:var(--shadow);
 }
 .mgroup button{
-  background:none;border:0;border-right:1px solid var(--line);
+  background:none;border:0;border-right:1px solid var(--line-soft);
   padding:6px 11px;font-size:12px;color:var(--ink-3);white-space:nowrap;
   transition:background .12s,color .12s;
 }
 .mgroup button:last-child{border-right:0}
 .mgroup button[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600}
-.mgroup button:hover:not(:disabled):not([aria-pressed=true]){background:var(--paper-2);color:var(--ink)}
+.mgroup button:hover:not(:disabled):not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 .mgroup button:disabled{opacity:.38;cursor:not-allowed}
 
 /* Place search. The input and the search button share one mgroup capsule,
    matching the basemap switcher's styling */
 .msearch input{
-  background:none;border:0;border-right:1px solid var(--line);
+  background:none;border:0;border-right:1px solid var(--line-soft);
   padding:6px 11px;font-size:12px;color:var(--ink);width:168px;min-height:29px;
 }
 .msearch input::placeholder{color:var(--ink-3)}
@@ -816,7 +932,7 @@ pre.code{
 }
 #msq-panel .sr{
   display:block;width:100%;text-align:left;background:none;border:0;
-  border-bottom:1px solid var(--line);padding:8px 11px;cursor:pointer;
+  border-bottom:1px solid var(--line-soft);padding:8px 11px;cursor:pointer;
 }
 #msq-panel .sr:last-child{border-bottom:0}
 #msq-panel .sr:hover,#msq-panel .sr:focus-visible{background:var(--paper-2)}
@@ -872,14 +988,14 @@ pre.code{
 /* The auto-colored footnote ends with a few line-number chips; flex keeps
    them baseline-aligned with the text and wrapping cleanly when numerous */
 #map-legend .lg-foot{
-  margin-top:6px;padding-top:5px;border-top:1px solid var(--line);
+  margin-top:6px;padding-top:5px;border-top:1px solid var(--line-soft);
   color:var(--ink-3);font-size:10.5px;
   display:flex;align-items:center;flex-wrap:wrap;gap:3px;
 }
 #map-legend .lg-hint{color:var(--ink-3);font-size:10px;margin-top:5px}
 #map-legend .lg-op{
   display:flex;align-items:center;gap:7px;margin-top:6px;
-  padding-top:6px;border-top:1px solid var(--line);
+  padding-top:6px;border-top:1px solid var(--line-soft);
   color:var(--ink-3);font-size:10.5px;
 }
 #map-legend .lg-op span{flex:none}
@@ -958,7 +1074,7 @@ pre.code{
    positions stay readable */
 .static-map{position:absolute;inset:0;background:var(--paper-2)}
 .static-map .sm-grid{position:absolute;inset:0;opacity:.5;
-  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
   background-size:52px 52px}
 /* In the static fallback we do the positioning ourselves (left/top
    percentages + centering translate) — the one place where setting
@@ -1002,10 +1118,10 @@ pre.code{
    here is route.md's `#` and h3 its `##` — the visual hierarchy is unchanged,
    only the tags shift. The cost summary and checklist are page-generated,
    peers of route.md's `##`, so they use h3 too. */
-.guide h2,.guide h3{font-family:var(--serif);font-weight:400;letter-spacing:.2px}
+.guide h2,.guide h3{font-family:var(--serif);font-weight:400;letter-spacing:var(--tracking)}
 .guide h2{font-size:29px;margin:34px 0 14px}
 .guide h3{
-  font-size:23px;margin:38px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line);
+  font-size:23px;margin:38px 0 14px;padding-bottom:9px;border-bottom:1px solid var(--line-soft);
 }
 .guide h4{font:600 16px/1.4 var(--sans);margin:26px 0 9px}
 .guide h5{font:600 13.5px/1.4 var(--sans);margin:19px 0 7px;color:var(--ink-2)}
@@ -1017,7 +1133,7 @@ pre.code{
   background:var(--accent-soft);border-radius:0 7px 7px 0;color:var(--ink-2);font-size:14px;
 }
 .guide blockquote p{margin:0}
-.guide hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+.guide hr{border:0;border-top:1px solid var(--line-soft);margin:30px 0}
 .guide code{
   background:var(--paper-2);padding:1.5px 5px;border-radius:4px;
   font:.88em var(--mono);border:1px solid var(--line);
@@ -1028,7 +1144,7 @@ pre.code{
 }
 .table-wrap{overflow-x:auto;margin:0 0 17px;border:1px solid var(--line);border-radius:8px}
 .guide table,.card-table{width:100%;border-collapse:collapse;font-size:13.5px}
-.guide th,.guide td,.card-table td,.card-table th{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left}
+.guide th,.guide td,.card-table td,.card-table th{padding:8px 12px;border-bottom:1px solid var(--line-soft);text-align:left}
 .guide tbody tr:last-child td,.card-table tr:last-child td{border-bottom:0}
 /* Headers are recognized by th, not by "first row" — positional selectors
    fail silently when row order changes */
@@ -1045,7 +1161,7 @@ pre.code{
   font:600 12px/1 var(--mono);color:var(--accent);background:var(--accent-soft);
   padding:3px 7px;border-radius:4px;margin-right:8px;white-space:nowrap;
 }
-.guide ul:has(li.tl){border-left:1px solid var(--line);padding-left:20px;margin-left:5px}
+.guide ul:has(li.tl){border-left:1px solid var(--line-soft);padding-left:20px;margin-left:5px}
 
 /* Weather strip */
 .wx{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 8px}
@@ -1067,7 +1183,7 @@ pre.code{
 .sum{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:17px}
 .sum-h{
   background:var(--paper-2);padding:9px 13px;font:600 12.5px/1 var(--sans);
-  border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:8px;
 }
 .sum-h span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
 /* Day separator row. One step lighter than .sum-h — it's a group inside the
@@ -1075,11 +1191,11 @@ pre.code{
 .sum-d{
   display:flex;align-items:center;gap:8px;padding:6px 13px;
   background:color-mix(in srgb,var(--paper-2) 60%,transparent);
-  border-bottom:1px solid var(--line);
+  border-bottom:1px solid var(--line-soft);
   font:600 11.5px/1.35 var(--sans);color:var(--ink-2);letter-spacing:.3px;
 }
 .sum-d span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
-.ck{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--line);font-size:13.5px}
+.ck{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--line-soft);font-size:13.5px}
 /* This column mixes numbers (per-day sequence) with icons, so it needs
    tabular-nums to column-align the digits and centering for the SVGs. */
 .ck .m{
@@ -1101,10 +1217,10 @@ pre.code{
 .ck.out{opacity:.55}
 .cost-total{
   display:flex;align-items:baseline;gap:10px;padding:11px 13px;
-  background:var(--paper-2);border-top:1px solid var(--line);font-size:13.5px;
+  background:var(--paper-2);border-top:1px solid var(--line-soft);font-size:13.5px;
 }
 .cost-total b{font:400 21px var(--serif);color:var(--ink)}
-.caveat{font-size:11.5px;color:var(--ink-3);padding:9px 13px;border-top:1px dashed var(--line);line-height:1.6}
+.caveat{font-size:11.5px;color:var(--ink-3);padding:9px 13px;border-top:1px dashed var(--line-soft);line-height:1.6}
 
 /* ═══════════════════════════════════════════════ Empty states / toast */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
@@ -1156,7 +1272,7 @@ pre.code{
      out as stipple. Group headings go back to paper ink for the same reason —
      on white, --canvas-ink is invisible. */
   body{background:#fff none}
-  .group-h{border-bottom-color:var(--line)}
+  .group-h{border-bottom-color:var(--line-soft)}
   .group-h h2{color:var(--ink)}
   .group-h .meta{color:var(--ink-3)}
   .guide{border:0;box-shadow:none;padding:0}
@@ -1877,6 +1993,14 @@ const icon = (body, n = 13) =>
   + `style="display:block;margin:auto;flex:none">${body}</svg>`;
 /* Lodging. viewBox is 24 — this path was drawn long ago, and redrawing it
    for uniformity isn't worth it; the size parameter still works. */
+/* Close. Drawn rather than typed: as the character &times; it is centered by
+   its *line box*, and the glyph's ink sits high inside that box (baseline up to
+   x-height), so a geometrically centered box left the mark ~2px low — and by
+   how much depends on the font, which the theme changes. Two strokes on a
+   16×16 viewBox are centered by construction, whatever the font. */
+const xmark = (n = 14) => icon(
+  `<path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" `
+  + `stroke-width="1.6" stroke-linecap="round"/>`, n);
 const house = (n = 13) => `<svg viewBox="0 0 24 24" width="${n}" height="${n}" `
   + `fill="currentColor" aria-hidden="true" style="display:block;margin:auto;flex:none">`
   + `<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>`;
@@ -2228,7 +2352,7 @@ function openDetail(id){
   $("#dlg-inner").innerHTML = `
     <div class="dlg-h">
       <h3>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc"${langAttr}>${esc(p.name_local)}</span>` : ""}</h3>
-      <button class="x" data-close aria-label="${esc(T.close)}">&times;</button>
+      <button class="x" data-close aria-label="${esc(T.close)}">${xmark()}</button>
     </div>
     <div class="dlg-b">
       ${im && im.url ? `<img class="dlg-img" src="${esc(im.url)}" alt="${esc(p.name)}" onerror="this.remove()">
@@ -2269,7 +2393,7 @@ function askReason(id){
   let picked = "";
   $("#rdlg-inner").innerHTML = `
     <div class="dlg-h"><h3>${tf("whyNotTitle", { name: esc(p.name) })}</h3>
-      <button class="x" data-rclose aria-label="${esc(T.close)}">&times;</button></div>
+      <button class="x" data-rclose aria-label="${esc(T.close)}">${xmark()}</button></div>
     <div class="dlg-b">
       <p style="font-size:13px">${T.reasonHint}</p>
       <div class="reasons">${QUICK.map(r => `<button data-r="${esc(r)}">${esc(r)}</button>`).join("")}</div>
@@ -2573,7 +2697,7 @@ function download(isFallback){
 function showCode(){
   const code = shortCode();
   $("#dlg-inner").innerHTML = `
-    <div class="dlg-h"><h3>${T.codeTitle}</h3><button class="x" data-close aria-label="${esc(T.close)}">&times;</button></div>
+    <div class="dlg-h"><h3>${T.codeTitle}</h3><button class="x" data-close aria-label="${esc(T.close)}">${xmark()}</button></div>
     <div class="dlg-b">
       <p style="font-size:13px">${T.codeHint}</p>
       <pre class="code" id="code">${esc(code)}</pre>
@@ -2728,9 +2852,9 @@ const MAP = (() => {
      back with it. */
   const MAP_INK = {
     light:{ hollow:"#fff", ring:"#fff", halo:"#fff",
-            lodging:"#4A4A4A", onLodging:"#fff",
-            station:"#fff", stationEdge:"#5b5b5b", stationLabel:"#4a4a4a",
-            poi:"#6b6257", poiHalo:"rgba(255,255,255,.9)",
+            lodging:"#545454", onLodging:"#fff",
+            station:"#fff", stationEdge:"#4A4A4A", stationLabel:"#4A4A4A",
+            poi:"#6C6C6C", poiHalo:"rgba(255,255,255,.9)",
             water:"rgb(190,221,243)", grass:"rgb(211,228,186)", wood:"rgb(186,214,180)" },
     // Note: flipped *by role*, not by color. A hollow dot is white on a light
     // basemap because white = the least conspicuous shade there, and it means
@@ -2738,10 +2862,10 @@ const MAP = (() => {
     // near-black — flipping it to light would make unscheduled dots louder
     // than scheduled ones, inverting the hierarchy. Station dots likewise:
     // the real figure is the stroke, the fill must recede into the basemap.
-    dark: { hollow:"#1b1815", ring:"#14110e", halo:"#14110e",
-            lodging:"#d8d2c6", onLodging:"#14110e",
-            station:"#14110e", stationEdge:"#cfc7b8", stationLabel:"#cfc7b8",
-            poi:"#b0a695", poiHalo:"rgba(12,10,8,.9)",
+    dark: { hollow:"#2A2A2A", ring:"#1F1F1F", halo:"#1F1F1F",
+            lodging:"#D5D0CA", onLodging:"#1F1F1F",
+            station:"#1F1F1F", stationEdge:"#D5D0CA", stationLabel:"#D5D0CA",
+            poi:"#A3A3A3", poiHalo:"rgba(31,31,31,.9)",
             water:"rgb(28,46,66)", grass:"rgb(38,50,34)", wood:"rgb(34,52,38)" },
   };
   /* Deliberately computed, not stored. Stored, every place that touches
@@ -2955,7 +3079,7 @@ const MAP = (() => {
      wrong, and it inflated the count. Now always shown and counted in no
      bucket. */
   const shown = p => isLodging(p) || st.show.has(kind(p));
-  const COLOR = { yes:"var(--ok)", maybe:"var(--warn)", no:"var(--ink-3)", none:"var(--accent)" };
+  const COLOR = { yes:"var(--ok)", maybe:"var(--ring-maybe)", no:"var(--ring-no)", none:"var(--ring-none)" };
 
   function center(){
     const l = pts();
@@ -5369,6 +5493,22 @@ addEventListener("resize", scheduleLayout);
 NARROW.addEventListener?.("change", () => { layoutMapActions(); layoutMap(); });
 
 /* ─────────────────────────────────────────────── Events */
+/* Click the backdrop to dismiss. A modal <dialog> does not do this on its own,
+   and a click on ::backdrop is dispatched to the dialog element, so the target
+   test alone cannot tell a backdrop click from a click on the dialog's own
+   border or scrollbar. Comparing against the box does: only a point outside it
+   closes, which leaves scrollbar drags — a real way to land target=#dlg —
+   working.
+   #rdlg is deliberately left out. It asks *why* a place was rejected, and a
+   stray click outside a half-typed reason should not throw it away; it keeps
+   its explicit buttons. */
+$("#dlg").addEventListener("click", e => {
+  if(e.target !== e.currentTarget) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  if(e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)
+    e.currentTarget.close();
+});
+
 document.addEventListener("click", e => {
   const detail = e.target.closest("[data-detail]");
   if(detail){ openDetail(detail.dataset.detail); return; }
