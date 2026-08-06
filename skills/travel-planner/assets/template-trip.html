@@ -462,7 +462,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    sign, the dialog title carries it in full, and one place here has one long
    enough to wrap. */
 .nm{
-  font:700 var(--nm-size)/var(--nm-lh) var(--serif);
+  font:900 var(--nm-size)/var(--nm-lh) var(--serif);
   cursor:pointer;letter-spacing:.2px;display:block;
 }
 /* The two-line floor sits on this plain div, never on .nm — .nm is a <button>,
@@ -698,11 +698,15 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
    control — the dialog's own frame is what says "you are in a dialog". Focus
    still enters the dialog, so Esc and the focus trap keep working, and Tab
    walks the content from the top in document order. */
-/* Bold, matching the card title it was opened from — the two are the same
-   label at two sizes, and at 500 the serif's CJK glyphs fell back to the
-   regular face (a Han glyph is a fixed em width, so nothing about the layout
-   said the weight had not taken). */
-.dlg-h h3{font:700 21px/1.3 var(--serif);margin:0;flex:1}
+/* Same weight as the card title it was opened from — the two are the same
+   label at two sizes. Both were 500, which on the CJK fallbacks resolves to
+   the regular face: a Han glyph is a fixed em width, so nothing in the layout
+   showed that the weight had not taken. Measured on this stack, the serif
+   resolves four distinct weights (≤300 / 400-500 / 600-700 / ≥800), so 900
+   lands on the heaviest face available. On a system whose CJK serif ships
+   only regular and bold, 900 is synthesised — acceptable here, and 400/700
+   remain the only two weights any system is guaranteed to draw for real. */
+.dlg-h h3{font:900 21px/1.3 var(--serif);margin:0;flex:1}
 .dlg-h h3:focus,.dlg-h h3:focus-visible{outline:none}
 .dlg-h .x{
   background:none;border:0;font-size:22px;color:var(--ink-3);line-height:1;border-radius:6px;
@@ -877,7 +881,7 @@ pre.code{
   flex:none;min-width:17px;height:17px;border-radius:50%;display:grid;place-items:center;
   font:700 9.5px/1 var(--mono);color:var(--on-day);
 }
-/* The name uses .dnm, not .nm — a global .nm{font:700 16px/1.35 var(--serif)}
+/* The name uses .dnm, not .nm — a global .nm{font:900 16px/1.35 var(--serif)}
    already exists as view ①'s card title. A rule that directly matches an
    element always beats a font inherited from the parent — nothing to do with
    specificity — so on collision the 12.5px sans set on .ditem did nothing. */
