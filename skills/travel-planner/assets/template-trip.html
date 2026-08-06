@@ -662,9 +662,13 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    box. overscroll-behavior:none stops both at once — no chaining out, no
    bounce in. */
 dialog{
-  border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--r-card);background:var(--card);color:var(--ink);
   padding:0;max-width:660px;width:calc(100vw - 34px);max-height:86vh;box-shadow:0 24px 70px rgba(0,0,0,.28);
   overscroll-behavior:none;
+  /* Same corner as a place card. The sticky header and footer paint to the
+     dialog's edges, so the scroll container has to clip them to the radius or
+     their square corners sit outside the curve. */
+  overflow:auto;
 }
 dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
 .dlg-h{
@@ -690,7 +694,17 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
   width:32px;height:32px;flex:none;display:grid;place-items:center;padding:0;
 }
 .dlg-h .x:hover{background:var(--accent-soft);color:var(--ink)}
-.dlg-b{padding:17px 20px 22px;overflow-y:auto}
+/* The bottom inset lives on .dlg-f, not here: that footer is sticky, and a
+   padding below it on this element would leave a gap the buttons drop into at
+   the end of the scroll. Every dialog body ends with a .dlg-f.
+   No overflow-y:auto either. The block comment above says this element never
+   overflows — the <dialog> is the scroll container — so the rule was inert for
+   scrolling, but it still made this a scroll container in its own right, and
+   that is what a sticky child positions against. The footer stuck to a box
+   that never scrolls, i.e. it didn't stick at all (measured 260px below the
+   dialog's floor mid-scroll). Dropping it hands .dlg-f the same scrollport
+   .dlg-h already sticks to. */
+.dlg-b{padding:17px 20px 0}
 .dlg-b h4{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.9px;color:var(--ink-3);margin:20px 0 8px}
 .dlg-b h4:first-child{margin-top:0}
 .dlg-b p{margin:0 0 10px;font-size:14px;color:var(--ink-2)}
@@ -713,14 +727,34 @@ textarea{
   width:100%;border:1px solid var(--line);border-radius:8px;background:var(--paper);
   color:var(--ink);padding:9px 11px;font:14px var(--sans);resize:vertical;min-height:66px;
 }
-.dlg-f{display:flex;gap:9px;justify-content:flex-end;margin-top:15px;flex-wrap:wrap;align-items:center}
-/* Here the pill shares a right-aligned footer row with the "add to day"
-   button, so it takes that row's alignment instead of centring itself. */
-.dlg-f .pick{margin:0}
+.dlg-f{
+  display:flex;gap:9px;justify-content:flex-end;align-items:center;flex-wrap:wrap;
+  margin-top:15px;padding-bottom:22px;
+}
+/* The detail dialog's footer only — the reason and export dialogs put two
+   ordinary buttons in a .dlg-f and want the plain right-aligned row above.
+   :has(.pick) picks out the one footer that carries the tri-state. */
+.dlg-f:has(.pick){
+  /* Pinned to the dialog's floor the way .dlg-h is pinned to its ceiling, so
+     the rating stays reachable however far down the practical info you have
+     scrolled. Deliberately unfilled: a painted bar here would read as a second
+     piece of chrome competing with the header, and the buttons carry their own
+     outlines already. */
+  position:sticky;bottom:0;z-index:2;
+  /* Three tracks so the pill is centred on the dialog, not on whatever is left
+     after the schedule button — the pill's position must not move when that
+     button appears, disappears (no day selected) or changes label between
+     "add to day 1" and "remove from day 1". */
+  display:grid;grid-template-columns:1fr auto 1fr;padding-top:13px;
+}
+.dlg-f .pick{margin:0;grid-column:2}
 .dlg-f .pick button{padding:7px 15px}
-/* The schedule button pushes left: it's a different matter from the
-   yes/maybe/no group on the right */
-.btn.sched{margin-right:auto}
+/* Matched to the tri-state: same pill, same height, same type size, so the
+   footer reads as one row of controls rather than two unrelated widgets. */
+.btn.sched{
+  grid-column:1;justify-self:start;
+  border-radius:999px;padding:7px 15px;font-size:12.5px;font-weight:400;
+}
 pre.code{
   background:var(--paper-2);border:1px solid var(--line);border-radius:8px;
   padding:12px;font:12.5px/1.7 var(--mono);white-space:pre-wrap;word-break:break-all;margin:0 0 12px;
