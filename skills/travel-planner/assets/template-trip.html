@@ -51,7 +51,7 @@
      draws between a card's edge and its internal separators. */
   --line:#4A4A4A;      /* --border — 31 outlines */
   --line-soft:#DDD8D2; /* derived — 25 internal dividers + the map grid */
-  --line-2:#C2BDB7;    /* derived — the dim tier: disabled, empty stars, tracks */
+  --line-2:#C2BDB7;    /* derived — the dim tier: disabled, stub border, tracks */
   --fill:#E7E2DB;      /* derived — the 7 former background:var(--line) uses */
   /* The theme's emphasis pair, used exactly as it ships it: --primary is
      near-black with a near-white foreground (its filled buttons), and its
@@ -187,7 +187,7 @@
   --card-pad:12px;
   /* The place name's type, as tokens rather than only inside the .nm rule:
      two other things are measured off it — the two-line floor that keeps the
-     header a fixed height, and the tier/stars row, which has to be exactly one
+     header a fixed height, and the tier-badge row, which has to be exactly one
      name-line tall to sit centred on the name's first line however the name
      wraps. Typing 21.6px in those two places would silently come undone the
      first time this size changes. */
@@ -474,13 +474,12 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    layout should depend on them. */
 .nm-box{min-height:calc(2 * var(--nm-size) * var(--nm-lh))}
 .nm:hover{color:var(--accent)}
-/* The tier badge and the stars belong to the name's first line, so they get a
-   box exactly one name-line tall and centre inside it. Aligned to the top of
-   .nm instead, they hung off the cap height of a 21.6px line box while their
-   own boxes are 19.5px and 15px — three different tops, which is what the
-   stray margin-top:3px on each of them had been approximating. Now the box
-   does it, and it stays right when the name wraps to a second line or the
-   name's size changes. */
+/* The tier badge belongs to the name's first line, so it gets a box exactly one
+   name-line tall and centres inside it. Aligned to the top of .nm instead, it
+   hung off the cap height of a 21.6px line box while its own box is 19.5px —
+   two different tops, which is what the stray margin-top:3px on it had been
+   approximating. Now the box does it, and it stays right when the name wraps to
+   a second line or the name's size changes. */
 .hd-r{
   display:flex;align-items:center;gap:8px;flex:none;
   height:calc(var(--nm-size) * var(--nm-lh));
@@ -502,8 +501,6 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* User-added stub not yet researched by the AI. The dashed border echoes the
    same mark on its map marker */
 .t-stub{background:transparent;color:var(--ink-3);border:1px dashed var(--line-2);font-weight:600}
-.stars{color:var(--accent);font-size:11px;letter-spacing:.5px;flex:none;line-height:1}
-.stars i{color:var(--line-2);font-style:normal}
 
 /* Three lines, not two: the median pitch here is 83 characters, which at this
    width is ~3.2 lines — two lines would cut half the places mid-sentence,
@@ -1940,7 +1937,7 @@ en: {
   vbTell:"Once you find out, tell the AI and it will fill in the data.",
   stubFacts:"Added by hand · details pending AI research",
   indoor:"indoor", outdoor:"outdoor", nightGood:"☾ good at night",
-  stubTier:"pending", photoIdx:"Photogenic score {n}/5", whyNot:"Reason: ",
+  stubTier:"pending", whyNot:"Reason: ",
   spotsHeader:"Photo stops along the way · {n}",
   otherArea:"Other", tierGroup:"Tier {t}", stubGroup:"Added by hand · pending",
   emptyBig:"No places match", emptySub:"Adjust the search or filters",
@@ -2108,7 +2105,7 @@ zh: {
   vbTell:"查到之后告诉 AI，它会补进数据里。",
   stubFacts:"手动添加 · 详情待 AI 补全",
   indoor:"室内", outdoor:"户外", nightGood:"☾ 适合夜间",
-  stubTier:"待补全", photoIdx:"出片指数 {n}/5", whyNot:"不去的理由：",
+  stubTier:"待补全", whyNot:"不去的理由：",
   spotsHeader:"顺路打卡点 · {n} 个",
   otherArea:"其他", tierGroup:"{t} 级", stubGroup:"手动添加·待补全",
   emptyBig:"没有符合条件的景点", emptySub:"调整一下搜索或筛选条件",
@@ -2452,7 +2449,6 @@ const LOCAL_LANG = (TRIP.local_language && TRIP.local_language !== TRIP.output_l
 const langAttr = LOCAL_LANG ? ` lang="${esc(LOCAL_LANG)}"` : "";
 const SCALE_TXT = { spot:T.scaleSpot, "30min":T.scale30, "1-2h":T.scale12,
                     "2-3h":T.scale23, "half-day":T.scaleHalf, "full-day":T.scaleFull };
-const stars = n => "★".repeat(n||0) + `<i>${"★".repeat(Math.max(0,5-(n||0)))}</i>`;
 
 /* ticket is free text, and squeezing it into a short label turns into a lie
    easily. Two cases we hit:
@@ -2657,9 +2653,7 @@ function cardHTML(p, children){
       </div>
       <div class="hd-r">
         ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
-               : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
-        <span class="stars" role="img" aria-label="${tf("photoIdx",{n:p.photo_index||0})}"
-          title="${tf("photoIdx",{n:p.photo_index||0})}"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
+               : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>`}
       </div>
     </div>
     ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
