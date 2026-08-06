@@ -459,12 +459,14 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* Stretches to the row's height so it still reads as a column rule when the
    ticket in the middle wraps to several lines */
 .fdiv{width:1px;align-self:stretch;min-height:13px;background:var(--line-soft);flex:none}
-/* Ticket price is the only fact that can run a whole paragraph ("grounds free
-   to enter; Central Garan adults ¥500 / Treasure Hall ¥500 / Honbō Garden
-   ¥300, three separate tickets, not interchangeable…"). It wraps in full
-   rather than being cut: it is decision-grade information, and a truncated
-   number reads as the whole price. The cell takes all the width the other two
-   don't need, so most tickets still land on one line. */
+/* Ticket price is the only fact whose source text can run a whole paragraph
+   ("grounds free to enter; Central Garan adults ¥500 / Treasure Hall ¥500 /
+   Honbō Garden ¥300, three separate tickets, not interchangeable…"). It isn't
+   laid out here — shortPrice() condenses it to a label ("free / from ¥500")
+   and the dialog keeps the text verbatim, so this cell is one line in
+   practice. It stays wrappable anyway: nothing guarantees a label is short in
+   a currency or language we haven't seen, and wrapping beats spilling past
+   the column rule. */
 .facts .tk{
   flex:0 1 auto;min-width:0;white-space:normal;text-align:center;line-height:1.5;
 }
@@ -1610,7 +1612,7 @@ en: {
   pinRemove:"Remove from {day}: {name}", pinAdd:"Add to {day}: {name}",
   noScheduleToast:"No schedule yet. Create the days first, then add places.",
   sideEmpty:"No places to show under the current filters",
-  free:"free", fromSuffix:"+",
+  free:"free", fromSuffix:"+", priceTBD:"price unlisted",
   wClosed:"closed", wAbnormal:"not operating normally", wUnverified:"unverified",
   wBooking:"booking req.", wClosedThatDay:"closed that day",
   lodging:"Lodging",
@@ -1777,7 +1779,7 @@ zh: {
   pinRemove:"移出{day}：{name}", pinAdd:"加入{day}：{name}",
   noScheduleToast:"还没有日程。先建立分天，再往里放地点。",
   sideEmpty:"当前筛选下没有可显示的地点",
-  free:"免费", fromSuffix:"起",
+  free:"免费", fromSuffix:" 起", priceTBD:"价格待查",
   wClosed:"已关闭", wAbnormal:"非正常营业", wUnverified:"待确认",
   wBooking:"须预约", wClosedThatDay:"当天闭馆",
   lodging:"住宿",
@@ -2048,6 +2050,49 @@ const SCALE_TXT = { spot:T.scaleSpot, "30min":T.scale30, "1-2h":T.scale12,
                     "2-3h":T.scale23, "half-day":T.scaleHalf, "full-day":T.scaleFull };
 const stars = n => "★".repeat(n||0) + `<i>${"★".repeat(Math.max(0,5-(n||0)))}</i>`;
 
+/* ticket is free text, and squeezing it into a short label turns into a lie
+   easily. Two cases we hit:
+     "Keep ¥600 (free under junior-high)" — matching "free" first would
+       print free and undercount a ticket
+     "public areas free; special exhibition adults ¥3,000, students ¥1,500"
+       — matching the amount first would print "from ¥3,000", while the
+       building itself can be entered for free
+   So both must be examined; whichever comes first sets the tone, and when
+   both are present they're shown side by side to say "it depends".
+
+   This lived inside the map module and served only the sidebar rows. The list
+   cards need exactly the same thing — 20 of 47 tickets here run past 30
+   characters, the longest is 122, and laid out in full they were four to six
+   lines at the foot of a card. So it moved up here and both views call it: one
+   place now shows one price label wherever you meet it, and the two views
+   can't drift into disagreeing about what a ticket costs. The verbatim text
+   stays in the detail dialog, which is the surface that has room for it. */
+const FREE_RE = /免费|免費|無料|无料|free/i;
+const AMT_RE = /[¥￥$€£]\s*[\d,]+/;
+function shortPrice(t){
+  if(!t) return "";
+  const s = String(t);
+  const amt = s.match(AMT_RE), free = s.match(FREE_RE);
+  if(amt && free){
+    const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
+    return free.index < amt.index
+      ? `${T.free} / ${amt[0].replace(/\s+/g, "")}${many ? T.fromSuffix : ""}`
+      : `${amt[0].replace(/\s+/g, "")}${many ? T.fromSuffix : ""}`;
+  }
+  if(amt){
+    const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
+    return amt[0].replace(/\s+/g, "") + (many ? T.fromSuffix : "");
+  }
+  return free ? T.free : "";
+}
+
+/* shortPrice returns "" when the ticket text carries no amount and no free
+   marker at all — a cafe whose menu the official page never lists, say. On a
+   card that blank would read as "we forgot", or worse, as free. Say instead
+   that the price is the thing we couldn't establish; the dialog carries the
+   verbatim note explaining why. */
+const priceLabel = t => shortPrice(t) || (t ? T.priceTBD : "—");
+
 /* ═══════════════ Monochrome icons ═══════════════
    No emoji on this page. Two reasons, both learned the hard way:
      1. We don't control the glyphs. The same ✅ differs in shape, weight and
@@ -2187,7 +2232,7 @@ function cardHTML(p, children){
     ? `<span>${T.stubFacts}</span>${p.area ? `<span class="tk">${esc(p.area)}</span>` : ""}`
     : `<span>${esc(SCALE_TXT[p.scale] || p.scale)}</span>
           <i class="fdiv"></i>
-          <span class="tk">${esc(p.ticket || "—")}</span>
+          <span class="tk">${esc(priceLabel(p.ticket))}</span>
           <i class="fdiv"></i>
           <span>${p.indoor ? T.indoor : T.outdoor}</span>`;
   return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
@@ -4352,35 +4397,6 @@ const MAP = (() => {
      children ¥500"), taking five or six lines per entry. Complete information
      lives in the detail dialog; this line only has to make the place
      recognizable and flag whether there's a catch. */
-  /* ticket is free text, and squeezing it into a short label turns into a lie
-     easily. Two cases we hit:
-       "Keep ¥600 (free under junior-high)" — matching "free" first would
-         print free and undercount a ticket
-       "public areas free; special exhibition adults ¥3,000, students ¥1,500"
-         — matching the amount first would print "from ¥3,000", while the
-         building itself can be entered for free
-     So both must be examined; whichever comes first sets the tone, and when
-     both are present they're shown side by side to say "it depends". */
-  const FREE_RE = /免费|免費|無料|无料|free/i;
-  const AMT_RE = /[¥￥$€£]\s*[\d,]+/;
-
-  function shortPrice(t){
-    if(!t) return "";
-    const s = String(t);
-    const amt = s.match(AMT_RE), free = s.match(FREE_RE);
-    if(amt && free){
-      const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
-      return free.index < amt.index
-        ? `${T.free} / ${amt[0].replace(/\s+/g, "")}${many ? T.fromSuffix : ""}`
-        : `${amt[0].replace(/\s+/g, "")}${many ? T.fromSuffix : ""}`;
-    }
-    if(amt){
-      const many = (s.match(new RegExp(AMT_RE.source, "g")) || []).length > 1;
-      return amt[0].replace(/\s+/g, "") + (many ? T.fromSuffix : "");
-    }
-    return free ? T.free : "";
-  }
-
   function warnOf(p){
     if(p.status === "permanently_closed") return T.wClosed;
     if(p.status && p.status !== "open") return T.wAbnormal;
