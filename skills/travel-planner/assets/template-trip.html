@@ -760,13 +760,20 @@ pre.code{
    13px. */
 .map-main{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper-2);--bar-h:34px}
 #map-canvas{position:absolute;inset:0}
-/* right reserves room for the zoom control: 29px wide + 10px margin + an
-   8px gap */
+/* right reserves room for the zoom control (29px wide + 10px margin + an 8px
+   gap = 57px) plus the lightness capsule sitting beside it. --tgl-w is that
+   capsule's *measured* width plus the gap, written by measureLightness —
+   hardcoding it
+   would mean re-guessing per language ("Light|Dark" vs 「浅色|深色」). Without
+   the reserve, a phone-width toolbar wraps and its first row runs straight
+   under the capsule. */
 .map-bar{
-  position:absolute;top:10px;left:10px;right:57px;z-index:20;
+  position:absolute;top:10px;left:10px;right:calc(57px + var(--tgl-w,0px));z-index:20;
   display:flex;gap:7px;flex-wrap:wrap;pointer-events:none;
 }
 .map-bar>*{pointer-events:auto}
+#map-lightness{position:absolute;top:10px;right:57px;z-index:20}
+#map-lightness:empty{display:none}
 .mgroup{
   display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);box-shadow:var(--shadow);
@@ -1210,6 +1217,13 @@ pre.code{
             <button id="transit-btn" aria-pressed="false">Transit</button>
           </div>
         </div>
+        <!-- Basemap lightness. Deliberately outside .map-bar and pinned to the
+             top-right, immediately left of the zoom control: it is a property
+             of the *basemap*, not one more filter, and the toolbar's left
+             cluster is already three capsules deep. .map-bar reserves room for
+             it via --tgl-w (see measureLightness) so the two never overlap
+             when the toolbar wraps on a phone. -->
+        <div class="mgroup" id="map-lightness" role="group"></div>
         <div id="msq-panel" hidden></div>
         <!-- The result panel is transient, plug-in/plug-out DOM; screen
              readers won't announce its appearance on their own. Announcements
@@ -1355,6 +1369,10 @@ en: {
   copy:"Copy", copied:"Copied",
   copyFail:"This browser blocks automatic copying — the text is selected, press ⌘C / Ctrl+C",
   bmSimple:"Simple", bmStandard:"Standard", bmRaster:"Raster",
+  bmLightness:"Basemap lightness", bmLight:"Light", bmDark:"Dark",
+  bmLightOn:"Light basemap", bmDarkOn:"Dark basemap",
+  bmNoDark:"The “{label}” basemap has no dark version (baked raster images) — switch to Simple or Standard",
+  bmLightnessLock:"Basemap lightness can't be switched in the current fallback mode",
   loadFail:"failed to load: ",
   osmOffline:"Opened from a local file, the browser sends no Referer, and OSM's raster tiles return an “Access blocked” image (HTTP 200). Open via build.py --serve to unlock.",
   osmOk:"Official OpenStreetMap basemap",
@@ -1517,6 +1535,10 @@ zh: {
   copy:"复制", copied:"已复制",
   copyFail:"这个浏览器不允许自动复制，已帮你选中，按 ⌘C / Ctrl+C",
   bmSimple:"简约", bmStandard:"标准", bmRaster:"光栅",
+  bmLightness:"底图明暗", bmLight:"浅色", bmDark:"深色",
+  bmLightOn:"浅色底图", bmDarkOn:"深色底图",
+  bmNoDark:"「{label}」底图没有深色版（瓦片是烘焙好的图片），切到简约或标准底图即可使用",
+  bmLightnessLock:"当前降级模式下无法切换底图明暗",
   loadFail:"加载失败：",
   osmOffline:"本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。",
   osmOk:"OpenStreetMap 官方底图",
@@ -1840,7 +1862,11 @@ function applyTheme(pref, persist = true){
     btn.title = tf("themeTitle", { cur: THEME_TXT[pref], next: THEME_TXT[next] });
     btn.setAttribute("aria-label", btn.title);
   }
-  // The basemap is beyond CSS's reach; it needs its own notification
+  // Anything beyond CSS's reach needs its own notification. The basemap used
+  // to be the one listener; it now has its own lightness button and is
+  // deliberately decoupled from the theme (see setMapDark), so nobody listens
+  // at the moment. Kept as the hook for the next such surface — canvas, WebGL
+  // or an <iframe> — rather than re-deriving it later.
   window.dispatchEvent(new CustomEvent("themechange", { detail:{ dark:themeIsDark() } }));
 }
 
@@ -2657,6 +2683,12 @@ function toast(msg){
 
    ① and ③ are both OSM-official, ② is OpenFreeMap; the two vector sources
    differ in schema and operator and won't fail together.
+
+   Crossed with that is lightness: ① and ② each exist as a light/dark pair of
+   styles over the *same* tiles (positron ⇄ dark, graybeard ⇄ shadow), so the
+   pair is one setting on top of the tier, not two more tiers. ③ is raster and
+   has no dark half — there the Dark button disables itself rather than
+   pretending. The setting is the user's, kept apart from the page theme.
    ═══════════════════════════════════════════════════════════════════ */
 const MAP = (() => {
   const MAPLIBRE_JS  = "https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js";
@@ -2669,47 +2701,66 @@ const MAP = (() => {
      other 324 layers work untouched. (The reverse doesn't hold: graybeard
      and positron share zero source-layers, so running graybeard on
      OpenFreeMap would mean rewriting every layer.) */
-  const GRAYBEARD  = "https://tiles.versatiles.org/assets/styles/graybeard/style.json";
+  /* graybeard ⇄ shadow are the light and dark halves of one style: same 324
+     layers, identical layer ids (verified: the diff is empty both ways), same
+     `versatiles-shortbread` source key — so the repointing below, HIDE and the
+     tint table all apply to either, only the URL changes. shadow is a genuine
+     luminance inversion, not a dimmed copy: its roads (rgb 51) sit *darker*
+     than the ground (rgb 60), keeping graybeard's figure/ground relation
+     rather than flipping it. */
+  const SHORTBREAD_STYLE = {
+    light:"https://tiles.versatiles.org/assets/styles/graybeard/style.json",
+    dark: "https://tiles.versatiles.org/assets/styles/shadow/style.json",
+  };
   const OSM_VECTOR = "https://vector.openstreetmap.org/shortbread_v1/{z}/{x}/{y}.mvt";
   const OSM_ATTRIB = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
   // For the Leaflet fallback: CARTO has CORS, needs no Referer, renders under file://
   const CARTO_RASTER = ["https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
                         "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"];
-  let gbStyle = null;      // graybeard's style JSON is fetched once; switching back doesn't re-request
+  // Each style JSON is fetched once; switching back and forth doesn't re-request.
+  // Keyed by lightness — the two are different documents.
+  const sbStyle = { light:null, dark:null };
 
-  /* The basemap under the dark theme.
+  /* The dark halves of the two vector basemaps.
      The map is view ②'s largest surface; a light basemap embedded in a
      near-black page is one big bright patch. OpenFreeMap's dark and positron
      come from the same openmaptiles schema with identical layer ids, so the
      tint patch, hide rules and POI layer all carry over — only the URL
-     changes. The other two basemaps have no dark version: graybeard is a
-     fixed style, and raster tiles are baked images. So "is the basemap dark"
-     can't be asked of the theme, only of the basemap in use — see MI.
-
-     Follows themeIsDark() (the resolved theme), not the system preference:
-     when the user pins the theme to light in the corner, the UI flips and
-     the map must flip with it, or it's another mismatched bright patch. */
+     changes; graybeard/shadow are the same deal on the shortbread side.
+     Raster is the one that can't follow: the tiles are baked images and OSM
+     ships no dark set. So "is the basemap dark" is a question about the
+     basemap in use, never about the page theme — see baseIsDark and MI. */
   const ofmStyle = dark =>
     "https://tiles.openfreemap.org/styles/" + (dark ? "dark" : "positron");
 
+  /* Fetch a shortbread style and repoint its source at OSM's official
+     endpoint. Never caches a failure — that would leave no room to retry. */
+  const shortbreadStyle = dark => {
+    const k = dark ? "dark" : "light";
+    return (sbStyle[k] ||= fetch(SHORTBREAD_STYLE[k], { cache:"force-cache" })
+      .then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(s => {
+        const src = s.sources["versatiles-shortbread"];
+        src.tiles = [OSM_VECTOR];
+        src.maxzoom = 14;      // matches vector.openstreetmap.org's tilejson
+        src.attribution = "";
+        return s;
+      })
+      .catch(e => { sbStyle[k] = null; throw e; }));
+  };
+
   const BASEMAPS = [
     { id:"ofm", label:T.bmSimple, kind:"vector", schema:"openmaptiles",
-      style:ofmStyle(themeIsDark()),
-      dark:themeIsDark(),
+      style:() => ofmStyle(st.mapDark),
       attrib:'OpenFreeMap © OpenMapTiles Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' },
     { id:"gb", label:T.bmStandard, kind:"vector", schema:"shortbread",
-      style:() => (gbStyle ||= fetch(GRAYBEARD, { cache:"force-cache" })
-        .then(r => { if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-        .then(s => {
-          const src = s.sources["versatiles-shortbread"];
-          src.tiles = [OSM_VECTOR];
-          src.maxzoom = 14;      // matches vector.openstreetmap.org's tilejson
-          src.attribution = "";
-          return s;
-        })
-        .catch(e => { gbStyle = null; throw e; })),   // never cache a failure; leave room to retry
-      attrib: OSM_ATTRIB + ' · Vector tiles <a href="https://vector.openstreetmap.org/" target="_blank" rel="noopener">vector.openstreetmap.org</a> · Style: VersaTiles graybeard' },
-    { id:"osm", label:T.bmRaster, kind:"raster", httpOnly:true,
+      style:() => shortbreadStyle(st.mapDark),
+      attrib:() => OSM_ATTRIB + ' · Vector tiles <a href="https://vector.openstreetmap.org/" target="_blank" rel="noopener">vector.openstreetmap.org</a> · Style: VersaTiles '
+        + (st.mapDark ? "shadow" : "graybeard") },
+    // noDark: raster tiles are pre-rendered images; there is no dark set to
+    // switch to. The lightness buttons disable themselves here rather than
+    // silently doing nothing.
+    { id:"osm", label:T.bmRaster, kind:"raster", httpOnly:true, noDark:true,
       tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       attrib: OSM_ATTRIB },
   ];
@@ -2717,10 +2768,11 @@ const MAP = (() => {
   /* ---------- Ink drawn on the basemap ----------
      (hollow markers, white rings, halos on transit stations and labels…)
      These were all hardcoded light, on the premise "all three basemaps are
-     light" — a premise now true for only two of them. So they're gathered in
-     one place and flip with the *current basemap*, not with the theme: in the
-     dark theme, manually switching back to Raster keeps a light basemap, and
-     these inks must come back with it. */
+     light" — a premise now true only when the basemap in use happens to be
+     light. So they're gathered in one place and flip with the *current
+     basemap*, not with the page theme: switching to Raster always lands on a
+     light basemap whatever the lightness button says, and these inks must come
+     back with it. */
   const MAP_INK = {
     light:{ hollow:"#fff", ring:"#fff", halo:"#fff",
             lodging:"#4A4A4A", onLodging:"#fff",
@@ -2743,14 +2795,16 @@ const MAP = (() => {
      st.base would have to remember to sync it — and init()'s fallback path
      writes st.base = "gb" directly without going through switchBase. Missed
      once in practice: first map entry after switching the theme to light,
-     the basemap was light but the inks were still the dark set. The Leaflet
-     fallback uses CARTO's light raster, always counted light. The static
-     fallback draws on --paper-2, a UI surface, so it follows the Simple
-     basemap's lightness. */
+     the basemap was light but the inks were still the dark set.
+     The Leaflet fallback uses CARTO's light raster, always counted light. The
+     static fallback draws no basemap at all — it's a sketch on --paper-2, a
+     UI surface — so there it is the *page theme* that decides, the one place
+     where the two questions genuinely coincide. */
   const baseIsDark = () => {
     if(st.engine === "leaflet") return false;
+    if(st.engine === "static") return themeIsDark();
     const b = BASEMAPS.find(x => x.id === st.base);
-    return !!(b && b.dark);
+    return !!(b && !b.noDark && st.mapDark);
   };
   const MI = () => MAP_INK[baseIsDark() ? "dark" : "light"];
 
@@ -2761,18 +2815,31 @@ const MAP = (() => {
      buildings and labels all stay gray — so the only color left in the frame
      is three things: markers, transit lines, water & greenery.
 
-     The shortbread values are hardcoded and never flip: graybeard exists in
-     light only, so these always paint on a light ground. */
-  const SB_WATER = "rgb(190,221,243)";
-  const tintFor = schema => schema === "shortbread" ? {
-      "water-ocean":SB_WATER, "water-area":SB_WATER, "water-area-river":SB_WATER,
-      "water-area-small":SB_WATER, "water-river":SB_WATER, "water-canal":SB_WATER,
-      "water-stream":SB_WATER, "water-ditch":SB_WATER, "water-dam":SB_WATER,
-      "land-park":"rgb(217,217,165)", "land-garden":"rgb(217,217,165)",
-      "land-vegetation":"rgb(217,217,165)", "land-forest":"rgb(150,196,124)",
-      "land-grass":"rgb(216,232,200)", "land-leisure":"rgb(231,237,222)",
-      "land-wetland":"rgb(211,230,219)",
-    } : schema === "openmaptiles" ? {
+     The shortbread values used to be hardcoded on the premise that graybeard
+     exists in light only. Now that shadow is the dark half, they come in two
+     sets keyed the same way as MAP_INK. The dark set is not the light set
+     dimmed: shadow's ground is a mid gray (rgb 60), so the tints have to be
+     *darker* than that ground to read as water and greenery rather than as
+     bright patches — the same figure/ground inversion shadow itself applies to
+     its roads. */
+  const SB_TINT = {
+    light:{ water:"rgb(190,221,243)", park:"rgb(217,217,165)",
+            forest:"rgb(150,196,124)", grass:"rgb(216,232,200)",
+            leisure:"rgb(231,237,222)", wetland:"rgb(211,230,219)" },
+    dark: { water:"rgb(38,58,80)", park:"rgb(56,58,38)",
+            forest:"rgb(42,62,44)", grass:"rgb(48,58,42)",
+            leisure:"rgb(54,58,50)", wetland:"rgb(44,60,56)" },
+  };
+  const SB = () => SB_TINT[baseIsDark() ? "dark" : "light"];
+  const tintFor = schema => schema === "shortbread" ? (t => ({
+      "water-ocean":t.water, "water-area":t.water, "water-area-river":t.water,
+      "water-area-small":t.water, "water-river":t.water, "water-canal":t.water,
+      "water-stream":t.water, "water-ditch":t.water, "water-dam":t.water,
+      "land-park":t.park, "land-garden":t.park,
+      "land-vegetation":t.park, "land-forest":t.forest,
+      "land-grass":t.grass, "land-leisure":t.leisure,
+      "land-wetland":t.wetland,
+    }))(SB()) : schema === "openmaptiles" ? {
       "water":MI().water, "waterway":MI().water, "landcover_wood":MI().wood,
     } : {};
 
@@ -2903,8 +2970,30 @@ const MAP = (() => {
     }
   }
 
+  /* ---------- Basemap lightness preference ----------
+     Independent of the page theme, on purpose: the map is a working surface,
+     not a panel of the UI, and "dark page, light map" is a legitimate
+     combination (a light basemap holds more contrast against the day colors).
+     So no themechange listener touches it — the button is the only thing that
+     moves it.
+
+     The page theme is consulted exactly once, as the seed for a trip that has
+     never had the button pressed. Without that, a dark-theme user's first
+     visit gets a near-black page around one bright rectangle. After the first
+     press, the stored value wins forever and the theme is never asked again. */
+  const MAPDARK_KEY = LS_KEY + ":mapdark";
+  function storedMapDark(){
+    try{
+      const v = localStorage.getItem(MAPDARK_KEY);
+      if(v === "1") return true;
+      if(v === "0") return false;
+    }catch(e){}
+    return themeIsDark();
+  }
+
   const st = { ready:false, engine:null, map:null, markers:new Map(),
-               base:"ofm", transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
+               base:"ofm", mapDark:storedMapDark(),
+               transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
                grp:"area",   // sidebar grouping: area | choice — tracked separately from the list view's ui.group
                opacity:1,    // transit layer opacity 0.15–1; like st.transit, lives only for this session
                curDay:null, flat:null, addOpen:false, legendOpen:false };
@@ -2996,12 +3085,51 @@ const MAP = (() => {
       `<button data-base="${b.id}" aria-pressed="${b.id === st.base}">${b.label}</button>`).join("");
   }
 
+  /* ---------- Basemap lightness buttons ----------
+     Left = light, right = dark, matching how the two read as a spectrum.
+     aria-pressed shows what is actually on screen (baseIsDark), not the stored
+     preference: under Raster the preference may say dark while the basemap is
+     unavoidably light, and a pressed "Dark" button over a light map would be a
+     plain lie to both sighted and screen-reader users. The preference is kept
+     intact underneath, so switching back to Simple restores it. */
+  function paintLightness(){
+    const g = $("#map-lightness");
+    if(!g) return;
+    g.setAttribute("aria-label", T.bmLightness);
+    const eff = baseIsDark();
+    g.innerHTML =
+        `<button data-mdark="0" aria-pressed="${!eff}" title="${esc(T.bmLightOn)}">${T.bmLight}</button>`
+      + `<button data-mdark="1" aria-pressed="${eff}" title="${esc(T.bmDarkOn)}">${T.bmDark}</button>`;
+    syncLightness();
+    measureLightness();
+  }
+
+  /* Enable/disable without repainting, so a basemap switch doesn't rebuild the
+     capsule under the user's cursor. */
+  function syncLightness(){
+    const g = $("#map-lightness");
+    if(!g) return;
+    const b = BASEMAPS.find(x => x.id === st.base);
+    const locked = st.degraded || st.engine === "leaflet" || st.engine === "static";
+    const noDark = !!(b && b.noDark);
+    const eff = baseIsDark();
+    for(const btn of $$("#map-lightness button")){
+      const wantDark = btn.dataset.mdark === "1";
+      btn.disabled = locked || (noDark && wantDark);
+      btn.setAttribute("aria-pressed", String(wantDark === eff));
+      btn.title = locked ? T.bmLightnessLock
+        : (noDark && wantDark) ? tf("bmNoDark", { label: (b && b.label) || "" })
+        : (wantDark ? T.bmDarkOn : T.bmLightOn);
+    }
+  }
+
   function lockBaseButtons(reason){
     $$("#basemaps button").forEach(b => {
       b.disabled = true;
       b.title = reason;
       b.setAttribute("aria-pressed", b.dataset.base === st.base);
     });
+    syncLightness();   // the fallback engines have no style to swap either
   }
 
   const PROBES = {
@@ -3083,7 +3211,9 @@ const MAP = (() => {
 
   function setAttrib(){
     const b = BASEMAPS.find(x => x.id === st.base);
-    $("#attrib").innerHTML = b ? b.attrib
+    // Standard's attribution names the style by its actual file (graybeard or
+    // shadow), so it's a function there — credit has to match what's rendered.
+    $("#attrib").innerHTML = b ? (typeof b.attrib === "function" ? b.attrib() : b.attrib)
       : (st.engine === "leaflet" ? OSM_ATTRIB + " © CARTO" : "");
   }
 
@@ -3466,12 +3596,12 @@ const MAP = (() => {
     el.style.zIndex = s.z;
 
     // Fill.
-    // Unscheduled uses white, not var(--paper): markers are drawn on the map
-    // and all three basemaps are light, whereas the page in dark theme has
-    // --paper at #16130f, near-black — using it for "hollow" would produce a
-    // dark solid dot, the exact opposite of the intended meaning. The
-    // sidebar's small dots are a different matter: they sit on a dark card,
-    // where --paper is the right choice.
+    // Unscheduled uses MI().hollow, not var(--paper): markers are drawn on the
+    // basemap, and the basemap's lightness is its own setting — a light map
+    // under a dark page is a normal combination, and --paper at #16130f would
+    // then produce a dark solid dot on it, the exact opposite of the intended
+    // meaning. The sidebar's small dots are a different matter: they sit on a
+    // card, a UI surface, where --paper is the right choice.
     if(s.lod){
       dot.style.background = MI().lodging;
     }else if(!s.placed){
@@ -4208,6 +4338,7 @@ const MAP = (() => {
      0.7 zoom levels. Initializing while hidden (container height 0) is far
      worse. */
   function onShow(){
+    measureLightness();   // a rect measured while the view was hidden reads 0
     if(!st.map) return;
     st.map.resize();
     if(!st.fitted){ fitAll(); st.fitted = true; }
@@ -4225,6 +4356,18 @@ const MAP = (() => {
     const sync = () => main.style.setProperty("--bar-h", `${Math.round(bar.getBoundingClientRect().height)}px`);
     sync();
     if(window.ResizeObserver) new ResizeObserver(sync).observe(bar);
+  }
+
+  /* Same reasoning as --bar-h, for the horizontal axis: .map-bar has to stop
+     short of the lightness capsule, whose width is "Light|Dark" in English and
+     「浅色|深色」 in Chinese. Measured, not guessed. The +7 matches .map-bar's
+     own gap. Runs whenever the capsule is repainted; the capsule's own text
+     never changes after that, so no observer is needed. */
+  function measureLightness(){
+    const g = $("#map-lightness"), main = document.querySelector(".map-main");
+    if(!g || !main) return;
+    const w = Math.round(g.getBoundingClientRect().width);
+    main.style.setProperty("--tgl-w", w ? `${w + 7}px` : "0px");
   }
 
   /* ResizeObserver must only resize when the size genuinely changed.
@@ -4257,6 +4400,7 @@ const MAP = (() => {
     const seq = ++switchSeq;
     st.base = id;
     $$("#basemaps button").forEach(b => b.setAttribute("aria-pressed", b.dataset.base === id));
+    syncLightness();   // Raster grays out the Dark button; leaving it re-enables
     let style;
     try{
       style = await styleFor(id);
@@ -4280,20 +4424,36 @@ const MAP = (() => {
     });
   }
 
-  /* The theme changed (the user pressed the corner button, or it's parked on
-     "follow system" and the system flipped): CSS follows instantly, the
-     basemap doesn't — it was chosen at init from the theme at that moment,
-     and leaving it alone reverts to "dark UI with a light map".
-     Only re-applied while Simple is in use: manually switching to
-     Standard/Raster is an explicit choice and must not be overridden. */
-  window.addEventListener("themechange", e => {
-    const dark = e.detail.dark, ofm = BASEMAPS[0];
-    if(ofm.dark === dark) return;
-    ofm.style = ofmStyle(dark);
-    ofm.dark = dark;
-    if(st.engine !== "maplibre" || st.base !== ofm.id) return;
+  /* Basemap lightness switch.
+     Note what is *not* here: a themechange listener. The page theme used to
+     drag the Simple basemap along with it; now the two are decoupled and this
+     button is the only thing that moves the map. See storedMapDark for why the
+     theme still seeds the very first visit.
+
+     Reuses switchBase by nulling st.base first — the style URL for the current
+     basemap has changed, so it is a genuine restyle, just one that lands on
+     the same id. That also inherits switchBase's sequence token, so
+     light→dark→light hammering can't leave the map on a stale style. */
+  function setMapDark(dark){
+    dark = !!dark;
+    if(dark === st.mapDark) return;
+    st.mapDark = dark;
+    try{ localStorage.setItem(MAPDARK_KEY, dark ? "1" : "0"); }catch(e){}
+    const b = BASEMAPS.find(x => x.id === st.base);
+    // Raster has no dark half: record the preference for when the user
+    // switches back to a vector basemap, but leave the map alone.
+    if(st.engine !== "maplibre" || !b || b.noDark){ syncLightness(); return; }
+    const id = st.base;
     st.base = null;                 // bypass switchBase's "same basemap, do nothing" guard
-    switchBase(ofm.id);
+    switchBase(id);
+    syncLightness();
+  }
+
+  /* The same trip open in two tabs: keep the map lightness in step, the way
+     the theme already does. */
+  window.addEventListener("storage", e => {
+    if(e.key !== MAPDARK_KEY) return;
+    setMapDark(storedMapDark());
   });
 
   /* ---------- Place search (Nominatim) ----------
@@ -4496,6 +4656,7 @@ const MAP = (() => {
     }
 
     paintBaseButtons();
+    paintLightness();
 
     const problems = [];
     const webgl = hasWebGL();
@@ -4552,6 +4713,8 @@ const MAP = (() => {
     }
 
     setAttrib();
+    syncLightness();   // the engine is settled only now: fallbacks lock it, and
+                       // the ofm→gb rescue path above changes st.base directly
     addMarkers();
     renderSide();
     renderDays();
@@ -4657,6 +4820,8 @@ ${selected().map(p => `<Placemark>
     if(go){ focus(go.dataset.goto, false); return; }
     const bm = e.target.closest("#basemaps button");
     if(bm && !bm.disabled){ switchBase(bm.dataset.base); return; }
+    const ml = e.target.closest("#map-lightness button");
+    if(ml && !ml.disabled){ setMapDark(ml.dataset.mdark === "1"); return; }
     const tb = e.target.closest("#transit-btn");
     if(tb && !tb.disabled){ setTransitVisible(tb.getAttribute("aria-pressed") !== "true"); return; }
     const lg = e.target.closest("#map-legend");
