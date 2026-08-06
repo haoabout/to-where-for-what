@@ -1557,9 +1557,39 @@ pre.code{
 .pg-body h2:first-child,.pg-body h3:first-child{margin-top:0}
 /* Scoped to the direct child: the sheet bodies are .guide too */
 .pg-toggle-on .pgwrap>.guide{display:none}
-/* On the standalone guide page the tab bar is hidden, so the toggle is moved
-   into the view it acts on (see the STANDALONE branch in start) */
+
+/* ── Sheet navigator ──
+   Fixed, not sticky: the sheets are absolutely positioned and scaled, so there
+   is no in-flow column for a sticky element to ride down. fit() places it from
+   the sheet's measured left edge and hides it when the gutter is too narrow —
+   the alternative, reserving a lane for it, would push the sheets off centre on
+   every window that can't spare one. */
+/* display:flex would otherwise beat the [hidden] attribute's UA display:none */
+.pgnav[hidden]{display:none}
+.pgnav{
+  position:fixed;width:170px;z-index:20;
+  display:flex;flex-direction:column;gap:1px;
+  max-height:calc(100vh - 170px);overflow:auto;
+  scrollbar-width:thin;
+}
+.pgnav button{
+  appearance:none;border:0;background:none;cursor:pointer;
+  display:flex;gap:9px;align-items:baseline;
+  padding:5px 9px;border-radius:7px;text-align:left;width:100%;
+  font:500 12px/1.45 var(--sans);color:var(--canvas-ink-3);
+  transition:background .12s,color .12s;
+}
+.pgnav button:hover{background:rgba(0,0,0,.05);color:var(--canvas-ink-2)}
+.pgnav button[aria-current="true"]{background:rgba(0,0,0,.075);color:var(--canvas-ink)}
+.pgnav .no{font:400 10.5px/1.6 var(--mono);flex:none;opacity:.65}
+/* One line each, or a long day heading pushes the rail wider than its gutter */
+.pgnav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* On the standalone guide page the tab bar is hidden, so the export button is
+   moved into the view it acts on (see the STANDALONE branch in start). The
+   hint's margin-left:auto is for the tab bar, where it pushes the group's text
+   to the far right; here it would strand it half a screen from its button. */
 #view-guide>.tab-actions{max-width:800px;margin:0 auto 14px}
+#view-guide>.tab-actions .hint{margin-left:0;text-align:left}
 
 /* ═══════════════════════════════════════════════ Empty states / toast */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
@@ -1610,7 +1640,7 @@ pre.code{
   .card:hover{transform:none}
 }
 @media print{
-  .top,.actionbar,.toolbar,.chips,.pick{display:none!important}
+  .top,.actionbar,.toolbar,.chips,.pick,.pgnav{display:none!important}
   .card{break-inside:avoid;box-shadow:none}
   /* On paper there is no scanning to do — one column reads better, and a
      3:2 photo per place across 47 places is most of a toner cartridge.
@@ -1662,8 +1692,8 @@ pre.code{
       <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
       <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
       <div class="tab-actions" id="guide-actions" hidden>
-        <button class="btn sm" id="pg-toggle" aria-pressed="false">A4 pages</button>
-        <span class="hint" id="pg-hint">Print from the browser to export a PDF</span>
+        <button class="btn sm" id="pg-print">Export PDF</button>
+        <span class="hint" id="pg-hint">Choose “Save as PDF”, and turn headers and footers off</span>
       </div>
       <div class="tab-actions" id="map-actions" hidden>
         <button class="btn sm" id="exp-csv">Export CSV</button>
@@ -1757,6 +1787,7 @@ pre.code{
 
   <!-- ══════════════ View ③ Guide ══════════════ -->
   <section class="view" id="view-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
+    <nav class="pgnav" id="pgnav" aria-label="Pages" hidden></nav>
     <!-- .guide stays the source of truth in both modes: the paginator clones
          out of it rather than moving its children, so switching pagination off
          is one removeChild and nothing can be lost on the way back. -->
@@ -1971,8 +2002,8 @@ en: {
   checklistTitle:"All places at a glance",
   checklistIntroDays:"The day boxes are the plan you arranged; the rest is everything unscheduled — dropped places included, so you can reconsider them.",
   checklistIntro:"All candidate places, dropped ones included, so you can reconsider them.",
-  pgToggle:"A4 pages", pgHint:"Print from the browser to export a PDF",
-  pgOnToast:"Laid out on {n} A4 sheets — print to export a PDF",
+  pgPrint:"Export PDF", pgNav:"Pages",
+  pgHint:"Choose “Save as PDF”, and turn headers and footers off",
   contd:" (cont.)",
   staleNote:"Data verified {n} days ago; hours may have changed",
   noGuideBig:"No guide yet",
@@ -2141,8 +2172,8 @@ zh: {
   checklistTitle:"全部景点对照表",
   checklistIntroDays:"按天的盒子是你排好的行程，其余是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。",
   checklistIntro:"包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。",
-  pgToggle:"A4 分页", pgHint:"分页后用浏览器打印即可导出 PDF",
-  pgOnToast:"已排成 {n} 页 A4，打印即可导出 PDF",
+  pgPrint:"导出 PDF", pgNav:"页面",
+  pgHint:"在打印窗口选「存储为 PDF」，并关掉页眉页脚",
   contd:"（续）",
   staleNote:"数据核验于 {n} 天前，开放时间可能已变",
   noGuideBig:"攻略还没生成",
@@ -5451,11 +5482,11 @@ ${selected().map(p => `<Placemark>
 
 window.MAP = MAP;
 window.initMap = MAP.init;
-const pgBtn = $("#pg-toggle");
-if(pgBtn) pgBtn.onclick = () => {
-  const n = PAGER.set(pgBtn.getAttribute("aria-pressed") !== "true");
-  if(n) toast(tf("pgOnToast", { n }));
-};
+/* There is no PDF writer in a single self-contained HTML file, and there does
+   not need to be — every browser's print dialog has one. beforeprint puts the
+   guide on sheets first, so this exports the same layout at any window size. */
+const pgBtn = $("#pg-print");
+if(pgBtn) pgBtn.onclick = () => print();
 $("#exp-csv").onclick = () => MAP.exportCSV();
 $("#exp-kml").onclick = () => MAP.exportKML();
 
@@ -5861,6 +5892,7 @@ window.GUIDE = GUIDE;
    from route.md instead: a `---` is a new sheet. */
 const PAGER = (() => {
   const A4_W = 210 * 96 / 25.4;              // .pg's width in CSS px
+  const NAV_W = 170;                         // must match .pgnav
   let on = false, printAuto = false;
 
   /* Where a block may be cut. Anything not listed is atomic and moves to the
@@ -6020,11 +6052,56 @@ const PAGER = (() => {
 
     const pgs = [...paged.children];
     const title = TRIP.title || document.title || "";
+    // A sheet is named by the heading it opens with; a sheet that carries on
+    // from the one before opens with no heading at all and borrows its name.
+    let last = title;
     pgs.forEach((pg, i) => {
+      const h = pg.querySelector(".pg-body h2, .pg-body h3");
+      const own = h && h === pg.querySelector(".pg-body > *") ? h.textContent.trim() : "";
+      pg.dataset.label = own || last + T.contd;
+      if(own) last = own;
       pg.querySelector(".pg-foot .t").textContent = title;
       pg.querySelector(".pg-foot .no").textContent = (i + 1) + " / " + pgs.length;
     });
+    buildNav(pgs);
     return pgs.length;
+  }
+
+  /* ---------- Sheet navigator ---------- */
+  function buildNav(pgs){
+    const nav = $("#pgnav");
+    if(!nav) return;
+    nav.textContent = "";
+    pgs.forEach((pg, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.innerHTML = `<span class="no">${i + 1}</span><span class="t"></span>`;
+      b.querySelector(".t").textContent = pg.dataset.label;
+      b.onclick = () => {
+        // Land the sheet's head just under the sticky header, not under it
+        const top = $(".top");
+        scrollTo({
+          top: pg.getBoundingClientRect().top + scrollY - (top ? top.offsetHeight : 0) - 14,
+          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        });
+      };
+      nav.appendChild(b);
+    });
+    markNav();
+  }
+
+  /* The sheet owning the top of the viewport, not the one most of it shows —
+     you scroll to a sheet's head and read down, so the head is what the rail
+     should be pointing at. */
+  function markNav(){
+    const nav = $("#pgnav");
+    if(!nav || nav.hidden) return;
+    const pgs = [...document.querySelectorAll(".pg")];
+    const top = $(".top");
+    const line = (top ? top.offsetHeight : 0) + 20;
+    let cur = 0;
+    pgs.forEach((pg, i) => { if(pg.getBoundingClientRect().top <= line) cur = i; });
+    [...nav.children].forEach((b, i) => b.setAttribute("aria-current", String(i === cur)));
   }
 
   /* A4 is 794px wide — wider than a phone. The sheets scale down to fit
@@ -6040,18 +6117,31 @@ const PAGER = (() => {
     const s = wrap.clientWidth < 240 ? 1 : Math.min(1, (wrap.clientWidth - 8) / A4_W);
     paged.style.transform = `translateX(-50%) scale(${s})`;
     wrap.style.height = Math.ceil(paged.offsetHeight * s) + "px";
+
+    // The rail goes in the gutter left of the sheets, measured rather than
+    // assumed: main is capped at 1180px and centred, so on a wide window most
+    // of the gutter is outside main and a rule in page coordinates would put
+    // the rail either on top of the paper or off screen.
+    const nav = $("#pgnav");
+    if(!nav) return;
+    const box = wrap.getBoundingClientRect();
+    const gutter = box.left + (box.width - A4_W * s) / 2;
+    nav.hidden = gutter < NAV_W + 24;
+    if(nav.hidden) return;
+    nav.style.left = Math.round(gutter - NAV_W - 16) + "px";
+    nav.style.top = (($(".top") ? $(".top").offsetHeight : 0) + 34) + "px";
+    markNav();
   }
 
   function set(v){
     on = v;
     document.body.classList.toggle("pg-toggle-on", on);
-    const btn = $("#pg-toggle");
-    if(btn) btn.setAttribute("aria-pressed", String(on));
-    const wrap = $("#pgwrap");
+    const wrap = $("#pgwrap"), nav = $("#pgnav");
     if(!wrap) return 0;
     if(!on){
       wrap.querySelectorAll(".paged").forEach(n => n.remove());
       wrap.style.height = "";
+      if(nav){ nav.hidden = true; nav.textContent = ""; }
       return 0;
     }
     const n = build();
@@ -6059,10 +6149,31 @@ const PAGER = (() => {
     return n;
   }
 
-  // Re-run after the checklist or the weather strip changes underneath
-  function refresh(){ if(on){ build(); fit(); } }
+  /* Sheets are the guide's normal state — no switch to find, and what is on
+     screen is what prints. The exception is a window too narrow to show a
+     sheet at a readable size: below ~0.8 scale, 14px body type lands under
+     11px, so there the guide goes back to flowing in one column. Printing is
+     unaffected either way; beforeprint paginates regardless. */
+  const MIN_W = 640;
+  function auto(){
+    const wrap = $("#pgwrap");
+    if(!wrap) return;
+    const want = wrap.clientWidth >= MIN_W;
+    if(want !== on) set(want);
+    else if(on){ build(); fit(); }        // content changed underneath
+  }
 
-  addEventListener("resize", () => { if(on) fit(); });
+  addEventListener("resize", () => {
+    const wrap = $("#pgwrap");
+    if(!wrap || $("#view-guide").hidden) return;
+    if((wrap.clientWidth >= MIN_W) !== on) set(!on);
+    else if(on) fit();
+  });
+  addEventListener("scroll", () => {
+    if(!on) return;
+    if(markNav.raf) return;
+    markNav.raf = requestAnimationFrame(() => { markNav.raf = 0; markNav(); });
+  }, { passive: true });
   /* Printing unpaginated would throw away everything above, so the guide
      always prints paginated — switched on here if the reader didn't, and back
      off afterwards so the screen is left as they had it. */
@@ -6074,7 +6185,7 @@ const PAGER = (() => {
   });
   addEventListener("afterprint", () => { if(printAuto){ printAuto = false; set(false); } });
 
-  return { set, refresh, fit, get on(){ return on; } };
+  return { set, auto, fit, get on(){ return on; } };
 })();
 window.PAGER = PAGER;
 
@@ -6131,8 +6242,14 @@ function switchView(v){
   }
   if(v === "guide" && window.GUIDE){
     GUIDE.render();                                  // the checklist must reflect the latest choices
-    if(!switchView._wx){ switchView._wx = true; GUIDE.renderWeather(); }
-    if(window.PAGER) PAGER.refresh();                // choices just changed under the sheets
+    if(window.PAGER) PAGER.auto();                   // choices just changed under the sheets
+    // The forecast arrives over the network, long after the sheets have been
+    // laid out from a "fetching weather…" placeholder. Without this the first
+    // sheet — and any PDF exported from it — keeps the placeholder.
+    if(!switchView._wx){
+      switchView._wx = true;
+      Promise.resolve(GUIDE.renderWeather()).then(() => window.PAGER && PAGER.auto());
+    }
   }
   layoutMapActions();
   layoutMap();
@@ -6149,8 +6266,9 @@ function applyStaticI18n(){
   txt("#tab-map", T.tabMap);
   txt("#tab-guide", T.tabGuide);
   attr("#tab-guide", "title", T.guideTabDisabled);
-  txt("#pg-toggle", T.pgToggle);
+  txt("#pg-print", T.pgPrint);
   txt("#pg-hint", T.pgHint);
+  attr("#pgnav", "aria-label", T.pgNav);
   txt("#exp-csv", T.exportCsv);
   txt("#exp-kml", T.exportKml);
   txt("#csv-hint", T.csvHint);
@@ -6239,8 +6357,8 @@ function boot(){
     document.querySelector("#view-list").remove();
     document.querySelector("#view-map").remove();
     document.querySelector("main").style.paddingBottom = "60px";
-    // The A4 toggle lives in the hidden tab bar; this page is the one people
-    // actually export from, so it moves into the guide rather than vanishing.
+    // Export lives in the hidden tab bar; this page is the one people actually
+    // export from, so it moves into the guide rather than vanishing.
     const ga = $("#guide-actions");
     if(ga) $("#view-guide").insertBefore(ga, $("#pgwrap"));
     switchView("guide");

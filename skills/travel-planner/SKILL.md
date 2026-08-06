@@ -397,11 +397,10 @@ Key points:
   special syntax**
 - **Don't** hand-write the cost summary or the place-by-place table in
   `route.md` — the page generates them from the data, guaranteed correct
-- **`---` is a page break.** The guide paginates to A4 (the "A4 pages" toggle,
-  and whenever the page is printed). Put a `---` between sections that
-  shouldn't share a sheet, and aim each section at one sheet — roughly
-  1,300–1,500 CJK characters. Page count is not fixed; type size is the same
-  on every sheet
+- **`---` is a page break.** The guide is laid out on A4 sheets by default and
+  always prints that way. Put a `---` between sections that shouldn't share a
+  sheet, and aim each section at one sheet — roughly 1,300–1,500 CJK
+  characters. Page count is not fixed; type size is the same on every sheet
 
 When the route includes museums or galleries, apply
 **[references/museum-module.md](references/museum-module.md)** for the deep

@@ -78,10 +78,11 @@ Write `route.md` in this order:
 
 ### `---` is a page break
 
-The guide has an **A4 pagination** mode (the "A4 pages" toggle in the guide
-view, and what the browser prints either way). In it, a `---` starts a new
-sheet — that is the only page-break control there is, and it belongs to you.
-Put one between sections that should not share paper. The two page-generated
+The guide **is laid out on A4 sheets** — that is its normal state on screen
+(a window too narrow to show a sheet at readable size falls back to one
+flowing column) and always what the browser prints. A `---` starts a new
+sheet. It is the only page-break control there is, and it belongs to you: put
+one between sections that should not share paper. The two page-generated
 sections, the cost summary and the all-places table, open a sheet of their own
 without being asked.
 
@@ -255,10 +256,9 @@ Then **actually open the page and look**:
 
 - [ ] The timeline renders (time capsules appear)
 - [ ] No table overflows
-- [ ] **Turn on "A4 pages"**: no sheet is nearly empty, and no section spills
-      by a line or two (see `---` above). This is also what the printed PDF
-      will look like — the browser prints paginated whether the toggle is on
-      or not
+- [ ] **Page through the sheets** (the rail on the left jumps between them):
+      no sheet is nearly empty, and no section spills by a line or two — see
+      `---` above. What you see is what "Export PDF" produces
 - [ ] Cost-summary numbers are sane (`ticket` is free text; unparseable ones are
   listed separately)
 - [ ] The table's ✅❌ match the user's choices
