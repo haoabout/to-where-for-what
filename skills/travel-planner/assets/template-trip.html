@@ -57,6 +57,31 @@
      switchable. */
   --lodging:#4A4A4A;
 
+  /* ---- The canvas ----
+     A second, dark zone. The page is not "dark mode": content lives on light
+     paper (--card / --paper), and the canvas is the deep navy those sheets are
+     laid on. Keeping it a separate token from --paper matters because --paper
+     also serves as the *foreground* on ink-filled controls (--on-ink, pressed
+     chips, primary buttons) — repointing --paper at the navy would have turned
+     every one of those labels navy-on-near-black.
+     Only three kinds of thing sit directly on the canvas: the header, the
+     action bar, and the group headings between cards. They take --canvas-ink*,
+     which is the ink scale re-derived for this ground (measured against
+     --canvas: 15.78 / 10.21 / 6.57:1). --accent is warm rust and manages only
+     2.4:1 here, so links on the canvas get their lightened twin. */
+  --canvas:#0E172B;
+  --canvas-ink:#eef1f7;
+  --canvas-ink-2:#bcc4d6;
+  --canvas-ink-3:#949db3;
+  --canvas-line:rgba(255,255,255,.11);
+  --canvas-accent:#e08a70;
+  /* The dot matrix. Two knobs deliberately exposed: --dot-gap is the lattice
+     pitch, --dot is its color. At .055 alpha a single dot is invisible on its
+     own — the texture only exists as a field, which is the point; anything
+     stronger and it competes with the cards for attention. */
+  --dot:rgba(255,255,255,.055);
+  --dot-gap:22px;
+
   --serif:Georgia,"Songti SC","Hiragino Mincho ProN","Noto Serif CJK SC",serif;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -72,8 +97,23 @@
    precede every layout rule. */
 [hidden]{display:none!important}
 html,body{margin:0;padding:0}
+/* The canvas and its dot matrix.
+   One radial-gradient tile repeated on a square lattice — no image asset, so
+   it survives being emailed as a single file, which is how this page travels.
+   The dot is drawn at 1px with a 1.5px stop so it lands as a soft point rather
+   than an aliased square; on a 2× screen the half-pixel is what keeps it from
+   looking like grit.
+   color, not background shorthand, and the gradient before the color: the
+   shorthand would need re-listing every layer at every override site.
+   Deliberately *not* background-attachment:fixed — that pins the lattice to
+   the viewport, so the texture slides under the cards as you scroll and reads
+   as a moving moiré. Attached to the page, it scrolls with the content and
+   behaves like paper. */
 body{
-  background:var(--paper); color:var(--ink);
+  background-color:var(--canvas);
+  background-image:radial-gradient(circle at center, var(--dot) 1px, transparent 1.5px);
+  background-size:var(--dot-gap) var(--dot-gap);
+  color:var(--ink);
   font:15px/1.65 var(--sans);
   -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
 }
@@ -104,19 +144,25 @@ button{font:inherit;color:inherit;cursor:pointer}
 }
 
 /* ═══════════════════════════════════════════════ Header */
+/* The header is a canvas zone: it floats over the navy, so it takes the navy's
+   ink scale. Setting the color here rather than on each child means anything
+   added later inherits legible ink by default; the light-surfaced controls
+   inside it (.btn, .stale) already assert their own color and are unaffected. */
 .top{
   position:sticky;top:0;z-index:50;
-  background:color-mix(in srgb,var(--paper) 88%,transparent);
-  backdrop-filter:saturate(1.6) blur(12px);
-  border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--canvas) 82%,transparent);
+  backdrop-filter:saturate(1.4) blur(12px);
+  border-bottom:1px solid var(--canvas-line);
+  color:var(--canvas-ink);
 }
+.top a{color:var(--canvas-accent)}
 .top-in{max-width:1180px;margin:0 auto;padding:12px 20px 0}
 .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .brand h1{
   font:400 25px/1.2 var(--serif);margin:0;letter-spacing:.2px;
 }
-.brand .sub{color:var(--ink-3);font-size:13px}
-.brand .sub b{color:var(--ink-2);font-weight:600}
+.brand .sub{color:var(--canvas-ink-3);font-size:13px}
+.brand .sub b{color:var(--canvas-ink-2);font-weight:600}
 .stale{
   background:var(--warn-soft);color:var(--warn);
   border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);
@@ -138,16 +184,21 @@ button{font:inherit;color:inherit;cursor:pointer}
    onto two lines and the map tab split mid-word, tab bar 68px tall. */
 .map-actions-slot:empty{display:none}
 .map-actions-slot .tab-actions{margin-left:0;margin-bottom:12px}
-.tab-actions .hint{font-size:11.5px;color:var(--ink-3)}
+/* Not scoped under .top: on narrow screens layoutMapActions moves this group
+   into the map view, where it still sits on the canvas. */
+.tab-actions .hint{font-size:11.5px;color:var(--canvas-ink-3)}
 .btn.sm{padding:5px 11px;font-size:12.5px}
 @media (max-width:760px){ .tab-actions .hint{display:none} }
 .tab{
   background:none;border:0;border-bottom:2px solid transparent;white-space:nowrap;
-  padding:9px 15px 11px;color:var(--ink-3);font-size:14px;font-weight:500;
+  padding:9px 15px 11px;color:var(--canvas-ink-3);font-size:14px;font-weight:500;
   display:flex;align-items:center;gap:7px;transition:color .15s;
 }
-.tab:hover:not(:disabled){color:var(--ink-2)}
-.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tab:hover:not(:disabled){color:var(--canvas-ink-2)}
+/* The selected tab's underline uses the lightened accent for the same reason
+   its text does: rust on navy is 2.6:1, and this rule is the one that says
+   which view you are in. */
+.tab[aria-selected=true]{color:var(--canvas-ink);border-bottom-color:var(--canvas-accent);font-weight:600}
 .tab:disabled{color:var(--line-2);cursor:not-allowed}
 .tab .n{
   font:600 10.5px/1 var(--mono);background:var(--paper-2);color:var(--ink-3);
@@ -160,7 +211,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* The small counts on the right of view ①'s toolbar. The list view is where
    choices get made, so a live count of the four buckets is most useful here;
    the map view hangs the same numbers on its filter buttons instead. */
-.tally{display:flex;gap:11px;font-size:12px;color:var(--ink-3);margin-left:auto;white-space:nowrap}
+.tally{display:flex;gap:11px;font-size:12px;color:var(--canvas-ink-3);margin-left:auto;white-space:nowrap}
 .tally span{display:flex;align-items:center;gap:4px}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 /* Undecided is hollow: it used to share --line-2 with "no", differing only by
@@ -206,10 +257,11 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .group{margin-bottom:34px}
 .group-h{
   display:flex;align-items:baseline;gap:10px;
-  padding-bottom:9px;margin-bottom:15px;border-bottom:1px solid var(--line);
+  padding-bottom:9px;margin-bottom:15px;border-bottom:1px solid var(--canvas-line);
 }
-.group-h h2{font:600 15px/1 var(--sans);margin:0;letter-spacing:.3px}
-.group-h .meta{font-size:12px;color:var(--ink-3);margin-left:auto;font-family:var(--mono)}
+/* Group headings live in the gaps between cards — canvas, not paper. */
+.group-h h2{font:600 15px/1 var(--sans);margin:0;letter-spacing:.3px;color:var(--canvas-ink)}
+.group-h .meta{font-size:12px;color:var(--canvas-ink-3);margin-left:auto;font-family:var(--mono)}
 
 /* ═══════════════════════════════════════════════ Cards */
 .cards{display:grid;gap:13px}
@@ -315,10 +367,17 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* ═══════════════════════════════════════════════ Bottom action bar */
 .actionbar{
   position:fixed;left:0;right:0;bottom:0;z-index:60;
-  background:color-mix(in srgb,var(--paper) 92%,transparent);
-  backdrop-filter:saturate(1.6) blur(12px);
-  border-top:1px solid var(--line);
+  background:color-mix(in srgb,var(--canvas) 88%,transparent);
+  backdrop-filter:saturate(1.4) blur(12px);
+  border-top:1px solid var(--canvas-line);
+  color:var(--canvas-ink);
 }
+.actionbar a{color:var(--canvas-accent)}
+.actionbar .hint{color:var(--canvas-ink-3)}
+/* .lnk is the quiet text button ("Manual save…", day-column actions). Its
+   --ink-3 was tuned for paper and lands at 3.8:1 down here. */
+.actionbar .lnk{color:var(--canvas-ink-3)}
+.actionbar .lnk:hover{background:var(--canvas-line);color:var(--canvas-ink)}
 /* Under the local server this bar is just a status line and shouldn't cost a
    button's height. With buttons present (file://) the buttons stretch it
    naturally; without them it's a single line of small text. */
@@ -927,7 +986,18 @@ pre.code{
 }
 
 /* ═══════════════════════════════════════════════ Guide view */
-.guide{max-width:800px;margin:0 auto}
+/* A sheet of paper on the canvas. The other two views are already made of
+   cards, so the canvas only ever shows through in the gaps; the guide is a
+   few thousand words of continuous prose and had nothing under it. Light ink
+   on navy is fine for a label and tiring for a document, so the document gets
+   its own ground and keeps black-on-white — which is also what makes the page
+   print without a second set of rules. */
+.guide{
+  max-width:800px;margin:0 auto;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);padding:30px 38px 38px;
+}
+@media (max-width:640px){ .guide{padding:22px 18px 26px} }
 /* md_to_html emits the guide body demoted one level (see build.py), so h2
    here is route.md's `#` and h3 its `##` — the visual hierarchy is unchanged,
    only the tags shift. The cost summary and checklist are page-generated,
@@ -1081,6 +1151,15 @@ pre.code{
 @media print{
   .top,.actionbar,.toolbar,.chips,.pick{display:none!important}
   .card{break-inside:avoid;box-shadow:none}
+  /* The canvas is a screen surface. Printed it would be a full-bleed navy
+     page most printers won't lay down anyway, and the dot lattice would come
+     out as stipple. Group headings go back to paper ink for the same reason —
+     on white, --canvas-ink is invisible. */
+  body{background:#fff none}
+  .group-h{border-bottom-color:var(--line)}
+  .group-h h2{color:var(--ink)}
+  .group-h .meta{color:var(--ink-3)}
+  .guide{border:0;box-shadow:none;padding:0}
 }
 </style>
 </head>
