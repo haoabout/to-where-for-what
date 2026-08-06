@@ -1437,6 +1437,130 @@ pre.code{
 .cost-total b{font:400 21px var(--serif);color:var(--ink)}
 .caveat{font-size:11.5px;color:var(--ink-3);padding:9px 13px;border-top:1px dashed var(--line-soft);line-height:1.6}
 
+/* ── Bento checklist ──
+   The all-places table used to be one column of ~50 rows: on A4 that is two
+   sheets of mostly margin, and nothing about it is a table — a day's places
+   and the dropped pile answer different questions and never get compared row
+   to row. So each group becomes its own box, and the boxes flow through two
+   columns. A 50-place trip then lands on one sheet.
+
+   `columns` rather than grid on purpose: the boxes are uneven by nature (a
+   9-place day beside an 18-place drop list) and packing them is exactly what
+   the multicol balancer already does. break-inside keeps a box whole; the
+   inline-block/width pair is what makes Safari honour it. */
+/* Two columns filled by packBento rather than by CSS. Multicol balances by
+   splitting content, and a box that has to stay whole defeats it: measured on
+   this 47-place trip it left one column 1130px tall and the other 680px.
+   Packing the boxes ourselves, always into the shorter column, is both
+   shorter to write and better at it. */
+.bento{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;align-items:start;margin-bottom:17px;
+}
+.bento-col{display:flex;flex-direction:column;gap:12px}
+.bento .sum{margin:0}
+/* Only the flowing guide collapses to one column. A sheet is 210mm wide
+   whatever the phone it is being previewed on, and letting the viewport
+   restack its boxes made the checklist run to two sheets on mobile and one on
+   a laptop — the same document must paginate the same everywhere. */
+@media (max-width:640px){ .pgwrap>.guide .bento{grid-template-columns:1fr} }
+/* Denser than a standalone .sum, and every row has to hold one line: at half
+   the width a row that wraps costs as much as two places. Hence the reason
+   sits in its own right-aligned column rather than under the name, and the
+   duration comes off entirely — "did I miss anything" is not a question you
+   answer with "1–2 hours". */
+.bento .sum-h{padding:7px 11px;font-size:11.5px}
+.bento .ck{
+  display:grid;grid-template-columns:16px 1fr auto;gap:1px 7px;
+  padding:3px 10px;font-size:11.5px;align-items:baseline;
+}
+.bento .ck .m{width:auto;font-size:11px}
+.bento .ck .n{line-height:1.45;min-width:0}
+.bento .ck .n .sub{margin-left:5px;font-size:10px}
+.bento .ck .why{
+  grid-column:3;justify-self:end;text-align:right;
+  white-space:nowrap;font-size:10px;padding-left:8px;
+}
+/* In a box that is one rating end to end, the mark repeats down every row and
+   says nothing the header hasn't. The day boxes keep theirs — there it is the
+   running order, which differs per row. */
+.bento .sum.plain .ck{grid-template-columns:1fr auto}
+.bento .sum.plain .ck .m{display:none}
+.bento .sum.plain .ck .why{grid-column:2}
+.bento .caveat{padding:7px 11px;font-size:10.5px}
+
+/* ── A4 pagination ──
+   The guide is the one view people print or hand to someone as a PDF. As a
+   continuous column it breaks wherever the paper runs out: mid-timeline,
+   mid-table, a heading stranded at the foot of a sheet. This lays the same
+   content into real A4 sheets from measurements the screen and the printer
+   share, so the preview is the export.
+
+   Page count is deliberately not fixed. A section starts on a fresh sheet and
+   a long one runs onto a second. Forcing "one section = one sheet" would mean
+   a different type size per section, which is the thing that makes an export
+   look thrown together. */
+.pgwrap{position:relative}
+.paged{
+  position:absolute;top:0;left:50%;
+  transform-origin:top center;                 /* scaled to fit narrow screens */
+}
+.pg{
+  width:210mm;height:297mm;box-sizing:border-box;
+  padding:17mm 18mm 8mm;margin:0 auto 18px;
+  background:#fff;color:var(--ink);
+  display:flex;flex-direction:column;
+  box-shadow:var(--shadow);border-radius:2px;
+}
+/* min-height:0 is what lets the body shrink inside the flex column; without
+   it the footer is pushed off the sheet by overlong content instead of the
+   content overflowing past it. overflow stays visible — a block too tall to
+   split (a lone oversized image, say) should bleed where you can see it, not
+   be silently cropped.
+
+   The sheet body carries .guide as well: the document's entire type scale is
+   scoped to that class, and duplicating every selector for the paged copy
+   would leave two scales to keep in step. What .guide adds on top of type —
+   an on-screen sheet of paper — is undone here, the sheet now being real. */
+.pg-body{
+  flex:1;min-height:0;
+  max-width:none;margin:0;padding:0;
+  background:none;border:0;box-shadow:none;border-radius:0;
+}
+/* One scale, every sheet. 15px/1.78 is sized for a column on a monitor at
+   arm's length; on paper those settings run this guide to eleven sheets, half
+   of them a third empty. 14px is about 10.5pt — an ordinary document body —
+   and it is the difference between a day landing on one sheet and spilling
+   onto two. Deliberately not tuned per section: type that changes size from
+   sheet to sheet is exactly what makes an export look assembled rather than
+   typeset. */
+.pg-body h2{font-size:25px;margin:0 0 12px}
+.pg-body h3{font-size:20px;margin:30px 0 12px;padding-bottom:8px}
+.pg-body h4{font-size:15px;margin:22px 0 8px}
+.pg-body p{font-size:14px;line-height:1.72;margin:0 0 11px}
+.pg-body ul,.pg-body ol{font-size:14px;margin:0 0 12px}
+.pg-body li{line-height:1.68;margin-bottom:5px}
+.pg-body li.tl{margin-bottom:9px}
+.pg-body blockquote{font-size:13px;margin:12px 0;padding:9px 14px}
+.pg-body table{font-size:12.5px}
+.pg-body th,.pg-body td{padding:6px 10px}
+.pg-body .wx-d{padding:9px 11px}
+.pg-body .wx-src{margin-bottom:18px}
+.pg-foot{
+  flex:none;display:flex;align-items:baseline;gap:8px;padding-top:5mm;
+  font:11px/1 var(--sans);color:var(--ink-3);
+}
+.pg-foot .no{margin-left:auto;font-family:var(--mono)}
+/* Inside a sheet the document is already on paper; the on-screen sheet
+   styling of .guide would be a second sheet drawn on top of this one. */
+.pg-body>*:first-child{margin-top:0}
+.pg-body h2:first-child,.pg-body h3:first-child{margin-top:0}
+/* Scoped to the direct child: the sheet bodies are .guide too */
+.pg-toggle-on .pgwrap>.guide{display:none}
+/* On the standalone guide page the tab bar is hidden, so the toggle is moved
+   into the view it acts on (see the STANDALONE branch in start) */
+#view-guide>.tab-actions{max-width:800px;margin:0 auto 14px}
+
 /* ═══════════════════════════════════════════════ Empty states / toast */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
 .empty-state .big{font:400 21px var(--serif);color:var(--ink-2);margin-bottom:9px}
@@ -1505,6 +1629,23 @@ pre.code{
   .group-h h2{color:var(--ink)}
   .group-h .meta{color:var(--ink-3)}
   .guide{border:0;box-shadow:none;padding:0}
+
+  /* The guide always prints paginated — beforeprint switches it on if the
+     reader didn't. Zero @page margin because .pg carries its own; leaving the
+     browser's default 10mm on top of that would shrink every sheet to 96% and
+     throw the measured layout away. */
+  @page{size:A4;margin:0}
+  .pgwrap{position:static}
+  .paged{position:static;left:auto;transform:none!important}
+  .pg{
+    margin:0;box-shadow:none;border-radius:0;
+    break-after:page;break-inside:avoid;
+  }
+  .pg:last-child{break-after:auto}
+  /* Tints and rules carry meaning here — the time capsules, the table headers,
+     the accent bar on a caution block. Without this the printer drops all of
+     them and the page loses its structure. */
+  .pg-body{print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
 </style>
 </head>
@@ -1520,6 +1661,10 @@ pre.code{
       <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span> <span class="n" id="n-list">0</span></button>
       <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
       <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
+      <div class="tab-actions" id="guide-actions" hidden>
+        <button class="btn sm" id="pg-toggle" aria-pressed="false">A4 pages</button>
+        <span class="hint" id="pg-hint">Print from the browser to export a PDF</span>
+      </div>
       <div class="tab-actions" id="map-actions" hidden>
         <button class="btn sm" id="exp-csv">Export CSV</button>
         <button class="btn sm" id="exp-kml">Export KML</button>
@@ -1612,10 +1757,15 @@ pre.code{
 
   <!-- ══════════════ View ③ Guide ══════════════ -->
   <section class="view" id="view-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
-    <div class="guide">
-      <div id="wx-box"></div>
-      <div id="guide-body"></div>
-      <div id="guide-auto"></div>
+    <!-- .guide stays the source of truth in both modes: the paginator clones
+         out of it rather than moving its children, so switching pagination off
+         is one removeChild and nothing can be lost on the way back. -->
+    <div class="pgwrap" id="pgwrap">
+      <div class="guide">
+        <div id="wx-box"></div>
+        <div id="guide-body"></div>
+        <div id="guide-auto"></div>
+      </div>
     </div>
   </section>
 </main>
@@ -1814,13 +1964,16 @@ en: {
   costUnparsed:"{n} ticket prices are text-only and not counted: {list}. Special exhibitions, add-on experiences and night surcharges usually cost extra, so the real total will be higher.",
   costOnly:"Tickets only — no transport, meals, or special-exhibition surcharges.",
   markYes:"yes", markMaybe:"maybe", markNo:"dropped", markNone:"unrated",
-  byDayTitle:"Day-by-day plan", nDaysItems:"{d} days · {i} items", nItems:"{n} items",
+  nItems:"{n} items",
   missedTitle:"Marked “Yes” but scheduled nowhere", nCount:"{n}",
   missedCaveat:"Either add them to a day or downgrade them to “Maybe” — otherwise you'll only notice the gap mid-trip.",
-  unscheduled:"Not in the schedule", allCandidates:"All candidates",
+  unscheduled:"Unscheduled",
   checklistTitle:"All places at a glance",
-  checklistIntroDays:"The top half is your day-by-day plan; the bottom half is everything unscheduled — dropped places included, so you can reconsider them.",
+  checklistIntroDays:"The day boxes are the plan you arranged; the rest is everything unscheduled — dropped places included, so you can reconsider them.",
   checklistIntro:"All candidate places, dropped ones included, so you can reconsider them.",
+  pgToggle:"A4 pages", pgHint:"Print from the browser to export a PDF",
+  pgOnToast:"Laid out on {n} A4 sheets — print to export a PDF",
+  contd:" (cont.)",
   staleNote:"Data verified {n} days ago; hours may have changed",
   noGuideBig:"No guide yet",
   noGuideSub:"Filter the places first, save, then tell the AI — it reads your choices back and designs the route.",
@@ -1981,13 +2134,16 @@ zh: {
   costUnparsed:"以下 {n} 项的票价是文字描述，未计入合计：{list}。特别展、体验项目、夜间加价通常另计，实际花费会高于此数。",
   costOnly:"仅含门票，不含交通、餐饮与特别展加价。",
   markYes:"想去", markMaybe:"待定", markNo:"放弃", markNone:"未表态",
-  byDayTitle:"按天的行程", nDaysItems:"{d} 天 · {i} 项", nItems:"{n} 项",
+  nItems:"{n} 项",
   missedTitle:"想去，但没排进任何一天", nCount:"{n} 个",
   missedCaveat:"要么加进某一天，要么改成「待定」——否则出发时才发现漏了。",
-  unscheduled:"没排进日程的", allCandidates:"全部候选",
+  unscheduled:"未排入",
   checklistTitle:"全部景点对照表",
-  checklistIntroDays:"上半部分是你排好的每天行程，下半部分是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。",
+  checklistIntroDays:"按天的盒子是你排好的行程，其余是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。",
   checklistIntro:"包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。",
+  pgToggle:"A4 分页", pgHint:"分页后用浏览器打印即可导出 PDF",
+  pgOnToast:"已排成 {n} 页 A4，打印即可导出 PDF",
+  contd:"（续）",
   staleNote:"数据核验于 {n} 天前，开放时间可能已变",
   noGuideBig:"攻略还没生成",
   noGuideSub:"先在清单里筛完景点，保存后告诉 AI，它会读回你的选择并设计路线。",
@@ -5295,6 +5451,11 @@ ${selected().map(p => `<Placemark>
 
 window.MAP = MAP;
 window.initMap = MAP.init;
+const pgBtn = $("#pg-toggle");
+if(pgBtn) pgBtn.onclick = () => {
+  const n = PAGER.set(pgBtn.getAttribute("aria-pressed") !== "true");
+  if(n) toast(tf("pgOnToast", { n }));
+};
 $("#exp-csv").onclick = () => MAP.exportCSV();
 $("#exp-kml").onclick = () => MAP.exportKML();
 
@@ -5530,18 +5691,62 @@ const GUIDE = (() => {
      Generated straight from choice, so it cannot disagree with the list view.
      Dropped places are listed too — making it easy to judge whether to bring
      one back. */
-  /* The checklist has two blocks: **scheduled places listed day by day**
-     (what you're actually doing), and the rest listed by rating. They're
-     separate because they answer different questions — the first is "which
-     ones on that day", the second "did I miss anything". */
-  function ckRow(p, mark, out, extra, cls){
+  /* One box per group, flowed through two columns (see .bento): a day is one
+     box, and each leftover rating is another. The groups answer different
+     questions — "which ones on that day" vs "did I miss anything" — so they
+     were never rows of one table, and as one long column a 50-place trip ate
+     two A4 sheets of margin. Boxed and paired up, it fits on one. */
+  function ckBox(title, count, rows, cls, caveat){
+    return `<div class="sum${cls ? " " + cls : ""}">
+      <div class="sum-h">${title}<span>${count}</span></div>
+      ${rows}
+      ${caveat ? `<div class="caveat">${caveat}</div>` : ""}
+    </div>`;
+  }
+
+  function ckRow(p, mark, out, extra, cls, bare){
     // Lodging has no scale, and concatenating directly would leave a lone "·"
-    const scale = SCALE_TXT[p.scale] || p.scale || (isLodging(p) ? T.lodging : "");
+    const scale = bare ? "" : SCALE_TXT[p.scale] || p.scale || (isLodging(p) ? T.lodging : "");
     return `<div class="ck${out ? " out" : ""}">
       <span class="m${cls ? " " + cls : ""}">${mark}</span>
       <span class="n">${esc(p.name)}<span class="sub">${esc(p.area)}${scale ? " · " + esc(scale) : ""}</span></span>
       ${extra || (p.choice_reason ? `<span class="why">${esc(p.choice_reason)}</span>` : "")}
     </div>`;
+  }
+
+  /* Two columns, tallest box first into whichever column is currently shorter
+     — the standard greedy pass, and on this shape it lands on the optimal
+     split. Sizes are measured, not counted in rows: a 9-place day and a
+     9-place drop list differ by half again in height, and packing by count
+     left one column 340px longer than the other. Row count is the fallback
+     for when this runs with the view still hidden and every box measures 0. */
+  function packBento(b){
+    if(!b) return;
+    const boxes = [...b.querySelectorAll(".sum")].map((el, i) => ({
+      el, i, h: el.getBoundingClientRect().height || 2 + el.querySelectorAll(".ck").length,
+    }));
+    b.textContent = "";
+    const cols = [0, 1].map(() => {
+      const c = document.createElement("div");
+      c.className = "bento-col";
+      b.appendChild(c);
+      return c;
+    });
+    // Assign biggest-first, because that is what balances; then hand each
+    // column back its boxes in document order, because that is what reads.
+    // Assigning in document order instead costs ~100px of balance; sorting
+    // the columns' contents afterwards costs nothing.
+    const h = [0, 0], pick = [[], []], rest = boxes.slice();
+    // The first box is nailed to column one first, so the sheet opens on day
+    // one whatever the balancer would otherwise do with it.
+    if(rest.length){ const first = rest.shift(); pick[0].push(first); h[0] = first.h; }
+    for(const box of rest.sort((x, y) => y.h - x.h)){
+      const i = h[0] <= h[1] ? 0 : 1;
+      pick[i].push(box);
+      h[i] += box.h;
+    }
+    pick.forEach((list, i) =>
+      list.sort((x, y) => x.i - y.i).forEach(box => cols[i].appendChild(box.el)));
   }
 
   function renderChecklist(){
@@ -5558,25 +5763,18 @@ const GUIDE = (() => {
     const scheduled = new Set(days.flatMap(d => d.places.map(e => e.id)));
 
     let html = "";
-    if(days.length){
-      let items = 0;
-      const blocks = days.map(d => {
-        let seq = 0;
-        const rows = d.places.map(e => {
-          const p = BY_ID[e.id];
-          if(!p) return "";
-          items++;
-          const lod = isLodging(p);
-          if(!lod) seq++;
-          return ckRow(p, lod ? house(12) : seq,
-            false, e.note ? `<span class="why">${esc(e.note)}</span>` : "", lod ? "lod" : "");
-        }).join("");
-        return `<div class="sum-d">${tf("dayN", { n: d.n })}${d.date ? " · " + d.date.slice(5) : ""}
-          <span>${tf("nItems", { n: d.places.length })}</span></div>${rows}`;
+    for(const d of days){
+      let seq = 0;
+      const rows = d.places.map(e => {
+        const p = BY_ID[e.id];
+        if(!p) return "";
+        const lod = isLodging(p);
+        if(!lod) seq++;
+        return ckRow(p, lod ? house(12) : seq,
+          false, e.note ? `<span class="why">${esc(e.note)}</span>` : "", lod ? "lod" : "", true);
       }).join("");
-      html += `<div class="sum">
-        <div class="sum-h">${T.byDayTitle}<span>${tf("nDaysItems", { d: days.length, i: items })}</span></div>
-        ${blocks}</div>`;
+      html += ckBox(tf("dayN", { n: d.n }) + (d.date ? " · " + d.date.slice(5) : ""),
+                    tf("nItems", { n: d.places.length }), rows);
     }
 
     /* Marked "yes" but scheduled nowhere — the easiest thing to miss, so it
@@ -5591,11 +5789,9 @@ const GUIDE = (() => {
       ? PLACES.filter(p => p.choice === "yes" && !isLodging(p) && !scheduled.has(p.id))
       : [];
     if(missed.length){
-      html += `<div class="sum">
-        <div class="sum-h">${T.missedTitle}<span>${tf("nCount", { n: missed.length })}</span></div>
-        ${missed.map(p => ckRow(p, MARK_ICON.warn, false, "", "warn")).join("")}
-        <div class="caveat">${T.missedCaveat}</div>
-      </div>`;
+      html += ckBox(T.missedTitle, tf("nCount", { n: missed.length }),
+        missed.map(p => ckRow(p, MARK_ICON.warn, false, "", "warn", true)).join(""),
+        "plain", T.missedCaveat);
     }
 
     const rest = PLACES.filter(p => !isLodging(p) && !scheduled.has(p.id) && !missed.includes(p));
@@ -5604,17 +5800,22 @@ const GUIDE = (() => {
     // With a schedule, "yes" has already been taken by the two blocks above;
     // without one they all land here and must sort first
     const order = days.length ? ["maybe", "none", "no"] : ["yes", "maybe", "none", "no"];
-    if(rest.length){
-      html += `<div class="sum">
-        <div class="sum-h">${days.length ? T.unscheduled : T.allCandidates}
-          <span>${order.map(k => `${MARK[k][1]} ${(by[k] || []).length}`).join(" · ")}</span></div>
-        ${order.flatMap(k => (by[k] || []).map(p => ckRow(p, MARK[k][0], k === "no", "", MARK[k][2]))).join("")}
-      </div>`;
+    // One box per rating rather than one box with three runs inside it. The
+    // dropped pile is usually the longest list on the page, and as part of a
+    // single box it would drag the two rating groups worth reconsidering down
+    // with it into whichever column it landed in.
+    for(const k of order){
+      const list = by[k];
+      if(!list || !list.length) continue;
+      html += ckBox((days.length ? T.unscheduled + " · " : "") + MARK[k][1],
+        tf("nCount", { n: list.length }),
+        list.map(p => ckRow(p, MARK[k][0], k === "no", "", MARK[k][2], true)).join(""),
+        "plain");
     }
 
     return `<h3>${T.checklistTitle}</h3>
       <p>${days.length ? T.checklistIntroDays : T.checklistIntro}</p>
-      ${html}`;
+      <div class="bento">${html}</div>`;
   }
 
   /* ---------- Timeline progressive enhancement ----------
@@ -5634,16 +5835,248 @@ const GUIDE = (() => {
   function render(){
     const auto = $("#guide-auto");
     auto.innerHTML = renderCost() + renderChecklist();
+    packBento(auto.querySelector(".bento"));
     enhanceTimeline($("#guide-body"));
   }
 
-  return { render, renderWeather, parseMoney };
+  return { render, renderWeather, parseMoney, packBento };
 })();
 
 // A top-level const in a classic script isn't attached to window, while
 // switchView tests window.GUIDE. The explicit assignment is required, or the
 // guide view never renders.
 window.GUIDE = GUIDE;
+
+/* ─────────────────────────────────────────────── A4 pagination
+   The guide is the one view that gets printed or handed over as a PDF. As a
+   continuous column it breaks wherever the paper runs out — mid-timeline,
+   mid-table, a heading stranded at the foot of a sheet. This lays the same
+   content onto real A4 sheets on screen, from the same measurements the
+   printer will use, so the preview *is* the export.
+
+   Page count is not fixed and shouldn't be. Sections start on a fresh sheet
+   and a long one runs onto a second; making every section fit exactly one
+   sheet would mean a different type size per section, and unequal type is
+   what makes an export look thrown together. The author controls the breaks
+   from route.md instead: a `---` is a new sheet. */
+const PAGER = (() => {
+  const A4_W = 210 * 96 / 25.4;              // .pg's width in CSS px
+  let on = false, printAuto = false;
+
+  /* Where a block may be cut. Anything not listed is atomic and moves to the
+     next sheet whole — a paragraph straddling two sheets reads worse than a
+     sheet that ends early. `host` is the node the pieces actually hang off,
+     which for a table is the tbody rather than the scroll wrapper. */
+  function parts(el){
+    const t = el.tagName;
+    if(t === "UL" || t === "OL") return { host: el, kids: [...el.children] };
+    // The bento's own children are its two columns; what splits is the boxes
+    // inside them. Whatever survives on either side gets re-packed below.
+    if(el.classList.contains("bento")) return { host: el, kids: [...el.querySelectorAll(".sum")] };
+    if(el.classList.contains("sum"))
+      return { host: el, kids: [...el.children].filter(c => !c.classList.contains("sum-h")) };
+    const tb = el.querySelector("tbody");
+    if(tb && tb.rows.length) return { host: tb, kids: [...tb.rows] };
+    return null;
+  }
+
+  function newPage(paged){
+    const pg = document.createElement("div");
+    pg.className = "pg";
+    // The footer is filled with a placeholder, not left empty: two empty
+    // spans give the footer no line box, so it stands 11px shorter than it
+    // will once numbered — and the flow would measure every sheet 11px taller
+    // than it ends up, overflowing the last block on sheets that fill up.
+    pg.innerHTML = `<div class="pg-body guide"></div>
+      <div class="pg-foot"><span class="t">·</span><span class="no">·</span></div>`;
+    paged.appendChild(pg);
+    return pg.firstElementChild;
+  }
+
+  /* Measured off the last child's box rather than scrollHeight: the sheet is
+     overflow:visible (a block too tall to cut should bleed where you can see
+     it, not vanish), and scrollHeight on a visible-overflow box is the one
+     number browsers have never agreed on. */
+  function fits(body){
+    const last = body.lastElementChild;
+    if(!last) return true;
+    return last.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom <= 0.5;
+  }
+
+  /* Move trailing pieces of `el` onto a continuation node until the sheet
+     closes. Returns that continuation, or null when `el` is atomic. The
+     continuation is a deep clone emptied of its pieces, so a table keeps its
+     thead and a box keeps its header — both of which have to repeat. */
+  function split(body, el, minKeep){
+    const p = parts(el);
+    if(!p || p.kids.length < minKeep + 2) return null;
+    const moved = [];
+    while(!fits(body) && p.kids.length > minKeep){
+      const k = p.kids.pop();
+      k.remove();
+      moved.unshift(k);
+    }
+    // Either the sheet still doesn't close within the floor, or closing it
+    // took everything but a straggler. Put the pieces back and let the caller
+    // move the block whole.
+    if(!fits(body) || (minKeep > 1 && moved.length < 2)){
+      moved.forEach(k => p.host.appendChild(k));
+      return null;
+    }
+    const cont = el.cloneNode(true);
+    const cp = parts(cont);
+    cp.kids.forEach(k => k.remove());
+    moved.forEach(k => cp.host.appendChild(k));
+    // Only when the box itself is what got cut — :scope matters, or a bento
+    // continuation labels its first intact box as a continuation.
+    const h = cont.querySelector(":scope > .sum-h");
+    if(h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.nodeValue += T.contd;
+    // Both halves are now short a few boxes; rebalance each over its columns.
+    if(el.classList.contains("bento") && window.GUIDE){
+      GUIDE.packBento(el);
+      GUIDE.packBento(cont);
+    }
+    return cont;
+  }
+
+  /* Reading order, flattened to the blocks a sheet is filled with. The trip
+     title leads: on screen the weather strip sits above it because it's a
+     live readout you want at a glance, but a printed document that opens on
+     a temperature and only then says what trip it is reads backwards. */
+  function blocks(src){
+    const out = [];
+    for(const sec of src.children){
+      for(const el of sec.children){
+        // <hr> is route.md's `---` — the author's own sheet break. The
+        // page-generated sections (cost, checklist) each open a sheet too.
+        out.push({ el, brk: el.tagName === "HR" || (sec.id === "guide-auto" && el.tagName === "H3") });
+      }
+    }
+    const i = out.findIndex(b => b.el.tagName === "H2");
+    if(i > 0){
+      const head = out.splice(i, out[i + 1] && out[i + 1].el.tagName === "P" ? 2 : 1);
+      out.unshift(...head);
+    }
+    return out;
+  }
+
+  function build(){
+    const wrap = $("#pgwrap"), src = wrap.querySelector(".guide");
+    wrap.querySelectorAll(".paged").forEach(n => n.remove());
+    const paged = document.createElement("div");
+    paged.className = "paged";
+    wrap.appendChild(paged);
+
+    let body = newPage(paged);
+    for(const b of blocks(src)){
+      if(b.brk){
+        if(b.el.tagName === "HR"){ if(body.childElementCount) body = newPage(paged); continue; }
+        if(body.childElementCount) body = newPage(paged);
+      }
+      const node = b.el.cloneNode(true);
+      body.appendChild(node);
+      // The checklist was packed against the on-screen column, which is
+      // narrower than a sheet; at this width the boxes are shorter and pack
+      // differently, so it is balanced again where it will actually be read.
+      if(node.classList.contains("bento") && window.GUIDE) GUIDE.packBento(node);
+      if(fits(body)) continue;
+
+      /* Didn't fit. First choice is to cut it where the sheet ends: pushing a
+         12-row table or a day's whole timeline down in one piece leaves a
+         half-empty sheet above it. split() refuses when it can't do that and
+         still leave two pieces on each side of the break — below that the
+         stragglers read worse than the gap would — and then the block moves. */
+      let cont = split(body, node, 2);
+      if(!cont && body.childElementCount > 1){
+        node.remove();
+        // A heading — and the paragraph introducing it, if there is one —
+        // travels with the block, or it is stranded at the sheet's foot.
+        const carry = [];
+        for(;;){
+          const l = body.lastElementChild;
+          if(!l) break;
+          const intro = !carry.length && l.tagName === "P"
+            && l.previousElementSibling && /^H[2-5]$/.test(l.previousElementSibling.tagName);
+          if(!/^H[2-5]$/.test(l.tagName) && !intro) break;
+          carry.unshift(body.removeChild(l));
+        }
+        // If carrying them emptied the sheet, reuse it — moving on would leave
+        // a blank one behind.
+        if(body.childElementCount) body = newPage(paged);
+        carry.forEach(h => body.appendChild(h));
+        body.appendChild(node);
+        if(fits(body)) continue;
+        // Too tall even with a sheet to itself. Now the widow floor gives way:
+        // one piece left behind beats content running off the paper.
+        cont = split(body, node, 1);
+      }
+      while(cont){
+        body = newPage(paged);
+        body.appendChild(cont);
+        if(fits(body)) break;
+        cont = split(body, cont, 1);
+      }
+    }
+
+    const pgs = [...paged.children];
+    const title = TRIP.title || document.title || "";
+    pgs.forEach((pg, i) => {
+      pg.querySelector(".pg-foot .t").textContent = title;
+      pg.querySelector(".pg-foot .no").textContent = (i + 1) + " / " + pgs.length;
+    });
+    return pgs.length;
+  }
+
+  /* A4 is 794px wide — wider than a phone. The sheets scale down to fit
+     rather than scroll sideways, and .pgwrap is given the scaled height back
+     because a transform doesn't change layout. */
+  function fit(){
+    const wrap = $("#pgwrap"), paged = wrap && wrap.querySelector(".paged");
+    if(!paged) return;
+    // Guarded: a hidden or not-yet-laid-out wrapper measures 0 and would
+    // scale the sheets to a couple of pixels, which looks like the feature is
+    // broken rather than like a narrow window. Below a phone's width, don't
+    // scale — sheets that scroll sideways are recoverable, 1% sheets aren't.
+    const s = wrap.clientWidth < 240 ? 1 : Math.min(1, (wrap.clientWidth - 8) / A4_W);
+    paged.style.transform = `translateX(-50%) scale(${s})`;
+    wrap.style.height = Math.ceil(paged.offsetHeight * s) + "px";
+  }
+
+  function set(v){
+    on = v;
+    document.body.classList.toggle("pg-toggle-on", on);
+    const btn = $("#pg-toggle");
+    if(btn) btn.setAttribute("aria-pressed", String(on));
+    const wrap = $("#pgwrap");
+    if(!wrap) return 0;
+    if(!on){
+      wrap.querySelectorAll(".paged").forEach(n => n.remove());
+      wrap.style.height = "";
+      return 0;
+    }
+    const n = build();
+    fit();
+    return n;
+  }
+
+  // Re-run after the checklist or the weather strip changes underneath
+  function refresh(){ if(on){ build(); fit(); } }
+
+  addEventListener("resize", () => { if(on) fit(); });
+  /* Printing unpaginated would throw away everything above, so the guide
+     always prints paginated — switched on here if the reader didn't, and back
+     off afterwards so the screen is left as they had it. */
+  addEventListener("beforeprint", () => {
+    const gv = $("#view-guide");
+    if(on || !gv || gv.hidden) return;
+    printAuto = true;
+    set(true);
+  });
+  addEventListener("afterprint", () => { if(printAuto){ printAuto = false; set(false); } });
+
+  return { set, refresh, fit, get on(){ return on; } };
+})();
+window.PAGER = PAGER;
 
 /* ─────────────────────────────────────────────── View switching */
 /* The map view's height used to be hardcoded as calc(100vh - 210px). That
@@ -5689,6 +6122,8 @@ function switchView(v){
   // The export buttons live in the top tab bar, but what they export is the
   // set of points filtered in the map view, so they appear only there.
   $("#map-actions").hidden = v !== "map";
+  const ga = $("#guide-actions");
+  if(ga) ga.hidden = v !== "guide";
   try{ localStorage.setItem(LS_KEY + ":view", v); }catch(e){}
   if(v === "map" && window.MAP){
     MAP.init();      // lazy: MapLibre is 275KB and shouldn't slow the first paint
@@ -5697,6 +6132,7 @@ function switchView(v){
   if(v === "guide" && window.GUIDE){
     GUIDE.render();                                  // the checklist must reflect the latest choices
     if(!switchView._wx){ switchView._wx = true; GUIDE.renderWeather(); }
+    if(window.PAGER) PAGER.refresh();                // choices just changed under the sheets
   }
   layoutMapActions();
   layoutMap();
@@ -5713,6 +6149,8 @@ function applyStaticI18n(){
   txt("#tab-map", T.tabMap);
   txt("#tab-guide", T.tabGuide);
   attr("#tab-guide", "title", T.guideTabDisabled);
+  txt("#pg-toggle", T.pgToggle);
+  txt("#pg-hint", T.pgHint);
   txt("#exp-csv", T.exportCsv);
   txt("#exp-kml", T.exportKml);
   txt("#csv-hint", T.csvHint);
@@ -5801,6 +6239,10 @@ function boot(){
     document.querySelector("#view-list").remove();
     document.querySelector("#view-map").remove();
     document.querySelector("main").style.paddingBottom = "60px";
+    // The A4 toggle lives in the hidden tab bar; this page is the one people
+    // actually export from, so it moves into the guide rather than vanishing.
+    const ga = $("#guide-actions");
+    if(ga) $("#view-guide").insertBefore(ga, $("#pgwrap"));
     switchView("guide");
   }else{
     let v = "list";
