@@ -370,7 +370,10 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .group-h .meta{font-size:12px;color:var(--canvas-ink-3);margin-left:auto;font-family:var(--mono)}
 
 /* ═══════════════════════════════════════════════ Cards */
-.cards{display:grid;gap:13px}
+/* Photo-topped tiles in an auto-fitting grid. auto-fill + minmax gives 3
+   columns inside the 1180px main, 2 around 900px, and the 640px block below
+   drops it to 1 — no column count is hardcoded anywhere. */
+.cards{display:grid;gap:13px;grid-template-columns:repeat(auto-fill,minmax(288px,1fr))}
 /* The heavy rule goes here and on the two other full-width containers
    (.map-main, .sum) rather than on every bordered thing. In the source theme
    it is the card outline that carries the brutalist weight; putting #4A4A4A on
@@ -379,6 +382,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r);
   box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s,opacity .2s;
+  display:flex;flex-direction:column;padding:12px;
 }
 .card:hover{border-color:var(--ink)}
 .card[data-choice=no]{opacity:.5}
@@ -388,24 +392,35 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    redundant, and a 3px colored side strip is the most recognizable
    template-y tell there is. */
 
-.card-in{display:flex;gap:15px;padding:14px}
-.thumb{
-  width:112px;height:88px;flex:none;border-radius:7px;overflow:hidden;
-  background:var(--paper-2);position:relative;
+/* Photo inset inside the card's own padding rather than bled to the edge.
+   Its radius is the card's minus that padding (20 − 12 = 8, rounded up to 11
+   because the eye reads the inner curve as tighter than it is) so the two
+   corners stay concentric instead of running parallel at different speeds. */
+.media{
+  aspect-ratio:3/2;background:var(--fill);position:relative;
+  border-radius:11px;overflow:hidden;
 }
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.thumb.empty::after{
-  content:attr(data-ch);position:absolute;inset:0;display:grid;place-items:center;
-  font:400 25px var(--serif);color:var(--line-2);
+.media img,.media-fb{position:absolute;inset:0;width:100%;height:100%}
+/* cover, never contain: a letterboxed tile in a grid reads as a broken image */
+.media img{object-fit:cover;display:block}
+.media-fb{
+  display:grid;place-items:center;align-content:center;gap:7px;
+  color:var(--ink-3);text-align:center;padding:0 10px;
 }
-.body{flex:1;min-width:0}
-.hd{display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap}
-.nm{font:500 17px/1.35 var(--serif);cursor:pointer;letter-spacing:.2px;display:block}
+.media-fb span{font-size:11.5px;line-height:1.3}
+/* Between --line-2 and --ink-3: at --line-2 the mark all but vanished in a
+   347px-wide tile, at --ink-3 it read as an active control rather than a
+   stand-in for a photo we don't have. */
+.media-fb svg{color:color-mix(in srgb,var(--ink-3) 40%,var(--line-2))}
+
+.hd{display:flex;align-items:flex-start;gap:8px;margin-top:12px}
+.nmw{flex:1;min-width:0}
+.nm{font:500 16px/1.35 var(--serif);cursor:pointer;letter-spacing:.2px;display:block}
 .nm:hover{color:var(--accent)}
-.loc{font-size:12.5px;color:var(--ink-3);align-self:center}
+.loc{font-size:11.5px;color:var(--ink-3);margin-top:2px;line-height:1.35}
 .tier{
-  font:700 10.5px/1 var(--mono);padding:3.5px 6px;border-radius:4px;align-self:center;
-  border:1px solid transparent;letter-spacing:.5px;
+  font:700 10.5px/1 var(--mono);padding:3.5px 6px;border-radius:4px;flex:none;
+  border:1px solid transparent;letter-spacing:.5px;margin-top:3px;
 }
 .t-S{background:var(--accent);color:var(--on-accent)} .t-A{background:var(--accent-soft);color:var(--accent)}
 .t-B{background:var(--paper-2);color:var(--ink-2);border-color:var(--line)}
@@ -413,20 +428,40 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* User-added stub not yet researched by the AI. The dashed border echoes the
    same mark on its map marker */
 .t-stub{background:transparent;color:var(--ink-3);border:1px dashed var(--line-2);font-weight:600}
-.stars{color:var(--accent);font-size:12px;letter-spacing:1px;align-self:center}
+.stars{color:var(--accent);font-size:11px;letter-spacing:.5px;flex:none;margin-top:3px}
 .stars i{color:var(--line-2);font-style:normal}
 
-.pitch{color:var(--ink-2);font-size:13.5px;margin:6px 0 0}
-.facts{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--ink-3)}
-.facts span{display:flex;align-items:center;gap:4px;white-space:nowrap}
+/* Three lines, not two: the median pitch here is 83 characters, which at this
+   width is ~3.2 lines — two lines would cut half the places mid-sentence,
+   three shows nearly all of them whole. The rest is one click away. */
+.pitch{
+  color:var(--ink-2);font-size:12.5px;line-height:1.6;margin:8px 0 0;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+/* margin-top:auto is what keeps the grid tidy: however long the pitch and the
+   flags run, the fact strip and the pick control below it are pushed to the
+   card's floor, so they line up across every card in a row. */
+.facts{
+  display:flex;align-items:center;gap:9px;margin-top:auto;padding-top:11px;
+  font-size:11.5px;color:var(--ink-3);
+}
+.facts span{display:flex;align-items:center;gap:4px;white-space:nowrap;flex:none}
+.fdiv{width:1px;height:13px;background:var(--line-soft);flex:none}
 /* Ticket price is the only fact that can run a whole paragraph ("grounds free
    to enter; Central Garan adults ¥500 / Treasure Hall ¥500 / Honbō Garden
-   ¥300, three separate tickets, not interchangeable…"). Nowrapped along with
-   the other facts, at 375px it measured 1129px wide in a 335px card — .card's
-   overflow:hidden chopped 70% of it, cutting mid-digit with no ellipsis, and a
-   reader would believe that truncated number was the whole price. It's
-   decision-grade information: let it wrap, don't hide it. */
-.facts .tk{white-space:normal;align-items:flex-start;min-width:0}
+   ¥300, three separate tickets, not interchangeable…"). The old row let it
+   wrap in full; a card this narrow can't, and a silent cut mid-digit would
+   have the reader believe a partial number is the whole price. So it is cut
+   in ticketShort() at a complete price token, marked with an explicit "…",
+   and turned into a button onto the dialog, which still shows it verbatim.
+   This cell takes all the leftover width — it is the variable-length one. */
+.facts .tk{
+  flex:1;min-width:0;justify-content:center;text-align:center;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+button.tk{cursor:pointer;display:block;transition:color .12s}
+button.tk:hover{color:var(--ink)}
+button.tk.more{text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
 
 .flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
 .flag{
@@ -451,11 +486,16 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .verify-box ul{margin:6px 0 0;padding-left:18px}
 .verify-box li{margin:2px 0}
 
-/* Tri-state */
-.pick{display:flex;gap:0;margin-top:12px;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:fit-content}
+/* Tri-state. Full-width pill split in three equal segments: it is the card's
+   one action, so it gets the card's full measure rather than a fit-content
+   cluster floating at the left edge. */
+.pick{
+  display:flex;gap:0;margin-top:11px;border:1px solid var(--line);
+  border-radius:999px;overflow:hidden;width:100%;
+}
 .pick button{
   background:var(--card);border:0;border-right:1px solid var(--line-soft);
-  padding:6px 15px;font-size:12.5px;color:var(--ink-3);transition:.12s;
+  flex:1;padding:8px 4px;font-size:12.5px;color:var(--ink-3);transition:.12s;
 }
 .pick button:last-child{border-right:0}
 .pick button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
@@ -463,7 +503,11 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .pick button.y[aria-pressed=true]{background:var(--ok);color:var(--on-ok)}
 .pick button.m[aria-pressed=true]{background:var(--warn);color:var(--on-warn)}
 .pick button.n[aria-pressed=true]{background:var(--ink-3);color:var(--paper)}
-.why{font-size:12px;color:var(--ink-3);margin-top:7px;font-style:italic}
+/* Reads as a note about the place, so it sits with the flags rather than
+   under the buttons — where, being present on some cards and not others, it
+   would push the pick control off the shared floor and break the row's
+   alignment, which is the one thing the grid layout has to get right. */
+.why{font-size:11.5px;color:var(--ink-3);margin-top:8px;font-style:italic;line-height:1.5}
 
 /* Folded photo stops */
 .spots{margin:11px 0 0;padding:9px 0 0;border-top:1px dashed var(--line-soft);}
@@ -473,7 +517,12 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .spot .sn:focus-visible{outline-offset:1px}
 .spot .sn:hover{color:var(--accent)}
 .spot .sd{color:var(--ink-3);font-size:11.5px}
-.spot .pick{margin:0 0 0 auto;transform:scale(.88);transform-origin:right center}
+/* The card's .pick is a full-width pill; a photo stop is one line inside that
+   card, so its copy shrinks back to a fit-content cluster on the right. */
+.spot .pick{
+  margin:0 0 0 auto;width:auto;transform:scale(.88);transform-origin:right center;
+}
+.spot .pick button{flex:none;padding:6px 13px}
 
 /* ═══════════════════════════════════════════════ Bottom action bar */
 .actionbar{
@@ -561,6 +610,10 @@ textarea{
   color:var(--ink);padding:9px 11px;font:14px var(--sans);resize:vertical;min-height:66px;
 }
 .dlg-f{display:flex;gap:9px;justify-content:flex-end;margin-top:15px;flex-wrap:wrap;align-items:center}
+/* Same reason as .spot .pick: the pill is full-width on a card, but here it
+   shares a right-aligned footer row with the "add to day" button. */
+.dlg-f .pick{width:auto;margin-top:0}
+.dlg-f .pick button{flex:none;padding:7px 15px}
 /* The schedule button pushes left: it's a different matter from the
    yes/maybe/no group on the right */
 .btn.sched{margin-right:auto}
@@ -1234,8 +1287,9 @@ pre.code{
 
 @media (max-width:640px){
   .brand h1{font-size:21px}
-  .card-in{flex-direction:column;gap:11px}
-  .thumb{width:100%;height:150px}
+  /* One card per row. Left to auto-fill, a 600px viewport would still fit two
+     288px columns and the photos would be postage stamps. */
+  .cards{grid-template-columns:1fr}
   .hint{margin-left:0;text-align:left;max-width:none}
   main{padding-bottom:150px}
 }
@@ -1267,6 +1321,14 @@ pre.code{
 @media print{
   .top,.actionbar,.toolbar,.chips,.pick{display:none!important}
   .card{break-inside:avoid;box-shadow:none}
+  /* On paper there is no scanning to do — one column reads better, and a
+     3:2 photo per place across 47 places is most of a toner cartridge.
+     The photo shrinks to a strip; the fallback category mark goes entirely. */
+  .cards{grid-template-columns:1fr}
+  .media{aspect-ratio:auto;height:96px}
+  .media:not(:has(img)){display:none}
+  /* Three lines was a grid-tidiness constraint; print has no such constraint */
+  .pitch{-webkit-line-clamp:none;display:block}
   /* The canvas is a screen surface. Printed it would be a full-bleed navy
      page most printers won't lay down anyway, and the dot lattice would come
      out as stipple. Group headings go back to paper ink for the same reason —
@@ -1307,8 +1369,8 @@ pre.code{
       <input class="search" id="q" type="search" placeholder="Search names, highlights, tags…" autocomplete="off"
         aria-label="Search places">
       <div class="seg" role="group" id="seg-group" aria-label="Group by">
-        <button id="by-area" aria-pressed="true">By area</button>
-        <button id="by-tier" aria-pressed="false">By tier</button>
+        <button id="by-area" aria-pressed="false">By area</button>
+        <button id="by-tier" aria-pressed="true">By tier</button>
       </div>
       <div class="seg" role="group" id="seg-scope" aria-label="Show">
         <button id="f-all"  aria-pressed="true">All</button>
@@ -1481,6 +1543,7 @@ en: {
   unvChipTitle:"Places whose official info couldn't be verified — confirm them yourself",
   kvHours:"Hours", kvLastEntry:"Last entry", kvClosed:"Closed", kvTicket:"Tickets",
   kvBooking:"Booking", kvDuration:"Suggested time", kvArea:"Area", kvPhoto:"Photogenic",
+  kvCategory:"Category", kvNight:"After dark", kvNightYes:"worth a night visit",
   bkRequiredLong:"Booking required to enter", bkRecommendedLong:"Walk-up possible, booking recommended",
   bkNone:"No booking needed", aboutMin:"~{n} min", close:"Close",
   stubDetail:"You added this place on the map; hours, tickets and other details haven't been researched yet. The AI will complete them next time it works on this trip.",
@@ -1645,6 +1708,7 @@ zh: {
   unvChipTitle:"官方信息没能查到的地点，需要你自己确认",
   kvHours:"开放时间", kvLastEntry:"最后入场", kvClosed:"闭馆", kvTicket:"门票",
   kvBooking:"预约", kvDuration:"建议时长", kvArea:"所属区域", kvPhoto:"出片指数",
+  kvCategory:"类别", kvNight:"夜间", kvNightYes:"适合夜间前往",
   bkRequiredLong:"必须预约才能进入", bkRecommendedLong:"可现场前往，但建议预约",
   bkNone:"无需预约", aboutMin:"约 {n} 分钟", close:"关闭",
   stubDetail:"你在地图上手动添加的地点，开放时间、门票等信息还没研究。下次让 AI 继续规划时，它会自动补全这里。",
@@ -1881,7 +1945,13 @@ const rich = s => esc(s).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 const richP = s => rich(s).split(/\n{2,}/).map(x => `<p>${x.replace(/\n/g, "<br>")}</p>`).join("");
 
 let fileHandle = null;
-const ui = { group:"area", scope:"all", q:"", cats:new Set(), tags:new Set(), unv:false };
+/* Grouped by tier, not area, by default. Areas are as fine-grained as the
+   research made them — this trip has 26 of them for 47 places, 17 holding a
+   single place — which in a card grid is 17 headings each followed by one card
+   and two empty cells. Tier splits the same 47 into four full groups, and
+   "which are the good ones" is the question the list is for anyway. Area is
+   still one click away, and is the better view once you're routing a day. */
+const ui = { group:"tier", scope:"all", q:"", cats:new Set(), tags:new Set(), unv:false };
 
 /* ─────────────────────────────────────────────── Trip dates */
 /* Local date formatting. Never toISOString() — it converts to UTC, which in
@@ -2018,11 +2088,91 @@ const MARK_ICON = {
             + `<circle cx="8" cy="11.7" r=".95" fill="currentColor"/>`),
 };
 
-function thumb(p){
+/* Category icons. Half the places have no photo (Wikipedia simply has no lead
+   image for a back-alley coffee shop), and a photo-forward grid can't leave 25
+   of 47 tiles blank. The category mark fills that slot with something the eye
+   can actually sort on — you can tell a shrine from a museum from a market at a
+   glance, which a repeated first-character placeholder never gave you.
+   Same contract as MARK_ICON: 16 viewBox, currentColor strokes, no emoji. */
+const CAT_ICON = {
+  /* Castle keep: tiered roofs, the shape every "landmark" in this trip shares */
+  landmark:     `<path d="M2.4 13.4h11.2" ${SVG_ST}/>`
+              + `<path d="M3.6 13.4V9.6h8.8v3.8" ${SVG_ST}/>`
+              + `<path d="M2.6 9.6h10.8L11.4 6.6H4.6z" ${SVG_ST}/>`
+              + `<path d="M5.4 6.6 8 3.2l2.6 3.4" ${SVG_ST}/>`,
+  /* Neoclassical portico — columns under a pediment */
+  museum:       `<path d="M2 6.4 8 2.8l6 3.6" ${SVG_ST}/>`
+              + `<path d="M2.6 13.4h10.8" ${SVG_ST}/>`
+              + `<path d="M4.6 8.2v4M8 8.2v4M11.4 8.2v4" ${SVG_ST}/>`,
+  /* Compass needle: off the beaten track */
+  hidden:       `<circle cx="8" cy="8" r="5.6" ${SVG_ST}/>`
+              + `<path d="M10.4 5.6 9 9 5.6 10.4 7 7z" ${SVG_ST}/>`,
+  /* Film strip with sprocket holes */
+  media:        `<rect x="2.2" y="3.6" width="11.6" height="8.8" rx="1.4" ${SVG_ST}/>`
+              + `<path d="M5.4 3.6v8.8M10.6 3.6v8.8" ${SVG_ST}/>`,
+  /* Two towers of differing height — skyline, not a single building */
+  architecture: `<path d="M2.6 13.4h10.8" ${SVG_ST}/>`
+              + `<rect x="3" y="6.2" width="4.2" height="7.2" ${SVG_ST}/>`
+              + `<rect x="8.8" y="2.8" width="4.2" height="10.6" ${SVG_ST}/>`
+              + `<path d="M10.2 5.6h1.4M10.2 8.2h1.4M4.4 8.8h1.4" ${SVG_ST}/>`,
+  /* Torii gate */
+  shrine:       `<path d="M2 4.2h12" ${SVG_ST}/>`
+              + `<path d="M3 6.4h10" ${SVG_ST}/>`
+              + `<path d="M4.6 4.2v9.2M11.4 4.2v9.2" ${SVG_ST}/>`,
+  /* Conifer over a hill line */
+  nature:       `<path d="M8 2.6 5 7.2h6z" ${SVG_ST}/>`
+              + `<path d="M8 5.6 4.4 10.8h7.2z" ${SVG_ST}/>`
+              + `<path d="M8 10.8v2.6M2.4 13.4h11.2" ${SVG_ST}/>`,
+  /* Market awning: scalloped canopy over a stall */
+  market:       `<path d="M2.2 6.4h11.6L12.4 3.4H3.6z" ${SVG_ST}/>`
+              + `<path d="M3.4 6.4v7h9.2v-7" ${SVG_ST}/>`
+              + `<path d="M2.2 6.4h11.6" ${SVG_ST}/>`,
+  /* Bowl with steam — a meal you sit down to, not a shop */
+  food:         `<path d="M2.6 8.2h10.8a5.4 5.4 0 0 1-10.8 0z" ${SVG_ST}/>`
+              + `<path d="M6.4 5.4c0-1 1.2-1 1.2-2M9.4 5.4c0-1 1.2-1 1.2-2" ${SVG_ST}/>`,
+  /* Ticket stub with a perforation */
+  event:        `<path d="M2.4 5.2h11.2v2.1a1.4 1.4 0 0 0 0 2.8v2.7H2.4v-2.7a1.4 1.4 0 0 0 0-2.8z" ${SVG_ST}/>`
+              + `<path d="M8 6.6v.9M8 9.4v.9" ${SVG_ST}/>`,
+};
+/* Places with no category (user-added stubs, lodging) fall back to the same
+   hollow circle the map uses for "unrated" */
+const catIcon = (c, n) => icon(CAT_ICON[c] || `<circle cx="8" cy="8" r="5.2" ${SVG_ST}/>`, n);
+
+/* The category mark is rendered *underneath* every tile, image or not, and the
+   photo is layered over it. A broken image URL then needs nothing but
+   this.remove() — no className rewriting, no SVG markup smuggled through an
+   inline onerror attribute (which would have to survive both HTML-attribute
+   and JS-string quoting). Costs a few bytes of markup per photo tile. */
+function media(p){
   const im = (p.images || [])[0];
-  if(!im || !im.url) return `<div class="thumb empty" data-ch="${esc((p.name||"?")[0])}"></div>`;
-  return `<div class="thumb"><img src="${esc(im.url)}" alt="${esc(p.name)}" loading="lazy"
-    onerror="this.parentNode.className='thumb empty';this.parentNode.dataset.ch='${esc((p.name||'?')[0])}';this.remove()"></div>`;
+  const label = CATMAP[p.category] || "";
+  return `<div class="media">
+    <div class="media-fb">${catIcon(p.category, 44)}${label ? `<span>${esc(label)}</span>` : ""}</div>
+    ${im && im.url ? `<img src="${esc(im.url)}" alt="${esc(p.name)}" loading="lazy" onerror="this.remove()">` : ""}
+  </div>`;
+}
+
+/* Ticket text is the one fact that can run a whole paragraph — 20 of 47 places
+   here exceed 30 characters, the longest is 122. The old row layout let it wrap
+   in full; a 290px-wide card can't, and the comment on .facts .tk is right that
+   a silent cut mid-digit would have the reader believe a partial number is the
+   whole price. So don't cut by width: take the first *semantically complete*
+   price token, mark the cut with an explicit ellipsis, and make the fact a
+   button onto the detail dialog, which still shows the full text verbatim.
+   The token is whichever comes first — a free marker or an amount — because
+   "grounds free to enter; keep ¥1,200" must not shorten to "¥1,200". */
+const FREE_RE = /免费|免費|無料|무료|free/i;
+const PRICE_RE = /[¥￥$€£]\s?[\d,.]*\d|\d[\d,.]*\s?(?:円|元|yen)/i;
+function ticketShort(t){
+  const s = String(t || "").trim();
+  if(!s) return null;
+  if([...s].length <= 12) return { txt: s, cut: false };
+  const f = s.search(FREE_RE), p = s.search(PRICE_RE);
+  let head = "";
+  if(f >= 0 && (p < 0 || f < p)) head = s.match(FREE_RE)[0];
+  else if(p >= 0) head = s.match(PRICE_RE)[0].replace(/\s+/g, "");
+  else head = [...s].slice(0, 10).join("");
+  return { txt: head, cut: true };
 }
 
 function pickHTML(p){
@@ -2034,43 +2184,49 @@ function pickHTML(p){
   </div>`;
 }
 
+/* The card is a vertical stack, not the old photo-beside-text row: a 3-column
+   grid of photo-topped cards is scannable in a way 47 stacked rows never were.
+   Everything sits inside the card's own padding — nothing bleeds to the edge —
+   and .facts carries margin-top:auto so that whatever the pitch length, the
+   fact strip and the pick control land on the same baseline across a row.
+   The verify box does NOT come along: it's a 3-line explanation that would
+   dwarf a card, and the f-unverified badge in .flags plus the "needs your
+   check" chip already point at it. The dialog still renders it in full. */
 function cardHTML(p, children){
   const fl = flags(p);
   const stub = isStubP(p);
-  const loc = p.name_local && p.name_local !== p.name ? `<span class="loc"${langAttr}>${esc(p.name_local)}</span>` : "";
+  const loc = p.name_local && p.name_local !== p.name ? `<div class="loc"${langAttr}>${esc(p.name_local)}</div>` : "";
   const unv = p.verify && p.verify.state && p.verify.state !== "verified" ? ` data-verify="${esc(p.verify.state)}"` : "";
+  const tk = ticketShort(p.ticket);
   // Stubs lack the research fields (tier/scale/ticket). They can't use the
   // generic template — esc(undefined) is "", leaving a row of hollow "◷ "
   // "◎ " icon shells.
   const facts = stub
-    ? `<span>${T.stubFacts}</span>${p.area ? `<span>${esc(p.area)}</span>` : ""}`
+    ? `<span>${T.stubFacts}</span>${p.area ? `<span class="tk">${esc(p.area)}</span>` : ""}`
     : `<span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
-          <span class="tk">◎ ${esc(p.ticket)}</span>
-          <span>${p.indoor ? T.indoor : T.outdoor}</span>
-          ${p.night ? `<span>${T.nightGood}</span>` : ""}
-          <span>${esc(CATMAP[p.category] || p.category)}</span>`;
+          <i class="fdiv"></i>
+          ${tk ? `<button class="bare tk${tk.cut ? " more" : ""}" type="button" data-detail="${esc(p.id)}"
+            ${tk.cut ? `title="${esc(p.ticket)}"` : ""}>◎ ${esc(tk.txt)}${tk.cut ? "…" : ""}</button>`
+                : `<span class="tk">◎ —</span>`}
+          <i class="fdiv"></i>
+          <span>${p.indoor ? T.indoor : T.outdoor}</span>`;
   return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
-    <div class="card-in">
-      ${thumb(p)}
-      <div class="body">
-        <div class="hd">
-          <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
-          ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
-                 : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
-          <span class="stars" role="img" aria-label="${tf("photoIdx",{n:p.photo_index||0})}"
-            title="${tf("photoIdx",{n:p.photo_index||0})}"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
-        </div>
-        ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
-        <div class="facts">
-          ${facts}
-        </div>
-        ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
-        ${verifyBox(p)}
-        ${pickHTML(p)}
-        <div class="why"${p.choice === "no" && p.choice_reason ? "" : " hidden"}>${T.whyNot}<span class="why-t">${esc(p.choice_reason || "")}</span></div>
-        ${children.length ? spotsHTML(children) : ""}
+    ${media(p)}
+    <div class="hd">
+      <div class="nmw">
+        <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
       </div>
+      ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
+             : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
+      <span class="stars" role="img" aria-label="${tf("photoIdx",{n:p.photo_index||0})}"
+        title="${tf("photoIdx",{n:p.photo_index||0})}"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
     </div>
+    ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
+    ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
+    <div class="why"${p.choice === "no" && p.choice_reason ? "" : " hidden"}>${T.whyNot}<span class="why-t">${esc(p.choice_reason || "")}</span></div>
+    <div class="facts">${facts}</div>
+    ${pickHTML(p)}
+    ${children.length ? spotsHTML(children) : ""}
   </article>`;
 }
 
@@ -2120,18 +2276,26 @@ function render(){
     }
   }
 
+  /* Group by a raw key and only format the heading at render time. Keying by
+     the formatted label and then reading its first character to look up
+     TIER_ORDER worked by luck in Chinese ("S 级" → "S") and silently failed in
+     English, where tierGroup is "Tier {t}" and every label starts with "T":
+     TIER_ORDER["T"] is undefined, all four groups sorted equal, and the order
+     fell back to whatever order the data happened to be in. */
   const groups = new Map();
   for(const p of tops){
-    const key = ui.group === "area" ? (p.area || T.otherArea)
-              : p.tier ? tf("tierGroup", { t: p.tier }) : T.stubGroup;
+    const key = ui.group === "area" ? (p.area || " other") : (p.tier || " stub");
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
+  const label = k => ui.group === "area"
+    ? (k === " other" ? T.otherArea : k)
+    : (k === " stub" ? T.stubGroup : tf("tierGroup", { t: k }));
 
   const keys = [...groups.keys()].sort((a,b) => {
     // Tiers must sort S→A→B→C, not alphabetically (that would put S last)
-    if(ui.group === "tier") return (TIER_ORDER[a[0]] ?? 9) - (TIER_ORDER[b[0]] ?? 9);
-    return groups.get(b).length - groups.get(a).length || a.localeCompare(b);
+    if(ui.group === "tier") return (TIER_ORDER[a] ?? 9) - (TIER_ORDER[b] ?? 9);
+    return groups.get(b).length - groups.get(a).length || label(a).localeCompare(label(b));
   });
 
   const box = $("#groups");
@@ -2146,7 +2310,7 @@ function render(){
       const kidCount = list.reduce((n,p) => n + (kidsOf[p.id]||[]).length, 0);
       return `<section class="group">
         <div class="group-h">
-          <h2>${esc(k)}</h2>
+          <h2>${esc(label(k))}</h2>
           <span class="meta">${tf("groupMeta", { n: list.length })}${kidCount ? tf("plusSpots", { k: kidCount }) : ""}</span>
         </div>
         <div class="cards">${list.map(p => cardHTML(p, kidsOf[p.id]||[])).join("")}</div>
@@ -2346,6 +2510,10 @@ function openDetail(id){
     [T.kvBooking, { required:T.bkRequiredLong, recommended:T.bkRecommendedLong, none:T.bkNone }[p.booking]],
     [T.kvDuration, p.duration_min ? tf("aboutMin", { n: p.duration_min }) : ""],
     [T.kvArea, p.area],
+    // Category and "good at night" used to ride along in the card's fact row.
+    // The card now shows three facts, so they land here instead of nowhere.
+    [T.kvCategory, CATMAP[p.category] || p.category],
+    [T.kvNight, p.night ? T.kvNightYes : ""],
     [T.kvPhoto, p.photo_index ? `${p.photo_index}/5` : ""],
   ].filter(([,v]) => v);
 
