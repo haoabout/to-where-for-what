@@ -183,7 +183,7 @@
      --card-pad is a token for one reason — the photo's radius is derived from
      it (see .media), and the two corners only stay concentric if the padding
      and the radius are read from the same place. */
-  --r-card:27px;
+  --r-card:34px;
   --card-pad:12px;
   /* The theme ships eight shadow steps, 2xs through 2xl. Measured on the source
      page, only one of them is ever applied: --shadow-xs, at alpha .08, on 30 of
@@ -427,9 +427,31 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 
 .hd{display:flex;align-items:flex-start;gap:8px;margin-top:12px}
 .nmw{flex:1;min-width:0}
+/* The name and the local name reserve a fixed two-line / one-line block, so
+   the pitch below them starts at the same height on every card in a row.
+   Left to flow, this header ran anywhere from one to four lines (42 of 47
+   names fit one line and 5 wrap; 40 local names fit one, 1 wraps, 6 don't
+   exist) and the pitch started at four different heights across the grid.
+   Both are em-based, so they follow the font size rather than restating it.
+
+   .nm gets a floor, not a clamp: reserving two lines is what aligns the 42
+   short names with the 5 that wrap, but a name long enough to need a third
+   line — narrow viewports, a longer language — grows into it rather than
+   being cut. Below 640px there is one card per row anyway, so nothing is
+   left to align and only that card gets taller.
+   .loc does get clamped: a local name is a recognition aid for the street
+   sign, the dialog title carries it in full, and one place here has one long
+   enough to wrap. */
 .nm{font:500 16px/1.35 var(--serif);cursor:pointer;letter-spacing:.2px;display:block}
+.hd .nm{min-height:2.7em}
 .nm:hover{color:var(--accent)}
-.loc{font-size:11.5px;color:var(--ink-3);margin-top:2px;line-height:1.35}
+.loc{font-size:11.5px;color:var(--ink-3);line-height:1.35}
+/* Scoped to the card header: .loc is also the detail dialog's h3, where it
+   trails the name inline and must stay inline. */
+.hd .loc{
+  margin-top:2px;min-height:1.35em;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;
+}
 .tier{
   font:700 10.5px/1 var(--mono);padding:3.5px 6px;border-radius:4px;flex:none;
   border:1px solid transparent;letter-spacing:.5px;margin-top:3px;
@@ -2245,7 +2267,13 @@ function pickHTML(p){
 function cardHTML(p, children){
   const fl = flags(p);
   const stub = isStubP(p);
-  const loc = p.name_local && p.name_local !== p.name ? `<div class="loc"${langAttr}>${esc(p.name_local)}</div>` : "";
+  // Rendered even when there is no local name. 6 of these 47 places have none
+  // (a user-added stub, a place whose local name is identical), and the line
+  // they were missing pulled their pitch a line higher than their neighbours'
+  // in the same grid row. The empty element holds the line open; .loc's
+  // min-height is what gives it size.
+  const loc = p.name_local && p.name_local !== p.name
+    ? `<div class="loc"${langAttr}>${esc(p.name_local)}</div>` : `<div class="loc"></div>`;
   const unv = p.verify && p.verify.state && p.verify.state !== "verified" ? ` data-verify="${esc(p.verify.state)}"` : "";
   // Stubs lack the research fields (tier/scale/ticket), so they can't use the
   // generic template — esc(undefined) is "", leaving a row of empty cells.
