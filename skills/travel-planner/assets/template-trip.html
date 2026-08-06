@@ -185,6 +185,15 @@
      and the radius are read from the same place. */
   --r-card:34px;
   --card-pad:12px;
+  /* The place name's type, as tokens rather than only inside the .nm rule:
+     two other things are measured off it — the two-line floor that keeps the
+     header a fixed height, and the tier/stars row, which has to be exactly one
+     name-line tall to sit centred on the name's first line however the name
+     wraps. Typing 21.6px in those two places would silently come undone the
+     first time this size changes. */
+  --nm-size:16px;
+  --nm-lh:1.35;
+  --shadow-lift:0 10px 22px rgba(0,0,0,.13), 0 3px 7px rgba(0,0,0,.07);
   /* The theme ships eight shadow steps, 2xs through 2xl. Measured on the source
      page, only one of them is ever applied: --shadow-xs, at alpha .08, on 30 of
      327 elements — 83% carry no shadow at all. --shadow / --shadow-sm (alpha
@@ -392,10 +401,20 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    of black boxes and buried the cards it was supposed to emphasise. */
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
-  box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s,opacity .2s;
+  box-shadow:var(--shadow);overflow:hidden;
+  transition:border-color .15s,opacity .2s,transform .15s ease-out,box-shadow .15s ease-out;
   display:flex;flex-direction:column;padding:var(--card-pad);
+  /* The whole card opens the detail dialog (see the click handler), so the
+     whole card has to say so. */
+  cursor:pointer;
 }
-.card:hover{border-color:var(--ink)}
+/* Lifts on hover. The resting shadow is deliberately almost nothing — depth
+   on this page is the outline's job — so the lift is what carries "this is a
+   thing you can pick up", and it needs a real shadow under it or the card
+   just appears to have jumped. */
+.card:hover{
+  border-color:var(--ink);transform:translateY(-3px);box-shadow:var(--shadow-lift);
+}
 .card[data-choice=no]{opacity:.5}
 .card[data-choice=no]:hover{opacity:.82}
 /* Choice state is already expressed by the tri-state buttons and the dots —
@@ -442,9 +461,23 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    .loc does get clamped: a local name is a recognition aid for the street
    sign, the dialog title carries it in full, and one place here has one long
    enough to wrap. */
-.nm{font:500 16px/1.35 var(--serif);cursor:pointer;letter-spacing:.2px;display:block}
-.hd .nm{min-height:2.7em}
+.nm{
+  font:500 var(--nm-size)/var(--nm-lh) var(--serif);
+  cursor:pointer;letter-spacing:.2px;display:block;
+}
+.hd .nm{min-height:calc(2 * var(--nm-lh) * 1em)}
 .nm:hover{color:var(--accent)}
+/* The tier badge and the stars belong to the name's first line, so they get a
+   box exactly one name-line tall and centre inside it. Aligned to the top of
+   .nm instead, they hung off the cap height of a 21.6px line box while their
+   own boxes are 19.5px and 15px — three different tops, which is what the
+   stray margin-top:3px on each of them had been approximating. Now the box
+   does it, and it stays right when the name wraps to a second line or the
+   name's size changes. */
+.hd-r{
+  display:flex;align-items:center;gap:8px;flex:none;
+  height:calc(var(--nm-size) * var(--nm-lh));
+}
 .loc{font-size:11.5px;color:var(--ink-3);line-height:1.35}
 /* Scoped to the card header: .loc is also the detail dialog's h3, where it
    trails the name inline and must stay inline. */
@@ -454,7 +487,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 .tier{
   font:700 10.5px/1 var(--mono);padding:3.5px 6px;border-radius:4px;flex:none;
-  border:1px solid transparent;letter-spacing:.5px;margin-top:3px;
+  border:1px solid transparent;letter-spacing:.5px;
 }
 .t-S{background:var(--accent);color:var(--on-accent)} .t-A{background:var(--accent-soft);color:var(--accent)}
 .t-B{background:var(--paper-2);color:var(--ink-2);border-color:var(--line)}
@@ -462,7 +495,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* User-added stub not yet researched by the AI. The dashed border echoes the
    same mark on its map marker */
 .t-stub{background:transparent;color:var(--ink-3);border:1px dashed var(--line-2);font-weight:600}
-.stars{color:var(--accent);font-size:11px;letter-spacing:.5px;flex:none;margin-top:3px}
+.stars{color:var(--accent);font-size:11px;letter-spacing:.5px;flex:none;line-height:1}
 .stars i{color:var(--line-2);font-style:normal}
 
 /* Three lines, not two: the median pitch here is 83 characters, which at this
@@ -1368,6 +1401,11 @@ pre.code{
      should still feel like it appears */
   .toast{transform:translate(-50%,0);transition:opacity .22s}
   .toast.on{transform:translate(-50%,0)}
+  /* The card's hover lift is decoration, not state — unlike the markers above,
+     nothing is lost by dropping the movement. The shadow and the darkened
+     outline stay, so "the pointer is on this card" still reads. */
+  .card{transition:border-color .15s,opacity .2s,box-shadow .15s}
+  .card:hover{transform:none}
 }
 @media print{
   .top,.actionbar,.toolbar,.chips,.pick{display:none!important}
@@ -2284,16 +2322,22 @@ function cardHTML(p, children){
           <span class="tk">${esc(priceLabel(p.ticket))}</span>
           <i class="fdiv"></i>
           <span>${p.indoor ? T.indoor : T.outdoor}</span>`;
-  return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
+  // data-detail on the article, not only on the name: the whole card opens the
+  // dialog. The click handler bails out inside .pick first, so the one control
+  // that isn't "tell me more" keeps working.
+  return `<article class="card" data-id="${esc(p.id)}" data-detail="${esc(p.id)}"
+    data-choice="${esc(p.choice||"")}"${unv}>
     ${media(p)}
     <div class="hd">
       <div class="nmw">
         <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
       </div>
-      ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
-             : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
-      <span class="stars" role="img" aria-label="${tf("photoIdx",{n:p.photo_index||0})}"
-        title="${tf("photoIdx",{n:p.photo_index||0})}"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
+      <div class="hd-r">
+        ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
+               : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>
+        <span class="stars" role="img" aria-label="${tf("photoIdx",{n:p.photo_index||0})}"
+          title="${tf("photoIdx",{n:p.photo_index||0})}"><span aria-hidden="true">${stars(p.photo_index)}</span></span>`}
+      </div>
     </div>
     ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
     ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
@@ -5727,23 +5771,36 @@ $("#dlg").addEventListener("click", e => {
 });
 
 document.addEventListener("click", e => {
+  /* The tri-state is tested before [data-detail], and the whole .pick swallows
+     the click rather than only its buttons. The card itself now carries
+     data-detail, so a closest() that ran the other way round would find the
+     card from inside the pill and open the dialog instead of recording the
+     rating — and a click that lands on the 1px seam between two segments would
+     do it too. */
+  const pickWrap = e.target.closest(".pick");
+  if(pickWrap){
+    const pick = e.target.closest(".pick button");
+    if(pick){
+      const id = pickWrap.dataset.id;
+      const v  = pick.dataset.v;
+      const p  = PLACES.find(x => x.id === id);
+      if(v === "no" && p && p.choice !== "no"){ $("#dlg").close(); askReason(id); }
+      else setChoice(id, v);
+    }
+    return;
+  }
+
   const detail = e.target.closest("[data-detail]");
-  if(detail){ openDetail(detail.dataset.detail); return; }
+  /* Selecting a line of the pitch ends in a click. Without this the dialog
+     would open every time someone tried to copy an address or a price out of
+     a card. */
+  if(detail && String(getSelection()).trim() === ""){ openDetail(detail.dataset.detail); return; }
+  if(detail) return;
 
   const sb = e.target.closest("[data-sched]");
   if(sb){
     MAP.toggleDay(sb.dataset.sched);
     openDetail(sb.dataset.sched);   // repaint the button: once added it should read "remove"
-    return;
-  }
-
-  const pick = e.target.closest(".pick button");
-  if(pick){
-    const id = pick.closest(".pick").dataset.id;
-    const v  = pick.dataset.v;
-    const p  = PLACES.find(x => x.id === id);
-    if(v === "no" && p && p.choice !== "no"){ $("#dlg").close(); askReason(id); }
-    else setChoice(id, v);
     return;
   }
 
