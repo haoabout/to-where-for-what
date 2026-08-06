@@ -438,30 +438,36 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   color:var(--ink-2);font-size:12.5px;line-height:1.6;margin:8px 0 0;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
 }
-/* margin-top:auto is what keeps the grid tidy: however long the pitch and the
-   flags run, the fact strip and the pick control below it are pushed to the
-   card's floor, so they line up across every card in a row. */
+/* Centred cluster, no leading glyphs. The ◷ ◎ ▢ △ marks in front of each
+   fact were decoration, not information — the values already say what they
+   are, and three tiny symbols on every one of 47 cards read as noise.
+   margin-top:auto is what keeps the grid tidy: however long the pitch, the
+   flags and the ticket run, the fact strip and the pick control below it are
+   pushed to the card's floor, so they line up across every card in a row. */
+/* Top-aligned, not centred: when a long ticket makes the middle column six
+   lines tall, centring leaves "1-2 hours" and "outdoor" floating at its
+   midpoint with nothing to line up against. Top-aligned, all three start on
+   the same line and the strip reads as a table row. */
 .facts{
-  display:flex;align-items:center;gap:9px;margin-top:auto;padding-top:11px;
-  font-size:11.5px;color:var(--ink-3);
+  display:flex;align-items:flex-start;justify-content:center;gap:10px;
+  margin-top:auto;padding-top:11px;font-size:11.5px;color:var(--ink-3);
 }
-.facts span{display:flex;align-items:center;gap:4px;white-space:nowrap;flex:none}
-.fdiv{width:1px;height:13px;background:var(--line-soft);flex:none}
+/* block, not flex: as a flex container the ticket's text formed one anonymous
+   item that sized to its own content instead of reflowing to the cell, and the
+   longest tickets bled a few px past the column rule. */
+.facts span{display:block;white-space:nowrap;flex:none;line-height:1.5}
+/* Stretches to the row's height so it still reads as a column rule when the
+   ticket in the middle wraps to several lines */
+.fdiv{width:1px;align-self:stretch;min-height:13px;background:var(--line-soft);flex:none}
 /* Ticket price is the only fact that can run a whole paragraph ("grounds free
    to enter; Central Garan adults ¥500 / Treasure Hall ¥500 / Honbō Garden
-   ¥300, three separate tickets, not interchangeable…"). The old row let it
-   wrap in full; a card this narrow can't, and a silent cut mid-digit would
-   have the reader believe a partial number is the whole price. So it is cut
-   in ticketShort() at a complete price token, marked with an explicit "…",
-   and turned into a button onto the dialog, which still shows it verbatim.
-   This cell takes all the leftover width — it is the variable-length one. */
+   ¥300, three separate tickets, not interchangeable…"). It wraps in full
+   rather than being cut: it is decision-grade information, and a truncated
+   number reads as the whole price. The cell takes all the width the other two
+   don't need, so most tickets still land on one line. */
 .facts .tk{
-  flex:1;min-width:0;justify-content:center;text-align:center;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  flex:0 1 auto;min-width:0;white-space:normal;text-align:center;line-height:1.5;
 }
-button.tk{cursor:pointer;display:block;transition:color .12s}
-button.tk:hover{color:var(--ink)}
-button.tk.more{text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
 
 .flags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
 .flag{
@@ -1533,7 +1539,7 @@ en: {
   vbCheck:"Check yourself: {x}",
   vbTell:"Once you find out, tell the AI and it will fill in the data.",
   stubFacts:"Added by hand · details pending AI research",
-  indoor:"▢ indoor", outdoor:"△ outdoor", nightGood:"☾ good at night",
+  indoor:"indoor", outdoor:"outdoor", nightGood:"☾ good at night",
   stubTier:"pending", photoIdx:"Photogenic score {n}/5", whyNot:"Reason: ",
   spotsHeader:"Photo stops along the way · {n}",
   otherArea:"Other", tierGroup:"Tier {t}", stubGroup:"Added by hand · pending",
@@ -1698,7 +1704,7 @@ zh: {
   vbCheck:"需自行确认：{x}",
   vbTell:"查到之后告诉 AI，它会补进数据里。",
   stubFacts:"手动添加 · 详情待 AI 补全",
-  indoor:"▢ 室内", outdoor:"△ 户外", nightGood:"☾ 适合夜间",
+  indoor:"室内", outdoor:"户外", nightGood:"☾ 适合夜间",
   stubTier:"待补全", photoIdx:"出片指数 {n}/5", whyNot:"不去的理由：",
   spotsHeader:"顺路打卡点 · {n} 个",
   otherArea:"其他", tierGroup:"{t} 级", stubGroup:"手动添加·待补全",
@@ -2152,28 +2158,6 @@ function media(p){
   </div>`;
 }
 
-/* Ticket text is the one fact that can run a whole paragraph — 20 of 47 places
-   here exceed 30 characters, the longest is 122. The old row layout let it wrap
-   in full; a 290px-wide card can't, and the comment on .facts .tk is right that
-   a silent cut mid-digit would have the reader believe a partial number is the
-   whole price. So don't cut by width: take the first *semantically complete*
-   price token, mark the cut with an explicit ellipsis, and make the fact a
-   button onto the detail dialog, which still shows the full text verbatim.
-   The token is whichever comes first — a free marker or an amount — because
-   "grounds free to enter; keep ¥1,200" must not shorten to "¥1,200". */
-const FREE_RE = /免费|免費|無料|무료|free/i;
-const PRICE_RE = /[¥￥$€£]\s?[\d,.]*\d|\d[\d,.]*\s?(?:円|元|yen)/i;
-function ticketShort(t){
-  const s = String(t || "").trim();
-  if(!s) return null;
-  if([...s].length <= 12) return { txt: s, cut: false };
-  const f = s.search(FREE_RE), p = s.search(PRICE_RE);
-  let head = "";
-  if(f >= 0 && (p < 0 || f < p)) head = s.match(FREE_RE)[0];
-  else if(p >= 0) head = s.match(PRICE_RE)[0].replace(/\s+/g, "");
-  else head = [...s].slice(0, 10).join("");
-  return { txt: head, cut: true };
-}
 
 function pickHTML(p){
   const c = p.choice;
@@ -2197,17 +2181,13 @@ function cardHTML(p, children){
   const stub = isStubP(p);
   const loc = p.name_local && p.name_local !== p.name ? `<div class="loc"${langAttr}>${esc(p.name_local)}</div>` : "";
   const unv = p.verify && p.verify.state && p.verify.state !== "verified" ? ` data-verify="${esc(p.verify.state)}"` : "";
-  const tk = ticketShort(p.ticket);
-  // Stubs lack the research fields (tier/scale/ticket). They can't use the
-  // generic template — esc(undefined) is "", leaving a row of hollow "◷ "
-  // "◎ " icon shells.
+  // Stubs lack the research fields (tier/scale/ticket), so they can't use the
+  // generic template — esc(undefined) is "", leaving a row of empty cells.
   const facts = stub
     ? `<span>${T.stubFacts}</span>${p.area ? `<span class="tk">${esc(p.area)}</span>` : ""}`
-    : `<span>◷ ${esc(SCALE_TXT[p.scale] || p.scale)}</span>
+    : `<span>${esc(SCALE_TXT[p.scale] || p.scale)}</span>
           <i class="fdiv"></i>
-          ${tk ? `<button class="bare tk${tk.cut ? " more" : ""}" type="button" data-detail="${esc(p.id)}"
-            ${tk.cut ? `title="${esc(p.ticket)}"` : ""}>◎ ${esc(tk.txt)}${tk.cut ? "…" : ""}</button>`
-                : `<span class="tk">◎ —</span>`}
+          <span class="tk">${esc(p.ticket || "—")}</span>
           <i class="fdiv"></i>
           <span>${p.indoor ? T.indoor : T.outdoor}</span>`;
   return `<article class="card" data-id="${esc(p.id)}" data-choice="${esc(p.choice||"")}"${unv}>
@@ -2596,7 +2576,11 @@ function payload(){
     p.choice = cur ? cur.choice ?? null : null;
     p.choice_reason = cur ? cur.choice_reason || "" : "";
   }
-  return JSON.stringify(out, null, 2);
+  // Trailing newline to match what the local save server writes — the manual
+  // download and File System Access routes overwrite the same git-tracked
+  // places.json, and a file that gains or loses its final newline depending on
+  // which save route you happened to use is a diff nobody asked for.
+  return JSON.stringify(out, null, 2) + "\n";
 }
 
 /* The short code is the last-resort path (when all three file-writing routes

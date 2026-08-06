@@ -398,6 +398,11 @@ def write_atomic(text):
     point places.json is neither readable nor backed up.
     On Windows, antivirus scanning briefly locks files, hence the retries.
     """
+    # places.json is checked into git. json.dumps ends without a newline, so
+    # every rating made in the page produced a "\ No newline at end of file"
+    # diff on a file whose content was otherwise unchanged.
+    if not text.endswith("\n"):
+        text += "\n"
     tmp = TARGET.with_name(TARGET.name + ".tmp")
     err = None
     for _ in range(4):
