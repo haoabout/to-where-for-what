@@ -60,6 +60,15 @@
      maps to --accent-soft here and --primary maps to --accent. */
   --accent:#0E0E0E;         /* --primary */
   --accent-soft:#FFEF85;    /* --accent, the yellow */
+  /* Gold. Two jobs: the S badge's fill and the pitch lede's margin rule — an
+     ornament in both, never a status, which is why it isn't in the block below.
+     It cannot be --accent-soft: that lemon is already the caution fill
+     (.f-warn, .verify-box, .f-unverified), so an S badge in it reads as a
+     warning, and at 1.16:1 against the card it barely separates from the paper
+     at all. This sits at 1.84:1 on the card and carries --ink at 10.43:1.
+     Not pushed darker than this — the note under --warn applies here too: drop
+     the lightness much further and the hue turns olive rather than gold. */
+  --gold:#E9B824;
   /* Status. The theme carries only --destructive, so success and caution are
      built here — and the *hue* matters more than it looks.
      --warn was first derived on the accent yellow's own hue (100.84) dropped
@@ -495,7 +504,12 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   font:700 10.5px/1 var(--mono);padding:3.5px 6px;border-radius:4px;flex:none;
   border:1px solid transparent;letter-spacing:.5px;
 }
-.t-S{background:var(--accent);color:var(--on-accent)} .t-A{background:var(--accent-soft);color:var(--accent)}
+/* Four weights for four tiers: gold fill, black fill, outlined, ghost. S used to
+   take the black and A the lemon — but the lemon is the caution fill everywhere
+   else on the card, so A and "closed Sundays" wore the same color. Gold pulls
+   the top tier out of that family, and black moves down one step to A, where it
+   is still emphatic without competing. */
+.t-S{background:var(--gold);color:var(--ink)} .t-A{background:var(--accent);color:var(--on-accent)}
 .t-B{background:var(--paper-2);color:var(--ink-2);border-color:var(--line)}
 .t-C{background:transparent;color:var(--ink-3);border-color:var(--line)}
 /* User-added stub not yet researched by the AI. The dashed border echoes the
@@ -729,10 +743,13 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
 .dlg-b p{margin:0 0 10px;font-size:14px;color:var(--ink-2)}
 /* The card clamps .pitch to three lines and — measured on the Osaka trip — 40%
    of them overflow it, so the dialog has to carry the pitch as well: it is the
-   only place that tail can be read. Set as a lede rather than one more body
-   paragraph, because pitch is the verdict and detail is the evidence; at the
-   same size the two read as the text repeating itself. */
-.dlg-b .lede p{font-size:15px;color:var(--ink);margin-bottom:14px}
+   only place that tail can be read. It has to look like the verdict rather than
+   one more body paragraph, and the axis for that is deliberately *not* type:
+   the first attempt set it 15px in --ink against the body's 14px --ink-2, and a
+   7% size step doesn't read as intent, it reads as a styling bug. A rule in the
+   margin says "different kind of text" without touching the type at all. */
+.dlg-b .lede{border-left:2px solid var(--gold);padding-left:12px;margin-bottom:15px}
+.dlg-b .lede p:last-child{margin-bottom:0}
 .dlg-img{width:100%;border-radius:9px;margin-bottom:14px;display:block}
 .credit{font-size:11px;color:var(--ink-3);margin:-9px 0 15px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:7px 15px;font-size:13.5px}
