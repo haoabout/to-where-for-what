@@ -578,17 +578,28 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    pill grows with it. Nothing here assumes the labels are two Chinese
    characters — "Not interested", or a German compound, widens the pill on its
    own; max-width caps it at the card and the labels wrap rather than
-   overflowing. */
+   overflowing.
+
+   The selected segment is a pill floating on a track, inset by the container's
+   padding, rather than a slab that fills its column and gets sliced flat where
+   it meets the neighbour — the middle one came out a plain rectangle and the
+   two ends came out half-round, so the same control had three different
+   shapes depending on which answer you gave. One padding value sets the inset
+   on all four sides; the radius is 999px on both the track and the segment, so
+   neither has to know the control's height.
+   The dividers went with it: a full-height hairline next to a floating pill
+   reads as a seam the pill is failing to line up with. What separates the
+   three now is the track itself. */
 .pick{
   display:grid;grid-template-columns:repeat(3,1fr);
   margin:11px auto 0;width:fit-content;max-width:100%;
-  border:1px solid var(--line);border-radius:999px;overflow:hidden;
+  border:1px solid var(--line);border-radius:999px;
+  padding:3px;background:var(--paper-2);
 }
 .pick button{
-  background:var(--card);border:0;border-right:1px solid var(--line-soft);
-  padding:8px 17px;font-size:12.5px;color:var(--ink-3);transition:.12s;
+  background:transparent;border:0;border-radius:999px;
+  padding:7px 15px;font-size:12.5px;color:var(--ink-3);transition:.12s;
 }
-.pick button:last-child{border-right:0}
 .pick button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 .pick button[aria-pressed=true]{font-weight:600}
 .pick button.y[aria-pressed=true]{background:var(--ok);color:var(--on-ok)}
@@ -746,14 +757,19 @@ textarea{
      button appears, disappears (no day selected) or changes label between
      "add to day 1" and "remove from day 1". */
   display:grid;grid-template-columns:1fr auto 1fr;padding-top:13px;
+  /* Row items stretch, which is how the schedule button gets the tri-state's
+     height without anyone adding up the pill's border, track inset and button
+     padding — a sum that would silently go stale the next time one of them
+     moves. */
+  align-items:stretch;
 }
 .dlg-f .pick{margin:0;grid-column:2}
-.dlg-f .pick button{padding:7px 15px}
-/* Matched to the tri-state: same pill, same height, same type size, so the
-   footer reads as one row of controls rather than two unrelated widgets. */
+/* Matched to the tri-state: same pill, same type size, height inherited from
+   the row, so the footer reads as one row of controls rather than two
+   unrelated widgets. */
 .btn.sched{
   grid-column:1;justify-self:start;
-  border-radius:999px;padding:7px 15px;font-size:12.5px;font-weight:400;
+  border-radius:999px;padding:0 15px;font-size:12.5px;font-weight:400;
 }
 pre.code{
   background:var(--paper-2);border:1px solid var(--line);border-radius:8px;
