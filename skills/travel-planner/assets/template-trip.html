@@ -465,7 +465,14 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   font:500 var(--nm-size)/var(--nm-lh) var(--serif);
   cursor:pointer;letter-spacing:.2px;display:block;
 }
-.hd .nm{min-height:calc(2 * var(--nm-lh) * 1em)}
+/* The two-line floor sits on this plain div, never on .nm — .nm is a <button>,
+   and a button taller than its text centres that text vertically. With the
+   min-height on the button, a one-line name dropped by half the reserved
+   slack (measured: the baseline moved from 16px below the box top to 26.8px)
+   and hung 11px under the tier badge, which was aligned to the top of the same
+   box. Button internals also differ across engines, so nothing about this
+   layout should depend on them. */
+.nm-box{min-height:calc(2 * var(--nm-size) * var(--nm-lh))}
 .nm:hover{color:var(--accent)}
 /* The tier badge and the stars belong to the name's first line, so they get a
    box exactly one name-line tall and centre inside it. Aligned to the top of
@@ -2330,7 +2337,7 @@ function cardHTML(p, children){
     ${media(p)}
     <div class="hd">
       <div class="nmw">
-        <button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button>${loc}
+        <div class="nm-box"><button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button></div>${loc}
       </div>
       <div class="hd-r">
         ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
