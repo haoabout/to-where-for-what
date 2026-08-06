@@ -221,6 +221,13 @@
    precede every layout rule. */
 [hidden]{display:none!important}
 html,body{margin:0;padding:0}
+/* No rubber band at either end of the page. The header and the tab bar are
+   sticky, so an elastic overscroll drags the whole content slab out from under
+   them and exposes the canvas — the page looks like it came unglued rather than
+   like it reached its end. Set on both elements because the scrolling box is
+   the viewport: which of the two propagates its overscroll-behavior varies by
+   engine, and the pair covers both. The dialog already does this for itself. */
+html,body{overscroll-behavior:none}
 /* The canvas and its dot matrix.
    One radial-gradient tile repeated on a square lattice — no image asset, so
    it survives being emailed as a single file, which is how this page travels.
@@ -832,7 +839,7 @@ pre.code{
 
 .day-col{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
-  overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;
+  overflow-y:auto;overscroll-behavior:none;display:flex;flex-direction:column;
 }
 .day-col .dc-head{
   position:sticky;top:0;z-index:2;background:var(--paper-2);
@@ -973,7 +980,7 @@ pre.code{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
   display:flex;flex-direction:column;min-height:0;
 }
-.map-side>#map-list{overflow-y:auto;overscroll-behavior:contain;flex:1;min-height:0}
+.map-side>#map-list{overflow-y:auto;overscroll-behavior:none;flex:1;min-height:0}
 /* The choice filter merges into the pool column's header: what it filters is
    exactly the list below it — putting it in the page toolbar would separate
    the control from the thing it acts on. */
@@ -1592,7 +1599,7 @@ pre.code{
 .pgnav{
   position:fixed;width:170px;z-index:20;
   display:flex;flex-direction:column;gap:1px;
-  max-height:calc(100vh - 170px);overflow:auto;
+  max-height:calc(100vh - 170px);overflow:auto;overscroll-behavior:none;
   scrollbar-width:thin;
 }
 .pgnav button{
