@@ -369,6 +369,23 @@ decoration.
 `pitch` (one line) and `detail` (two or three paragraphs) decide whether the
 user can make good trade-offs.
 
+### The division of labor
+
+| | `pitch` | `detail` |
+|---|---|---|
+| Answers | Do I want this at all? | I want it — now what do I need to know? |
+| Holds | The one judgment that decides want / skip, plus any dealbreaker | Background, history, what to see inside, caveats, comparisons |
+| Length | **Under ~3 card lines** — about 80 CJK characters or 160 Latin ones | Two or three paragraphs |
+
+The card clamps `pitch` to three lines. The detail dialog then repeats it in
+full as a lede above `detail`, so nothing is ever unreachable — but a hook that
+never fits its own card has stopped being a hook and is turning into a second
+`detail`. `validate.py` raises a P2 when it overflows.
+
+The commonest way this goes wrong: packing the pitch with facts that belong in
+`detail` (founding year, floor count, full opening caveats) instead of the one
+sentence that settles the decision. Background goes down; the verdict stays up.
+
 **Be honest.** If a place is heavily touristified, say so:
 
 > Honesty required here: over the past decade this market has been thoroughly

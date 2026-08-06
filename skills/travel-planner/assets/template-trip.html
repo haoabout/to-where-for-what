@@ -503,8 +503,11 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .t-stub{background:transparent;color:var(--ink-3);border:1px dashed var(--line-2);font-weight:600}
 
 /* Three lines, not two: the median pitch here is 83 characters, which at this
-   width is ~3.2 lines — two lines would cut half the places mid-sentence,
-   three shows nearly all of them whole. The rest is one click away. */
+   width is ~3.2 lines — two lines would cut half the places mid-sentence.
+   Three still isn't enough for 40% of them, so the clamp only works because the
+   dialog carries the whole pitch as a lede (see openDetail). It used to render
+   `detail || pitch`, which dropped the pitch entirely whenever detail existed —
+   and the tail cut off here was then readable nowhere at all. */
 .pitch{
   color:var(--ink-2);font-size:12.5px;line-height:1.6;margin:8px 0 0;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
@@ -724,6 +727,12 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
 .dlg-b h4{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.9px;color:var(--ink-3);margin:20px 0 8px}
 .dlg-b h4:first-child{margin-top:0}
 .dlg-b p{margin:0 0 10px;font-size:14px;color:var(--ink-2)}
+/* The card clamps .pitch to three lines and — measured on the Osaka trip — 40%
+   of them overflow it, so the dialog has to carry the pitch as well: it is the
+   only place that tail can be read. Set as a lede rather than one more body
+   paragraph, because pitch is the verdict and detail is the evidence; at the
+   same size the two read as the text repeating itself. */
+.dlg-b .lede p{font-size:15px;color:var(--ink);margin-bottom:14px}
 .dlg-img{width:100%;border-radius:9px;margin-bottom:14px;display:block}
 .credit{font-size:11px;color:var(--ink-3);margin:-9px 0 15px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:7px 15px;font-size:13.5px}
@@ -2963,7 +2972,8 @@ function openDetail(id){
       ${fl.length ? `<div class="flags" style="margin-bottom:14px">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
       ${verifyBox(p)}
       ${isStubP(p) ? `<p>${T.stubDetail}</p>` : ""}
-      ${richP(p.detail || p.pitch)}
+      ${p.pitch ? `<div class="lede">${richP(p.pitch)}</div>` : ""}
+      ${p.detail ? richP(p.detail) : ""}
       ${p.photo_note ? `<h4>${T.photoAdvice}</h4>${richP(p.photo_note)}` : ""}
       <h4>${T.practicalInfo}</h4>
       <dl class="kv">${kv.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>

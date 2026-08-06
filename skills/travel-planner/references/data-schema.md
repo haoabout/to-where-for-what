@@ -208,8 +208,8 @@ Without these three fields, stage D can only improvise.
 
 | Field | Type | Required | Notes |
 |---|---|:--:|---|
-| `pitch` | string | ✅ | One-line hook, shown on the shortlist card |
-| `detail` | string | ✅ | Two or three paragraphs, shown in the detail dialog |
+| `pitch` | string | ✅ | One-line hook. The card clamps it to three lines (over that = P2); the detail dialog repeats it in full as a lede |
+| `detail` | string | ✅ | Two or three paragraphs, shown in the detail dialog under the `pitch` lede |
 | `photo_index` | int 1–5 | ✅ | Photogenic score. Anchors: [research-playbook.md](research-playbook.md), "Grading". Shown in the detail dialog only — not on the card |
 | `photo_note` | string | | What the shot looks like and how to take it, e.g. "bamboo path in the garden; best front-lit in the morning" (missing = P2) |
 | `tags` | string[] | | e.g. `["hidden gem","film location","rainy-day indoor"]` |

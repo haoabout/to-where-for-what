@@ -18,6 +18,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -115,6 +116,14 @@ def _is_url(v) -> bool:
 
 def _blank(v) -> bool:
     return v is None or (isinstance(v, str) and not v.strip())
+
+
+# Character count can't compare a Chinese pitch with an English one: measured on
+# the card, ~28 CJK characters fill a line where ~55 Latin ones do. Counting the
+# wide ones as two puts both languages on the same ruler — the card's three-line
+# clamp lands near 170 units either way.
+def _display_width(s: str) -> int:
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in s)
 
 
 def _haversine_m(a: dict, b: dict) -> float:
@@ -397,6 +406,13 @@ def check_place(p, idx, doc, rep: Report) -> None:
             rep.add("P2", where, "no images")
         if isinstance(p.get("detail"), str) and 0 < len(p["detail"].strip()) < 60:
             rep.add("P2", where, f"detail is only {len(p['detail'].strip())} characters — thin")
+        # The card clamps the pitch to three lines. Overflow is no longer lost —
+        # the dialog carries the full pitch as a lede — but a hook that never
+        # fits its own card has stopped being a hook and is drifting into detail.
+        if isinstance(p.get("pitch"), str) and _display_width(p["pitch"].strip()) > 180:
+            rep.add("P2", where,
+                    "pitch overflows the card's three-line clamp — move the background into detail "
+                    "and keep the hook to the one judgment that decides want/skip")
     if p.get("booking") in ("required", "recommended") and _blank(p.get("booking_url")):
         rep.add("P2", where, f"booking={p['booking']} but booking_url is missing")
 
