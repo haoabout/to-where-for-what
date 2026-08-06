@@ -102,6 +102,13 @@ it.
 
 Don't let the user rush over full of hope after last entry has passed.
 
+### 1-8. Tier distribution isn't inflated
+
+Roughly `S` ≤ 12% and `S + A` ≤ ⅓ of the list. Over that, everything looks
+important and the tier stops helping anyone filter. The fix is re-grading
+against the detour ladder in [research-playbook.md](research-playbook.md) —
+never nudging a number to clear this line.
+
 ---
 
 ## 🔵 P2 · Nice to have

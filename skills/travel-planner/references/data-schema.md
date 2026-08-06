@@ -71,7 +71,7 @@ Write `label` in the user's language. Default quotas: `research-playbook.md`.
 | `name_en` | string | | English name. More reliable than the user's language when exporting to Google My Maps |
 | `kind` | `attraction`\|`lodging` | | Default `attraction`. See "Lodging" below |
 | `category` | string | ✅ | Must be one of `categories[].id` (lodging exempt) |
-| `tier` | `S`\|`A`\|`B`\|`C` | ✅ | Recommendation tier. S = must-go, C = only if passing by |
+| `tier` | `S`\|`A`\|`B`\|`C` | ✅ | Recommendation tier, graded on how much detour the place is worth. Rubric: [research-playbook.md](research-playbook.md), "Grading" |
 | `scale` | enum | ✅ | Visit scale, see below |
 | `parent_id` | string | | A micro-spot may point at a major place in the same area; the shortlist folds it underneath. **When the area has no suitable parent, leave it empty** — forcing one fabricates a false hierarchy (observed: ferry piers and small roadside shrines are typical cases) |
 | `area` | string | ✅ | District, e.g. "Nakanoshima". **Stage D clusters the route by this** — keep it consistent |
@@ -210,7 +210,7 @@ Without these three fields, stage D can only improvise.
 |---|---|:--:|---|
 | `pitch` | string | ✅ | One-line hook, shown on the shortlist card |
 | `detail` | string | ✅ | Two or three paragraphs, shown in the detail dialog |
-| `photo_index` | int 1–5 | ✅ | Photogenic score |
+| `photo_index` | int 1–5 | ✅ | Photogenic score. Anchors: [research-playbook.md](research-playbook.md), "Grading". Shown in the detail dialog only — not on the card |
 | `photo_note` | string | | What the shot looks like and how to take it, e.g. "bamboo path in the garden; best front-lit in the morning" (missing = P2) |
 | `tags` | string[] | | e.g. `["hidden gem","film location","rainy-day indoor"]` |
 | `media` | object | | Film/anime pilgrimage only: `{title, title_local, scene}` |

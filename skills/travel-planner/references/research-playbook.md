@@ -281,6 +281,89 @@ Check the returned `display_name` against the destination's administrative area
 
 ---
 
+## Grading: `tier` and `photo_index`
+
+Both are judgment calls, which is exactly why they need anchors. Without them
+the same city researched twice comes back with two different S lists — each
+internally consistent, neither reproducible.
+
+### `tier` — how much of the trip is this worth?
+
+Grade on one scale: **how much detour the user would accept for it.** That's a
+question you can simulate and get a single answer to, unlike "is this
+excellent".
+
+| Tier | Worth… |
+|---|---|
+| `S` | Its own half-day, and there's no substitute elsewhere — missing it is a reason to come back to this city |
+| `A` | A 20–30 minute detour, or a dedicated half-day slot |
+| `B` | Going into when already in that area — but not a detour |
+| `C` | A glance in passing, 5–15 min; skipping it costs nothing |
+
+The subject of "worth" is **this user**, not a generic tourist. A person who
+genuinely loves modern architecture really would detour 30 minutes for one
+building; that isn't grade inflation, it's the fact.
+
+This is the same trade-off stage D makes when routing
+([route-design.md](route-design.md)) — one scale, used twice.
+
+#### Preferences move a tier at most one step
+
+Set the base tier for "a traveler who likes this category", then adjust from
+`preferences.md`. **One step total, and adjustments don't stack:**
+
+| Trigger in `preferences.md` | Effect |
+|---|---|
+| Category or named subject under **High** interest | +1 |
+| Under **Low** interest | −1 |
+| Under **Not interested — don't recommend** | Leave it out entirely |
+| Photography marked very important **and** `photo_index` ≥ 4 | +1 |
+| Breaks a hard constraint — over the ticket threshold, on the "must avoid" list, needs booking further ahead than they accept | Cap at `B` |
+
+The one-step ceiling is the point of the rule: matching the user's taste can
+lift a strong place to `S`, but it can never make a mediocre one `S`.
+
+**No preferences file, or one still full of `<placeholders>`** (first-time
+user): use the base tier and stop. Don't invent a taste profile.
+
+#### What `tier` is not about
+
+Opening hours, closure days, booking lead time, weather, whether it's even open
+on the trip dates — that's **availability**, and it's already carried by
+`closed_days`, `status`, and the page's filters. A superb place that's shut both
+days stays `S`; `pitch` says it's shut. Fold availability into the tier and the
+scale stops meaning anything.
+
+#### Distribution check
+
+In a 40-place list, expect roughly `S` ≤ 5 and `S + A` ≤ 13 (≈12% and ≈⅓). Over
+that, the ruler has gone soft — re-grade, don't rationalize. Under it is fine
+and needs no explanation.
+
+The reason for a tier belongs in `pitch`, which already has to give grounds
+rather than adjectives — there's no separate field for it.
+
+### `photo_index` — 1 to 5
+
+| Score | Meaning |
+|---|---|
+| 5 | The composition is already there — stand in the right place and it works |
+| 4 | Reliably good, but you pick the angle or wait for the light |
+| 3 | A decent shot exists if you go looking for it |
+| 2 | Photographable, nothing more |
+| 1 | Nothing to shoot; you come for other reasons |
+
+**This one describes the place, not the user** — no preference adjustment. The
+user's interest in photography enters through the tier `+1` rule above, and
+double-counting it here would apply the same input twice.
+
+The number surfaces in the detail dialog, in that `+1` rule, and as the
+tiebreak that orders places within a tier — **not** on the shortlist card. An
+inflated 5 quietly reorders the shortlist and can lift a tier; it isn't
+decoration.
+
+---
+
 ## Writing the copy
 
 `pitch` (one line) and `detail` (two or three paragraphs) decide whether the
@@ -310,5 +393,7 @@ face is backlit at noon".
 - [ ] Every `status` was confirmed; none filled in as `open` on assumption
 - [ ] `closed_days` agrees with the `closed` text
 - [ ] Every micro-spot has a `parent_id`
+- [ ] Every `tier` is explainable from the detour ladder, and the distribution
+      isn't inflated (`S` ≤ ~12%, `S + A` ≤ ~⅓)
 - [ ] Image URLs came from the API and were eyeballed against their places
 - [ ] `validate.py --check-links` reports zero P0

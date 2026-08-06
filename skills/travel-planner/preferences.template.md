@@ -37,8 +37,9 @@
 
 ## Interest weights
 
-Rank by your actual preferences; the AI adjusts recommendation tiers
-accordingly:
+Rank by your actual preferences. This carries real weight: **High** lifts a
+place one recommendation tier, **Low** drops it one, and anything under "not
+interested" is left off the list entirely.
 
 - **High**: <e.g. architecture, modern art, old districts, hidden corners>
 - **Medium**: <e.g. natural scenery, historic sites>
