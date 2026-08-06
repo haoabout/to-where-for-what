@@ -1565,7 +1565,7 @@ pre.code{
    the alternative, reserving a lane for it, would push the sheets off centre on
    every window that can't spare one. */
 /* display:flex would otherwise beat the [hidden] attribute's UA display:none */
-.pgnav[hidden]{display:none}
+.pgnav[hidden],.pgnav-btn[hidden],.pgnav-scrim[hidden]{display:none}
 .pgnav{
   position:fixed;width:170px;z-index:20;
   display:flex;flex-direction:column;gap:1px;
@@ -1584,6 +1584,40 @@ pre.code{
 .pgnav-h{
   padding:2px 9px 7px;font:600 10.5px/1.4 var(--sans);
   color:var(--canvas-ink-3);letter-spacing:.4px;opacity:.75;
+}
+
+/* ── Folded form ──
+   From ~1180px down there is no gutter left to stand a rail in, and on a phone
+   there are no sheets at all — but "jump to day two" is wanted in both. Same
+   list, same markup, folded behind a pill anchored bottom-left: clear of the
+   fixed action bar (--ab-h is maintained for exactly this), and covering the
+   part of the page you have just finished reading rather than the part you
+   are about to. */
+.pgnav-btn{
+  position:fixed;left:14px;bottom:calc(var(--ab-h,64px) + 14px);z-index:22;
+  display:flex;align-items:center;gap:7px;
+  padding:8px 14px 8px 11px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);
+  font:500 12.5px/1 var(--sans);box-shadow:0 3px 12px var(--sh-1);
+}
+.pgnav-btn .lb{font-family:var(--mono);font-size:11.5px}
+.pgnav.panel{
+  left:14px;top:auto;bottom:calc(var(--ab-h,64px) + 60px);
+  width:min(232px,calc(100vw - 28px));
+  max-height:min(58vh,420px);
+  padding:9px 6px 6px;
+  background:var(--card);border:1px solid var(--line);border-radius:13px;
+  box-shadow:0 10px 34px var(--sh-2,var(--sh-1));
+  z-index:23;
+}
+.pgnav.panel button{font-size:12.5px;padding:7px 9px}
+.pgnav.panel button:hover{background:var(--paper-2)}
+.pgnav.panel button[aria-current="true"]{background:var(--paper-2);color:var(--ink)}
+.pgnav.panel .pgnav-h{color:var(--ink-3);opacity:1}
+.pgnav-scrim{position:fixed;inset:0;z-index:21;background:transparent}
+@media (prefers-reduced-motion:no-preference){
+  .pgnav.panel{animation:pgnav-in .16s ease-out}
+  @keyframes pgnav-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 }
 .pgnav .no{font:400 10.5px/1.6 var(--mono);flex:none;opacity:.65}
 /* One line each, or a long day heading pushes the rail wider than its gutter */
@@ -1644,7 +1678,8 @@ pre.code{
   .card:hover{transform:none}
 }
 @media print{
-  .top,.actionbar,.toolbar,.chips,.pick,.pgnav,.tab-actions{display:none!important}
+  .top,.actionbar,.toolbar,.chips,.pick,.tab-actions,
+  .pgnav,.pgnav-btn,.pgnav-scrim{display:none!important}
   .card{break-inside:avoid;box-shadow:none}
   /* On paper there is no scanning to do — one column reads better, and a
      3:2 photo per place across 47 places is most of a toner cartridge.
@@ -1806,6 +1841,11 @@ pre.code{
   <!-- ══════════════ View ③ Guide ══════════════ -->
   <section class="view" id="view-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
     <nav class="pgnav" id="pgnav" aria-label="Pages" hidden></nav>
+    <!-- Below the width where a rail fits in the gutter, the same list folds
+         behind this pill. Its label doubles as a position readout, so it earns
+         its place on screen even when nobody opens it. -->
+    <button class="pgnav-btn" id="pgnav-btn" aria-expanded="false" aria-controls="pgnav" hidden></button>
+    <div class="pgnav-scrim" id="pgnav-scrim" hidden></div>
     <!-- .guide stays the source of truth in both modes: the paginator clones
          out of it rather than moving its children, so switching pagination off
          is one removeChild and nothing can be lost on the way back. -->
@@ -2020,7 +2060,7 @@ en: {
   checklistTitle:"All places at a glance",
   checklistIntroDays:"The day boxes are the plan you arranged; the rest is everything unscheduled — dropped places included, so you can reconsider them.",
   checklistIntro:"All candidate places, dropped ones included, so you can reconsider them.",
-  pgPrint:"Export PDF", pgNav:"Pages", pgNavHead:"A4 · {n} pages",
+  pgPrint:"Export PDF", pgNav:"Pages", pgNavHead:"A4 · {n} pages", pgNavToc:"Contents",
   pgHint:"A4 · choose “Save as PDF”, and turn headers and footers off",
   contd:" (cont.)",
   staleNote:"Data verified {n} days ago; hours may have changed",
@@ -2190,7 +2230,7 @@ zh: {
   checklistTitle:"全部景点对照表",
   checklistIntroDays:"按天的盒子是你排好的行程，其余是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。",
   checklistIntro:"包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。",
-  pgPrint:"导出 PDF", pgNav:"页面", pgNavHead:"A4 · 共 {n} 页",
+  pgPrint:"导出 PDF", pgNav:"页面", pgNavHead:"A4 · 共 {n} 页", pgNavToc:"目录",
   pgHint:"A4 · 在打印窗口选「存储为 PDF」，并关掉页眉页脚",
   contd:"（续）",
   staleNote:"数据核验于 {n} 天前，开放时间可能已变",
@@ -6081,80 +6121,136 @@ const PAGER = (() => {
       pg.querySelector(".pg-foot .t").textContent = title;
       pg.querySelector(".pg-foot .no").textContent = (i + 1) + " / " + pgs.length;
     });
-    buildNav(pgs);
+    buildNav();
     return pgs.length;
   }
 
-  /* ---------- Sheet navigator ---------- */
-  function buildNav(pgs){
+  /* ---------- Navigator ----------
+     One list, two shapes. On sheets it lists sheets; flowing, it lists the
+     headings — which are the same divisions, since a section per sheet is the
+     whole premise. Numbers only appear where they mean a page. */
+  let navOpen = false;
+
+  function navTargets(){
+    if(on) return [...document.querySelectorAll(".pg")]
+      .map((pg, i) => ({ el: pg, no: String(i + 1), label: pg.dataset.label }));
+    const g = document.querySelector("#pgwrap > .guide");
+    return g ? [...g.querySelectorAll("h2, h3")]
+      .map(h => ({ el: h, no: "", label: h.textContent.trim() })) : [];
+  }
+
+  function goTo(el){
+    // Land the target's head just below the sticky header, not under it
+    const top = $(".top");
+    scrollTo({
+      top: el.getBoundingClientRect().top + scrollY - (top ? top.offsetHeight : 0) - 14,
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }
+
+  function buildNav(){
     const nav = $("#pgnav");
     if(!nav) return;
+    const items = navTargets();
     nav.textContent = "";
     // The paper size belongs here rather than in the sheet footer: the footer
     // prints, and "A4" is not something to tell someone holding the sheet.
     const head = document.createElement("div");
     head.className = "pgnav-h";
-    head.textContent = tf("pgNavHead", { n: pgs.length });
+    head.textContent = on ? tf("pgNavHead", { n: items.length }) : T.pgNavToc;
     nav.appendChild(head);
-    pgs.forEach((pg, i) => {
+    for(const it of items){
       const b = document.createElement("button");
       b.type = "button";
-      b.innerHTML = `<span class="no">${i + 1}</span><span class="t"></span>`;
-      b.querySelector(".t").textContent = pg.dataset.label;
-      b.onclick = () => {
-        // Land the sheet's head just under the sticky header, not under it
-        const top = $(".top");
-        scrollTo({
-          top: pg.getBoundingClientRect().top + scrollY - (top ? top.offsetHeight : 0) - 14,
-          behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        });
-      };
+      b.innerHTML = `<span class="no"></span><span class="t"></span>`;
+      b.querySelector(".no").textContent = it.no;
+      b.querySelector(".t").textContent = it.label;
+      b.onclick = () => { goTo(it.el); if(nav.classList.contains("panel")) openNav(false); };
       nav.appendChild(b);
-    });
+    }
+    layoutNav();
+  }
+
+  function openNav(v){
+    const nav = $("#pgnav"), pill = $("#pgnav-btn"), scrim = $("#pgnav-scrim");
+    if(!nav || !nav.classList.contains("panel")) return;
+    navOpen = v;
+    nav.hidden = !v;
+    if(scrim) scrim.hidden = !v;
+    if(pill) pill.setAttribute("aria-expanded", String(v));
+    // A popover menu, not a dialog: focus moves in and comes back, and Escape
+    // closes it. Trapping the page behind it would be more machinery than a
+    // nine-item list is worth.
+    if(v){ const f = nav.querySelector("button"); if(f) f.focus(); }
+    else if(pill && document.activeElement && nav.contains(document.activeElement)) pill.focus();
+  }
+
+  /* Rail when the gutter can hold one, pill otherwise. Measured, not assumed:
+     main is capped at 1180px and centred, so on a wide window most of the
+     gutter is outside main and a rule in page coordinates would put the rail
+     either on top of the paper or off screen. */
+  function layoutNav(){
+    const nav = $("#pgnav"), pill = $("#pgnav-btn"), scrim = $("#pgnav-scrim"), wrap = $("#pgwrap");
+    if(!nav || !wrap) return;
+    const empty = !nav.querySelector("button");
+    const box = wrap.getBoundingClientRect();
+    const gutter = on ? box.left + (box.width - A4_W * scaleFor(wrap)) / 2 : 0;
+    const rail = on && gutter >= NAV_W + 24;
+
+    nav.classList.toggle("panel", !rail);
+    if(rail){
+      navOpen = false;
+      nav.hidden = empty;
+      nav.style.left = Math.round(gutter - NAV_W - 16) + "px";
+      nav.style.top = (($(".top") ? $(".top").offsetHeight : 0) + 34) + "px";
+      // aria-expanded has to be cleared with navOpen, or a window that grows
+      // and shrinks again leaves the pill claiming an open panel
+      if(pill){ pill.hidden = true; pill.setAttribute("aria-expanded", "false"); }
+      if(scrim) scrim.hidden = true;
+    }else{
+      nav.style.left = nav.style.top = "";
+      nav.hidden = !navOpen || empty;
+      if(scrim) scrim.hidden = !navOpen || empty;
+      if(pill) pill.hidden = empty;
+    }
     markNav();
   }
 
-  /* The sheet owning the top of the viewport, not the one most of it shows —
-     you scroll to a sheet's head and read down, so the head is what the rail
-     should be pointing at. */
+  /* The target owning the top of the viewport, not the one most of it shows —
+     you scroll to a heading and read down, so the head is what to point at. */
   function markNav(){
-    const nav = $("#pgnav");
-    if(!nav || nav.hidden) return;
-    const pgs = [...document.querySelectorAll(".pg")];
+    const nav = $("#pgnav"), pill = $("#pgnav-btn");
+    if(!nav) return;
+    const items = navTargets();
+    if(!items.length) return;
     const top = $(".top");
     const line = (top ? top.offsetHeight : 0) + 20;
     let cur = 0;
-    pgs.forEach((pg, i) => { if(pg.getBoundingClientRect().top <= line) cur = i; });
+    items.forEach((it, i) => { if(it.el.getBoundingClientRect().top <= line) cur = i; });
     nav.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-current", String(i === cur)));
+    if(pill && !pill.hidden){
+      pill.querySelector(".lb").textContent = on ? (cur + 1) + " / " + items.length : T.pgNavToc;
+    }
   }
 
   /* A4 is 794px wide — wider than a phone. The sheets scale down to fit
      rather than scroll sideways, and .pgwrap is given the scaled height back
      because a transform doesn't change layout. */
+  // Guarded: a hidden or not-yet-laid-out wrapper measures 0 and would
+  // scale the sheets to a couple of pixels, which looks like the feature is
+  // broken rather than like a narrow window. Below a phone's width, don't
+  // scale — sheets that scroll sideways are recoverable, 1% sheets aren't.
+  function scaleFor(wrap){
+    return wrap.clientWidth < 240 ? 1 : Math.min(1, (wrap.clientWidth - 8) / A4_W);
+  }
+
   function fit(){
     const wrap = $("#pgwrap"), paged = wrap && wrap.querySelector(".paged");
     if(!paged) return;
-    // Guarded: a hidden or not-yet-laid-out wrapper measures 0 and would
-    // scale the sheets to a couple of pixels, which looks like the feature is
-    // broken rather than like a narrow window. Below a phone's width, don't
-    // scale — sheets that scroll sideways are recoverable, 1% sheets aren't.
-    const s = wrap.clientWidth < 240 ? 1 : Math.min(1, (wrap.clientWidth - 8) / A4_W);
+    const s = scaleFor(wrap);
     paged.style.transform = `translateX(-50%) scale(${s})`;
     wrap.style.height = Math.ceil(paged.offsetHeight * s) + "px";
-
-    // The rail goes in the gutter left of the sheets, measured rather than
-    // assumed: main is capped at 1180px and centred, so on a wide window most
-    // of the gutter is outside main and a rule in page coordinates would put
-    // the rail either on top of the paper or off screen.
-    const nav = $("#pgnav");
-    if(!nav) return;
-    const box = wrap.getBoundingClientRect();
-    const gutter = box.left + (box.width - A4_W * s) / 2;
-    nav.hidden = gutter < NAV_W + 24;
-    if(nav.hidden) return;
-    nav.style.left = Math.round(gutter - NAV_W - 16) + "px";
-    nav.style.top = (($(".top") ? $(".top").offsetHeight : 0) + 34) + "px";
-    markNav();
+    layoutNav();
   }
 
   function set(v){
@@ -6165,7 +6261,7 @@ const PAGER = (() => {
     if(!on){
       wrap.querySelectorAll(".paged").forEach(n => n.remove());
       wrap.style.height = "";
-      if(nav){ nav.hidden = true; nav.textContent = ""; }
+      buildNav();          // flowing: the list becomes the headings
       return 0;
     }
     const n = build();
@@ -6185,6 +6281,7 @@ const PAGER = (() => {
     const want = wrap.clientWidth >= MIN_W;
     if(want !== on) set(want);
     else if(on){ build(); fit(); }        // content changed underneath
+    else buildNav();
   }
 
   addEventListener("resize", () => {
@@ -6192,12 +6289,22 @@ const PAGER = (() => {
     if(!wrap || $("#view-guide").hidden) return;
     if((wrap.clientWidth >= MIN_W) !== on) set(!on);
     else if(on) fit();
+    else layoutNav();
   });
   addEventListener("scroll", () => {
-    if(!on) return;
-    if(markNav.raf) return;
+    if(markNav.raf || $("#view-guide").hidden) return;
     markNav.raf = requestAnimationFrame(() => { markNav.raf = 0; markNav(); });
   }, { passive: true });
+
+  const pill = $("#pgnav-btn"), scrim = $("#pgnav-scrim");
+  if(pill){
+    pill.innerHTML = `<span class="ic"></span><span class="lb"></span>`;
+    pill.querySelector(".ic").innerHTML = icon(
+      `<path d="M2.5 4h11M2.5 8h11M2.5 12h7" ${SVG_ST}/>`, 13);
+    pill.onclick = () => openNav(!navOpen);
+  }
+  if(scrim) scrim.onclick = () => openNav(false);
+  addEventListener("keydown", e => { if(e.key === "Escape" && navOpen) openNav(false); });
   /* Printing unpaginated would throw away everything above, so the guide
      always prints paginated — switched on here if the reader didn't, and back
      off afterwards so the screen is left as they had it. */
