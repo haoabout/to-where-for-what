@@ -6,96 +6,64 @@
 <title>Trip</title>
 <style>
 /* ═══════════════════════════════════════════════ Design tokens
-   Both palettes live in one place. light-dark() resolves against the *adopted*
-   color-scheme, so the three states (follow system / force light / force dark)
-   only ever touch the single color-scheme property — no copying the whole
-   token block three times (a triplicated copy would eventually drift).
-   The default still follows the system preference — even with JS dead, the
-   colors are correct and there is no flash. */
+   One palette, light, fixed. The page used to carry both and a three-state
+   corner toggle; that is gone. The trip page is read outdoors and printed as
+   often as it is read at night, and the thing that genuinely needed a dark
+   option — the basemap, the largest surface in view ② — now has its own
+   switch inside the map (see setMapDark). Two independent light/dark controls
+   on one screen was the confusing part, not the dark map.
+
+   color-scheme:light is not vestigial: it is what keeps the browser's *own*
+   painting — scrollbars, the search input, focus rings — light on a machine
+   whose OS is set to dark. Drop it and those come back dark against a paper
+   page. */
 :root{
-  color-scheme:light dark;
+  color-scheme:light;
 
-  --paper:light-dark(#faf8f4,#16130f);
-  --paper-2:light-dark(#f2eee7,#1d1915);
-  --card:light-dark(#fffefc,#211c17);
+  --paper:#faf8f4;
+  --paper-2:#f2eee7;
+  --card:#fffefc;
   /* --ink-3 carries all the site's 11.5–12.5px small text (.hint/.facts/.sub/
-     .caveat…). The old light #918879 hit only 3.03:1 on --paper-2 and the dark
-     #877d6d 4.17 on --card — the smallest text paired with the lowest contrast,
-     two liabilities stacked. Now the three light steps are 5.16/5.43/4.73 and
-     the dark ones 5.23/4.77/4.93. */
-  --ink:light-dark(#1f1b16,#ece6dc);
-  --ink-2:light-dark(#5c544a,#b3a999);
-  --ink-3:light-dark(#726859,#918776);
-  --line:light-dark(#e3ddd2,#332c24);
-  --line-2:light-dark(#d0c8ba,#443b31);
-  --accent:light-dark(#b5442a,#e0765a);
-  --accent-soft:light-dark(#f6e7e2,#3a221c);
-  --ok:light-dark(#2f6b4f,#7fbd9c);
-  --ok-soft:light-dark(#e6f0ea,#1c2b23);
-  --warn:light-dark(#9a6414,#d9a95c);
-  --warn-soft:light-dark(#fbf0dc,#2e2617);
-  --danger:light-dark(#a8322b,#e08079);
-  --danger-soft:light-dark(#fae9e7,#33201e);
-  --mute:light-dark(#8d8577,#7d7466);
+     .caveat…). The old #918879 hit only 3.03:1 on --paper-2 — the smallest
+     text paired with the lowest contrast, two liabilities stacked. The three
+     steps now measure 5.16 / 5.43 / 4.73. */
+  --ink:#1f1b16;
+  --ink-2:#5c544a;
+  --ink-3:#726859;
+  --line:#e3ddd2;
+  --line-2:#d0c8ba;
+  --accent:#b5442a;
+  --accent-soft:#f6e7e2;
+  --ok:#2f6b4f;
+  --ok-soft:#e6f0ea;
+  --warn:#9a6414;
+  --warn-soft:#fbf0dc;
+  --danger:#a8322b;
+  --danger-soft:#fae9e7;
+  --mute:#8d8577;
 
-  /* Foreground on filled controls. A token background flips with the theme
-     while a hardcoded #fff foreground doesn't — in dark mode the selected
-     "want" state was once white text on #7fbd9c, 2.17:1. Anywhere a semantic
-     color is used as a background, the foreground takes the matching --on-*.
-     After the fix: --on-ok 8.52, --on-warn 8.62, --on-accent 6.09. */
-  --on-accent:light-dark(#fff,#16130f);
-  --on-ok:light-dark(#fff,#16130f);
-  --on-warn:light-dark(#fff,#16130f);
+  /* Foreground on filled controls. Anywhere a semantic color is used as a
+     background, the foreground takes the matching --on-*, rather than a
+     hardcoded #fff scattered through the rules. Measured: --on-ok 8.52,
+     --on-warn 8.62, --on-accent 6.09. */
+  --on-accent:#fff;
+  --on-ok:#fff;
+  --on-warn:#fff;
   --on-ink:var(--paper);
-  /* --on-day deliberately does not flip. The day colors are one set shared by
-     both themes (see DAY_COLORS); the background is identical on both sides,
-     so the text sitting on it should be too. */
   --on-day:#fff;
   /* Lodging dot. It has no "which day", so a neutral color keeps it distinct
      from the day palette. The one on the map doesn't use this — it sits on the
-     basemap and flips with the basemap's lightness (see MAP_INK). */
-  --lodging:light-dark(#4A4A4A,#8b8272);
+     basemap and follows the basemap's lightness (see MAP_INK), which is still
+     switchable. */
+  --lodging:#4A4A4A;
 
   --serif:Georgia,"Songti SC","Hiragino Mincho ProN","Noto Serif CJK SC",serif;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --r:10px;
-  /* light-dark() only takes color values, not whole shadows, so the two
-     layers' colors are split into their own tokens */
-  --sh-1:light-dark(rgba(31,27,22,.05),rgba(0,0,0,.3));
-  --sh-2:light-dark(rgba(31,27,22,.05),rgba(0,0,0,.25));
+  --sh-1:rgba(31,27,22,.05);
+  --sh-2:rgba(31,27,22,.05);
   --shadow:0 1px 2px var(--sh-1),0 4px 14px var(--sh-2);
-}
-/* When the user explicitly picks a theme in the top-right corner, only
-   color-scheme changes — every light-dark() above follows along, including
-   form controls and scrollbars, the parts the browser paints itself. */
-:root[data-theme="light"]{color-scheme:light}
-:root[data-theme="dark"]{color-scheme:dark}
-
-/* Floor for old browsers. Custom properties can't participate in cascade
-   fallback — their values are always valid at parse time and only fail at
-   var() lookup, at which point the whole token set collapses at once and the
-   page becomes unstyled black-on-white. That is far worse than losing a bit of
-   frosted glass, and this page gets shared with travel companions whose
-   browsers we don't choose. So a light-palette fallback stays; only browsers
-   without light-dark() ever read it, and if it drifts, old browsers merely see
-   slightly stale colors — nothing functional.
-   (light-dark() baseline: Chrome 123 / Safari 17.5 / Firefox 120.) */
-@supports not (color: light-dark(#000,#fff)){
-  :root{
-    --paper:#faf8f4; --paper-2:#f2eee7; --card:#fffefc;
-    --ink:#1f1b16; --ink-2:#5c544a; --ink-3:#726859;
-    --line:#e3ddd2; --line-2:#d0c8ba;
-    --accent:#b5442a; --accent-soft:#f6e7e2;
-    --ok:#2f6b4f; --ok-soft:#e6f0ea;
-    --warn:#9a6414; --warn-soft:#fbf0dc;
-    --danger:#a8322b; --danger-soft:#fae9e7;
-    --mute:#8d8577;
-    --on-accent:#fff; --on-ok:#fff; --on-warn:#fff;
-    --lodging:#4A4A4A;
-    --sh-1:rgba(31,27,22,.05); --sh-2:rgba(31,27,22,.05);
-  }
-  .theme-btn{display:none}          /* switching would do nothing; better not to offer it */
 }
 *{box-sizing:border-box}
 /* Any explicit display rule overrides the browser default for [hidden].
@@ -155,31 +123,12 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:1px 8px;border-radius:20px;font-size:11.5px;
 }
 
-/* Theme toggle. Three-state cycle: follow system → light → dark → follow
-   system. The icon depicts the *current* theme; the accessible name also says
-   what pressing will switch to — the classic failure of cycle buttons is
-   never announcing the next step. */
-.theme-btn{
-  margin-left:auto;align-self:center;flex:none;
-  width:32px;height:32px;display:grid;place-items:center;
-  border:1px solid var(--line);border-radius:9px;
-  background:var(--card);color:var(--ink-2);transition:.15s;
-}
-.theme-btn:hover{border-color:var(--line-2);color:var(--ink);background:var(--paper-2)}
-/* Narrow screens: the subtitle wraps to two lines, and in DOM order the
-   toggle gets pushed onto a third, adding dead height to the header (measured
-   at 375px: 173 → 194px, 24% of the viewport). Putting the toggle on the
-   title's row and dropping the subtitle to its own full row makes the header
-   shorter than before the toggle existed. */
+/* Narrow screens: the subtitle wraps to two lines and needs a row of its own,
+   or the header eats a quarter of a 375px viewport. */
 @media (max-width:640px){
   .brand{gap:8px 12px}
-  .theme-btn{order:1}
   .brand .sub{order:2;flex-basis:100%}
 }
-.theme-btn svg{display:block}
-/* "Follow system" shows both palettes as the two halves of the same circle
-   instead of inventing a third symbol */
-.theme-btn .half{fill:currentColor;stroke:none}
 
 .tabs{display:flex;gap:2px;margin-top:12px;align-items:center}
 .tab-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
@@ -215,7 +164,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tally span{display:flex;align-items:center;gap:4px}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 /* Undecided is hollow: it used to share --line-2 with "no", differing only by
-   45% opacity, and in the light theme the two gray dots were indistinguishable.
+   45% opacity, and the two gray dots were indistinguishable.
    Hollow = not yet decided, which happens to match the map markers' own
    "hollow = not yet scheduled" intuition. */
 .d-yes{background:var(--ok)} .d-maybe{background:var(--warn)} .d-no{background:var(--line-2)} .d-none{background:transparent;border:1.5px solid var(--line-2)}
@@ -644,12 +593,13 @@ pre.code{
 .ms-fil button:hover:not([aria-pressed=true]){background:color-mix(in srgb,var(--card) 55%,transparent);color:var(--ink-2)}
 /* Selected = a piece of card "lifted" off the paper-2 band. It used to be the
    inverse (paper-2 sunk into a card capsule), which only made sense while
-   that capsule existed. The outline can't be dropped: in dark mode
-   --card(#211c17) and --paper-2(#1d1915) sit four lightness steps apart —
-   measured, the background difference alone barely shows which filters are
-   on, and shadows do almost nothing on a dark ground. Inset, not border —
-   the outline must not change the button's box size, or unselected buttons
-   shrink and all four widths jump on every toggle. */
+   that capsule existed. The outline originally earned its place on the dark
+   palette, where --card and --paper-2 sat four lightness steps apart and the
+   background difference alone barely showed which filters were on; that
+   palette is gone, but --card(#fffefc) over --paper-2(#f2eee7) is a quiet
+   difference too, so it stays. Inset, not border — the outline must not
+   change the button's box size, or unselected buttons shrink and all four
+   widths jump on every toggle. */
 .ms-fil button[aria-pressed=true]{
   background:var(--card);color:var(--ink);font-weight:600;
   box-shadow:0 1px 2px var(--sh-1),inset 0 0 0 1px var(--line);
@@ -665,7 +615,7 @@ pre.code{
 /* The count badge uses one color set for both states: --line is legible on
    the band (--paper-2) and on the selected state (--card) alike. The selected
    state used to hardcode rgba(255,255,255,.24) — tuned for dark fills — which
-   in the light theme meant white on white and the pill vanished entirely. */
+   on a light card meant white on white and the pill vanished entirely. */
 .ms-fil .c{
   font:600 9.5px/13px var(--mono);min-width:13px;padding:0 3px;border-radius:7px;
   background:var(--line);color:var(--ink-3);
@@ -1141,7 +1091,6 @@ pre.code{
     <div class="brand">
       <h1 id="title">Trip</h1>
       <div class="sub" id="subtitle"></div>
-      <button class="theme-btn" id="theme"></button>
     </div>
     <nav class="tabs" role="tablist">
       <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span> <span class="n" id="n-list">0</span></button>
@@ -1315,8 +1264,6 @@ en: {
   msqGo:"Search", transit:"Transit",
   saveBtn:"Save choices & schedule", saveNow:"Save now",
   downloadBtn:"Download places.json", copyBtn:"Copy for AI…", moreBtn:"Manual save…",
-  themeAuto:"Follow system", themeLight:"Light", themeDark:"Dark",
-  themeTitle:"Theme: {cur} (click for {next})",
   scaleSpot:"photo stop, 5–15 min", scale30:"~30 min", scale12:"1–2 h",
   scale23:"2–3 h", scaleHalf:"half a day", scaleFull:"a full day",
   stRenovating:"Under renovation", stSeasonal:"Seasonally closed", stPermanent:"Permanently closed",
@@ -1481,8 +1428,6 @@ zh: {
   msqGo:"搜索", transit:"地铁",
   saveBtn:"保存选择和日程", saveNow:"立即保存",
   downloadBtn:"下载 places.json", copyBtn:"复制给 AI…", moreBtn:"手动保存…",
-  themeAuto:"跟随系统", themeLight:"浅色", themeDark:"深色",
-  themeTitle:"配色：{cur}（点击切换到{next}）",
   scaleSpot:"打卡点 5-15 分钟", scale30:"约 30 分钟", scale12:"1-2 小时",
   scale23:"2-3 小时", scaleHalf:"半天", scaleFull:"一整天",
   stRenovating:"修缮中", stSeasonal:"季节性关闭", stPermanent:"已永久关闭",
@@ -1666,15 +1611,18 @@ const isStubP = p => !!p && p.origin === "user" && !p.tier;
 /* Must avoid green (yes) / amber (maybe) / gray (no), or fill and ring share
    a family. Lightness also has to satisfy three constraints at once, and the
    window is narrow (relative luminance L in 0.150–0.178):
-     · white sequence digits stay legible   → L ≤ 0.179 (white text 4.5:1)
-     · recognizable on the dark theme card  → L ≥ 0.144 (3:1 vs --card, WCAG 1.4.11)
-     · recognizable on the light theme card → L ≤ 0.30
-   The old six colors were picked on the first constraint only; in dark mode
-   #5D4037 hit just 1.81:1 against the card and #C2185B 2.88 — and "which day
-   is this" rides entirely on this color code, so invisible = information
-   lost. The six hues stay; lightness is normalized to L≈0.162, and all four
-   checks pass measured (lowest 3.38). One value set for both themes, to
-   preserve "map and sidebar show the same data under the same rules". */
+     · white sequence digits stay legible  → L ≤ 0.179 (white text 4.5:1)
+     · recognizable on a dark ground       → L ≥ 0.144 (3:1, WCAG 1.4.11)
+     · recognizable on a light ground      → L ≤ 0.30
+   The dark constraint outlived the dark page palette that produced it: these
+   are also the marker colors on the basemap, which still switches light/dark
+   (see setMapDark), and the dark basemap is darker than that page ever was.
+   The old six colors were picked on the first constraint only; against a dark
+   ground #5D4037 hit just 1.81:1 and #C2185B 2.88 — and "which day is this"
+   rides entirely on this color code, so invisible = information lost. The six
+   hues stay; lightness is normalized to L≈0.162, and all four checks pass
+   measured (lowest 3.38). One value set for every ground, to preserve "map
+   and sidebar show the same data under the same rules". */
 const DAY_COLORS = ["#597481", "#2A6DD8", "#8E55C4", "#0E7C7D", "#D81B65", "#936657"];
 const dayColor = n => DAY_COLORS[((n % DAY_COLORS.length) + DAY_COLORS.length) % DAY_COLORS.length];
 
@@ -1804,91 +1752,15 @@ function verifyBox(p){
   </div>`;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Light / dark theme
+/* The page has one palette, fixed light (see the design tokens). There is no
+   theme state, no corner toggle and no themechange event; the only light/dark
+   control left on the page belongs to the basemap and lives inside the map
+   (see setMapDark).
 
-   Three states, not two: the original behavior WAS "follow system", and many
-   people (especially those with sunset auto-switching) want exactly that —
-   replacing it with a binary toggle would take that ability away. So the
-   cycle is follow-system → light → dark → follow-system, defaulting to
-   follow-system.
-
-   The CSS only honors :root[data-theme]; without the attribute it falls back
-   to color-scheme:light dark — meaning with JS dead or localStorage blocked,
-   the colors are still right.
-   ═══════════════════════════════════════════════════════════════════ */
-const DARK_MQ = matchMedia("(prefers-color-scheme: dark)");
-/* Read .matches each time instead of caching the boolean: toggling "reduce
+   Read .matches each time instead of caching the boolean: toggling "reduce
    motion" in system settings should take effect immediately, without
    reopening the page. */
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)");
-const THEMES = ["auto", "light", "dark"];
-const THEME_TXT = { auto:T.themeAuto, light:T.themeLight, dark:T.themeDark };
-const THEME_ICON = {
-  // Sun: a ring of short rays
-  light: stroke("M8 2.6V1M8 15v-1.6M13.2 8H15M1 8h1.8M11.8 4.2 12.9 3.1M3.1 12.9l1.1-1.1"
-              + "M11.8 11.8l1.1 1.1M3.1 3.1l1.1 1.1", 15,
-              '<circle cx="8" cy="8" r="3.1"/>'),
-  // Moon: the same circle with a bite taken out — sharing the sun's radius
-  // keeps the visual weight consistent
-  dark:  stroke("M13 9.6A5.6 5.6 0 1 1 6.4 3a4.4 4.4 0 0 0 6.6 6.6Z", 15),
-  // Follow system: one circle, light left half, dark right half
-  auto:  stroke("", 15,
-              '<circle cx="8" cy="8" r="5.4"/>'
-              + '<path class="half" d="M8 2.6a5.4 5.4 0 0 1 0 10.8Z"/>'),
-};
-
-function themePref(){
-  try{
-    const v = localStorage.getItem(LS_KEY + ":theme");
-    return THEMES.includes(v) ? v : "auto";
-  }catch(e){ return "auto"; }
-}
-const themeIsDark = () => {
-  const p = themePref();
-  return p === "auto" ? DARK_MQ.matches : p === "dark";
-};
-
-function applyTheme(pref, persist = true){
-  const root = document.documentElement;
-  if(pref === "auto") root.removeAttribute("data-theme");
-  else root.dataset.theme = pref;
-  if(persist){ try{ localStorage.setItem(LS_KEY + ":theme", pref); }catch(e){} }
-
-  const btn = $("#theme");
-  if(btn){
-    const next = THEMES[(THEMES.indexOf(pref) + 1) % THEMES.length];
-    btn.innerHTML = THEME_ICON[pref];
-    btn.title = tf("themeTitle", { cur: THEME_TXT[pref], next: THEME_TXT[next] });
-    btn.setAttribute("aria-label", btn.title);
-  }
-  // Anything beyond CSS's reach needs its own notification. The basemap used
-  // to be the one listener; it now has its own lightness button and is
-  // deliberately decoupled from the theme (see setMapDark), so nobody listens
-  // at the moment. Kept as the hook for the next such surface — canvas, WebGL
-  // or an <iframe> — rather than re-deriving it later.
-  window.dispatchEvent(new CustomEvent("themechange", { detail:{ dark:themeIsDark() } }));
-}
-
-function initTheme(){
-  applyTheme(themePref());
-  $("#theme").addEventListener("click", () => {
-    const cur = themePref();
-    applyTheme(THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length]);
-  });
-  // While parked on "follow system", a system switch must apply immediately
-  DARK_MQ.addEventListener?.("change", () => {
-    if(themePref() === "auto") applyTheme("auto");
-  });
-  /* The same trip open in two tabs (common under --serve): switch the theme
-     in tab A and tab B's localStorage changes, but its button won't repaint
-     itself — icon and label drift from reality. The storage event only fires
-     in *other* tabs, so no loop here; persist=false because the value was
-     written by someone else and needn't be written again. */
-  addEventListener("storage", e => {
-    if(e.key === LS_KEY + ":theme") applyTheme(themePref(), false);
-  });
-}
 
 /* ─────────────────────────────────────────────── Render helpers */
 /* Local-language names carry a lang attribute. The page's lang is the body
@@ -1912,8 +1784,9 @@ const stars = n => "★".repeat(n||0) + `<i>${"★".repeat(Math.max(0,5-(n||0)))
         sequence digits next to it (the map's lodging marker moved from emoji
         to SVG for exactly this).
      2. We don't control the color. Emoji are pre-colored and can't inherit
-        currentColor, so the "yes" green isn't the page's --ok green, and it
-        won't flip with the dark theme either.
+        currentColor, so the "yes" green isn't the page's --ok green — and on
+        the map, where the ink follows the basemap's lightness, a baked-in
+        color can't follow anything.
    Font symbols (◐ ✕ etc.) fix #2 but gamble that the user's fonts carry the
    code point — this page gets shared, and we don't choose the fonts. So:
    inline SVG throughout. viewBox is uniformly 16; different uses only change
@@ -2688,7 +2561,8 @@ function toast(msg){
    styles over the *same* tiles (positron ⇄ dark, graybeard ⇄ shadow), so the
    pair is one setting on top of the tier, not two more tiers. ③ is raster and
    has no dark half — there the Dark button disables itself rather than
-   pretending. The setting is the user's, kept apart from the page theme.
+   pretending. It is the only light/dark control on the page — the page
+   itself is fixed light.
    ═══════════════════════════════════════════════════════════════════ */
 const MAP = (() => {
   const MAPLIBRE_JS  = "https://unpkg.com/maplibre-gl@5.14.0/dist/maplibre-gl.js";
@@ -2729,7 +2603,7 @@ const MAP = (() => {
      changes; graybeard/shadow are the same deal on the shortbread side.
      Raster is the one that can't follow: the tiles are baked images and OSM
      ships no dark set. So "is the basemap dark" is a question about the
-     basemap in use, never about the page theme — see baseIsDark and MI. */
+     basemap in use; the page around it does not switch. See baseIsDark, MI. */
   const ofmStyle = dark =>
     "https://tiles.openfreemap.org/styles/" + (dark ? "dark" : "positron");
 
@@ -2770,7 +2644,7 @@ const MAP = (() => {
      These were all hardcoded light, on the premise "all three basemaps are
      light" — a premise now true only when the basemap in use happens to be
      light. So they're gathered in one place and flip with the *current
-     basemap*, not with the page theme: switching to Raster always lands on a
+     basemap*, not with the page: switching to Raster always lands on a
      light basemap whatever the lightness button says, and these inks must come
      back with it. */
   const MAP_INK = {
@@ -2794,15 +2668,13 @@ const MAP = (() => {
   /* Deliberately computed, not stored. Stored, every place that touches
      st.base would have to remember to sync it — and init()'s fallback path
      writes st.base = "gb" directly without going through switchBase. Missed
-     once in practice: first map entry after switching the theme to light,
-     the basemap was light but the inks were still the dark set.
-     The Leaflet fallback uses CARTO's light raster, always counted light. The
-     static fallback draws no basemap at all — it's a sketch on --paper-2, a
-     UI surface — so there it is the *page theme* that decides, the one place
-     where the two questions genuinely coincide. */
+     once in practice: the basemap was light but the inks were still the dark
+     set.
+     Both fallback engines are light and say so outright: Leaflet paints
+     CARTO's light raster, and the static path draws no basemap at all — it's a
+     sketch on --paper-2, a page surface, and the page is fixed light. */
   const baseIsDark = () => {
-    if(st.engine === "leaflet") return false;
-    if(st.engine === "static") return themeIsDark();
+    if(st.engine === "leaflet" || st.engine === "static") return false;
     const b = BASEMAPS.find(x => x.id === st.base);
     return !!(b && !b.noDark && st.mapDark);
   };
@@ -2971,24 +2843,19 @@ const MAP = (() => {
   }
 
   /* ---------- Basemap lightness preference ----------
-     Independent of the page theme, on purpose: the map is a working surface,
-     not a panel of the UI, and "dark page, light map" is a legitimate
-     combination (a light basemap holds more contrast against the day colors).
-     So no themechange listener touches it — the button is the only thing that
-     moves it.
+     The one light/dark control on the page, and it governs the basemap only.
+     The page around it is fixed light, so the default is light too: a
+     near-black rectangle inside a paper page is a worse first impression than
+     an all-light page, and anyone who wants the dark map is one click and one
+     stored value away from keeping it forever.
 
-     The page theme is consulted exactly once, as the seed for a trip that has
-     never had the button pressed. Without that, a dark-theme user's first
-     visit gets a near-black page around one bright rectangle. After the first
-     press, the stored value wins forever and the theme is never asked again. */
+     Nothing else moves this. There is no page theme to follow and no
+     themechange listener — the button is the only writer. */
   const MAPDARK_KEY = LS_KEY + ":mapdark";
   function storedMapDark(){
     try{
-      const v = localStorage.getItem(MAPDARK_KEY);
-      if(v === "1") return true;
-      if(v === "0") return false;
-    }catch(e){}
-    return themeIsDark();
+      return localStorage.getItem(MAPDARK_KEY) === "1";
+    }catch(e){ return false; }
   }
 
   const st = { ready:false, engine:null, map:null, markers:new Map(),
@@ -4425,10 +4292,8 @@ const MAP = (() => {
   }
 
   /* Basemap lightness switch.
-     Note what is *not* here: a themechange listener. The page theme used to
-     drag the Simple basemap along with it; now the two are decoupled and this
-     button is the only thing that moves the map. See storedMapDark for why the
-     theme still seeds the very first visit.
+     The only writer of st.mapDark, and the page's only light/dark control (see
+     storedMapDark).
 
      Reuses switchBase by nulling st.base first — the style URL for the current
      basemap has changed, so it is a genuine restyle, just one that lands on
@@ -4449,8 +4314,9 @@ const MAP = (() => {
     syncLightness();
   }
 
-  /* The same trip open in two tabs: keep the map lightness in step, the way
-     the theme already does. */
+  /* The same trip open in two tabs (common under --serve): switch in tab A and
+     tab B's localStorage changes, but its map and buttons won't follow on
+     their own. The storage event only fires in *other* tabs, so no loop. */
   window.addEventListener("storage", e => {
     if(e.key !== MAPDARK_KEY) return;
     setMapDark(storedMapDark());
@@ -5339,7 +5205,6 @@ function boot(){
   document.title = tf("docTitle", { dest: TRIP.destination || T.trip });
   if(TRIP.output_language) document.documentElement.lang = TRIP.output_language;
   applyStaticI18n();
-  initTheme();
   $("#title").innerHTML = esc(TRIP.destination || T.trip)
     + (TRIP.destination_local && TRIP.destination_local !== TRIP.destination
         ? `（<span${langAttr}>${esc(TRIP.destination_local)}</span>）` : "");
