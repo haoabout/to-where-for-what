@@ -1581,6 +1581,10 @@ pre.code{
 }
 .pgnav button:hover{background:rgba(0,0,0,.05);color:var(--canvas-ink-2)}
 .pgnav button[aria-current="true"]{background:rgba(0,0,0,.075);color:var(--canvas-ink)}
+.pgnav-h{
+  padding:2px 9px 7px;font:600 10.5px/1.4 var(--sans);
+  color:var(--canvas-ink-3);letter-spacing:.4px;opacity:.75;
+}
 .pgnav .no{font:400 10.5px/1.6 var(--mono);flex:none;opacity:.65}
 /* One line each, or a long day heading pushes the rail wider than its gutter */
 .pgnav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1707,7 +1711,7 @@ pre.code{
       <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
       <div class="tab-actions" id="guide-actions" hidden>
         <button class="btn sm" id="pg-print">Export PDF</button>
-        <span class="hint" id="pg-hint">Choose “Save as PDF”, and turn headers and footers off</span>
+        <span class="hint" id="pg-hint">A4 · choose “Save as PDF”, and turn headers and footers off</span>
       </div>
       <div class="tab-actions" id="map-actions" hidden>
         <button class="btn sm" id="exp-csv">Export CSV</button>
@@ -2016,8 +2020,8 @@ en: {
   checklistTitle:"All places at a glance",
   checklistIntroDays:"The day boxes are the plan you arranged; the rest is everything unscheduled — dropped places included, so you can reconsider them.",
   checklistIntro:"All candidate places, dropped ones included, so you can reconsider them.",
-  pgPrint:"Export PDF", pgNav:"Pages",
-  pgHint:"Choose “Save as PDF”, and turn headers and footers off",
+  pgPrint:"Export PDF", pgNav:"Pages", pgNavHead:"A4 · {n} pages",
+  pgHint:"A4 · choose “Save as PDF”, and turn headers and footers off",
   contd:" (cont.)",
   staleNote:"Data verified {n} days ago; hours may have changed",
   noGuideBig:"No guide yet",
@@ -2186,8 +2190,8 @@ zh: {
   checklistTitle:"全部景点对照表",
   checklistIntroDays:"按天的盒子是你排好的行程，其余是没排进去的——放弃的也列在这里，方便回头判断要不要捡回来。",
   checklistIntro:"包含所有候选地点，放弃的也列在这里，方便你回头判断要不要捡回来。",
-  pgPrint:"导出 PDF", pgNav:"页面",
-  pgHint:"在打印窗口选「存储为 PDF」，并关掉页眉页脚",
+  pgPrint:"导出 PDF", pgNav:"页面", pgNavHead:"A4 · 共 {n} 页",
+  pgHint:"A4 · 在打印窗口选「存储为 PDF」，并关掉页眉页脚",
   contd:"（续）",
   staleNote:"数据核验于 {n} 天前，开放时间可能已变",
   noGuideBig:"攻略还没生成",
@@ -6086,6 +6090,12 @@ const PAGER = (() => {
     const nav = $("#pgnav");
     if(!nav) return;
     nav.textContent = "";
+    // The paper size belongs here rather than in the sheet footer: the footer
+    // prints, and "A4" is not something to tell someone holding the sheet.
+    const head = document.createElement("div");
+    head.className = "pgnav-h";
+    head.textContent = tf("pgNavHead", { n: pgs.length });
+    nav.appendChild(head);
     pgs.forEach((pg, i) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -6115,7 +6125,7 @@ const PAGER = (() => {
     const line = (top ? top.offsetHeight : 0) + 20;
     let cur = 0;
     pgs.forEach((pg, i) => { if(pg.getBoundingClientRect().top <= line) cur = i; });
-    [...nav.children].forEach((b, i) => b.setAttribute("aria-current", String(i === cur)));
+    nav.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-current", String(i === cur)));
   }
 
   /* A4 is 794px wide — wider than a phone. The sheets scale down to fit
