@@ -174,6 +174,17 @@
      page's body copy is almost entirely Han. */
   --tracking:-0.025em;
   --r:20px;               /* --radius, 1.25rem */
+  /* Place cards run rounder than the rest of the chrome. They are the one
+     surface you look at as an object rather than as a panel, and at 371px wide
+     with a photo inset in them the theme radius read as a slightly softened
+     rectangle. Kept as its own token rather than raising --r: the segmented
+     controls, the map frame and the summary boxes are chrome and should stay
+     at the theme value.
+     --card-pad is a token for one reason — the photo's radius is derived from
+     it (see .media), and the two corners only stay concentric if the padding
+     and the radius are read from the same place. */
+  --r-card:27px;
+  --card-pad:12px;
   /* The theme ships eight shadow steps, 2xs through 2xl. Measured on the source
      page, only one of them is ever applied: --shadow-xs, at alpha .08, on 30 of
      327 elements — 83% carry no shadow at all. --shadow / --shadow-sm (alpha
@@ -380,9 +391,9 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    the chips and segmented controls as well turned the filter rows into a grid
    of black boxes and buried the cards it was supposed to emphasise. */
 .card{
-  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
   box-shadow:var(--shadow);overflow:hidden;transition:border-color .15s,opacity .2s;
-  display:flex;flex-direction:column;padding:12px;
+  display:flex;flex-direction:column;padding:var(--card-pad);
 }
 .card:hover{border-color:var(--ink)}
 .card[data-choice=no]{opacity:.5}
@@ -393,12 +404,13 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    template-y tell there is. */
 
 /* Photo inset inside the card's own padding rather than bled to the edge.
-   Its radius is the card's minus that padding (20 − 12 = 8, rounded up to 11
-   because the eye reads the inner curve as tighter than it is) so the two
-   corners stay concentric instead of running parallel at different speeds. */
+   Its radius is the card's minus that padding, which is the condition for two
+   nested corners to stay concentric — anything else and the curves run
+   parallel at different speeds, which reads as a mistake without the eye
+   being able to say why. Derived, not typed, so raising --r-card keeps it. */
 .media{
   aspect-ratio:3/2;background:var(--fill);position:relative;
-  border-radius:11px;overflow:hidden;
+  border-radius:calc(var(--r-card) - var(--card-pad));overflow:hidden;
 }
 .media img,.media-fb{position:absolute;inset:0;width:100%;height:100%}
 /* cover, never contain: a letterboxed tile in a grid reads as a broken image */
