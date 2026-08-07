@@ -218,6 +218,21 @@
      without them the stack falls through to the previous system fonts. */
   --serif:"Source Serif 4",Georgia,"Songti SC","Hiragino Mincho ProN","Noto Serif CJK SC",serif;
   --sans:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  /* Japanese faces for Japanese text. The two stacks above are correct for
+     the UI language and must stay that way — every CJK family in them is a
+     Simplified-Chinese cut ("Hiragino Sans GB" included: the GB is 国标), and
+     --serif deliberately puts Songti SC ahead of Hiragino Mincho because for
+     Chinese that is the right order. Font matching runs per character and
+     first family wins, and the Chinese cuts cover kanji, so Japanese
+     name_local values were resolving to Chinese glyph shapes — 梅田スカイビル,
+     千日前道具屋筋, 自由軒, 司馬遼太郎記念館 all contain kanji whose CN and JP
+     forms differ at the same codepoint, and 13 of this trip's 47 local names
+     also carry kana, which a Chinese font draws at Chinese kana proportions.
+     Swapping the base stacks would only move the problem onto the Chinese UI,
+     since a Japanese font covers those kanji too. So: a parallel pair, opted
+     into by language rather than globally. */
+  --serif-ja:"Source Serif 4",Georgia,"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;
+  --sans-ja:"DM Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo","Noto Sans JP",sans-serif;
   --mono:"Roboto Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   /* The theme's --tracking-normal is -0.025em applied to body. Here it is a
      token used only on the display headings: negative tracking tightens Latin
@@ -689,6 +704,18 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   height:calc(var(--nm-size) * var(--nm-lh));
 }
 .loc{font-size:11.5px;color:var(--ink-3);line-height:1.35}
+/* What makes lang="ja" (written by langAttr onto every name_local) actually
+   change anything. On its own the attribute steers hyphenation and screen
+   reader pronunciation but not font selection — an explicit font-family list
+   wins over it — so the mechanism the langAttr comment describes at length
+   was inert until these rules existed.
+   Two rules rather than one because the same .loc lands in two type contexts:
+   in a card it sits under the name in the sans stack, and in the detail
+   dialog it trails the title inside an h3 set in --serif. A single :lang(ja)
+   rule would put a sans local name inside a serif heading. Any further place
+   a local name is rendered in serif needs adding to the second selector. */
+:lang(ja){font-family:var(--sans-ja)}
+.dlg-h h3 :lang(ja){font-family:var(--serif-ja)}
 /* Scoped to the card header: .loc is also the detail dialog's h3, where it
    trails the name inline and must stay inline. */
 .hd .loc{
