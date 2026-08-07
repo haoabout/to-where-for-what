@@ -65,8 +65,8 @@ jump between them. "Export PDF" goes through the browser's print dialog. A
 - **Map**: OSM vector basemaps (two independent sources backing each other up)
   plus **metro lines and stations pulled from OSM, in the official line colors**.
   Both vector basemaps come as a light/dark pair, switched from the map's own
-  corner button — the page around it is a fixed deep-navy canvas with light
-  paper surfaces, and has no theme switch of its own
+  corner button — the page around it is a fixed light canvas with a dot
+  matrix and paper surfaces on top, and has no theme switch of its own
 - **Weather**: fetched live from Open-Meteo in the browser. A real forecast
   within 16 days; beyond that it falls back to 8-year historical averages,
   clearly labeled
@@ -196,7 +196,7 @@ npx skills add <owner>/<repo>
 
 ## 页面里有什么
 
-- **地图**：OSM 矢量底图（两个独立数据源互为备份）+ 从 OSM 抓的**地铁线路与车站，用官方线路配色**。两个矢量底图各有明暗两版，由地图右上角的开关切换；页面本身是固定的深蓝底 + 浅色纸面，没有自己的明暗切换
+- **地图**：OSM 矢量底图（两个独立数据源互为备份）+ 从 OSM 抓的**地铁线路与车站，用官方线路配色**。两个矢量底图各有明暗两版，由地图右上角的开关切换；页面本身是固定的浅色底 + 点阵纹理 + 其上的纸面，没有自己的明暗切换
 - **天气**：浏览器端实时拉 Open-Meteo。16 天内是预报，超出则退回过去 8 年同期均值并明确标注
 - **导出**：CSV（可直接导入 Google My Maps）、KML；攻略按 A4 分页，经浏览器打印导出 PDF
 - **降级链**：矢量 → 光栅 → 无 WebGL 用 Leaflet → 全挂时静态散点图。每一级都实测过
