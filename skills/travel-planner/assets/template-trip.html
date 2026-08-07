@@ -2750,7 +2750,13 @@ en: {
 },
 zh: {
   trip:"行程", docTitle:"{dest} · 行程规划",
-  tabList:"景点清单", tabMap:"地图", tabGuide:"攻略",
+  // 三个 tab 一律两字：地图、攻略都没有后缀，"清单"是这一个多出来的，英文那边
+  // 也只是 Places 而非 Place list。四字的标签让选中态的胶囊宽出一倍，在两个
+  // 两字标签旁边压得过重。
+  // 不用「地点」——它才是本文件其余地方的量词（"{n} 个地点"，17 处对 8 处），也
+  // 更贴 Places，这一屏里确实还有餐饮和商店街。但「地点」和隔壁的「地图」首字
+  // 相同，两个 tab 紧挨着会糊成一片，扫视的代价比语义上的宽窄更实在。
+  tabList:"景点", tabMap:"地图", tabGuide:"攻略",
   guideTabDisabled:"生成攻略后可用",
   exportCsv:"导出 CSV",
   csvHint:"CSV 可直接导入 Google My Maps",
