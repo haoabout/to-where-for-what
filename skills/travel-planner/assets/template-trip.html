@@ -670,6 +670,12 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tally button[aria-pressed=false]{
   background:none;border-color:var(--line-soft);color:var(--ink-3);
 }
+/* Label and count both, and set on the two children rather than on the button
+   they share. The button is a flex container, so a decoration declared there
+   would have to be propagated into its flex items to land — and into an
+   anonymous one for the label, which is engine-dependent. Declaring it where
+   the text actually is costs one selector and no guesswork. */
+.tally button[aria-pressed=false] .lb,
 .tally button[aria-pressed=false] .n{text-decoration:line-through}
 /* Deselected hover: "click and it comes back", in the page's shared yellow. */
 .tally button[aria-pressed=false]:hover{border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
@@ -3625,8 +3631,13 @@ const CHOICES = ["yes","maybe","no","none"];
 function renderTally(){
   const t = $("#tally");
   if(!t) return;
+  /* The label gets its own element rather than riding as a bare text node.
+     Deselected strikes both halves through, and a decoration set on the
+     button would have to propagate into an *anonymous* flex item to reach a
+     bare label — which is exactly the kind of thing engines disagree on.
+     A real element takes the rule directly. */
   t.innerHTML = CHOICES.map(k =>
-    `<button class="t-${k}" data-c="${k}" aria-pressed="${ui.show.has(k)}">${T[k]}<b class="n">0</b></button>`
+    `<button class="t-${k}" data-c="${k}" aria-pressed="${ui.show.has(k)}"><span class="lb">${T[k]}</span><b class="n">0</b></button>`
   ).join("");
 }
 
