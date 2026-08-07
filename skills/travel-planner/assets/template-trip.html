@@ -650,7 +650,8 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 @media (prefers-reduced-motion:no-preference){ .chips-more:active{scale:.96} }
 .chip{
   border:1px solid var(--line);background:var(--card);color:var(--ink-2);
-  padding:5px 12px;border-radius:20px;font-size:12.5px;transition:.15s;
+  padding:5px 12px;border-radius:20px;font-size:12.5px;
+  transition:background .15s,color .15s,border-color .15s,scale .15s;
 }
 .chip:hover:not([aria-pressed=true]){border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
@@ -919,7 +920,8 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 .pick button{
   background:transparent;border:0;border-radius:999px;
-  padding:7px 15px;font-size:12.5px;color:var(--ink-3);transition:.12s;
+  padding:7px 15px;font-size:12.5px;color:var(--ink-3);
+  transition:background .12s,color .12s,scale .12s;
 }
 /* The tab bar's hover, literally: a wash of white over the track rather than the
    theme's yellow, so two instances of one pattern behave the same way under the
@@ -929,6 +931,11 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    The other twelve --accent-soft hovers are left alone: they belong to chips,
    menus and list rows, which are not this pattern. */
 .pick button:hover:not([aria-pressed=true]){background:rgba(255,255,255,.45);color:var(--ink)}
+/* font-weight is deliberately not in the transition list above, though the
+   duration-only shorthand that used to be there did animate it. Tweening a
+   weight re-lays-out the text on every frame, and on the CJK fallbacks 500
+   and 600 usually resolve to the same face anyway — so it was paying for a
+   reflow to render nothing. It snaps now. */
 .pick button[aria-pressed=true]{font-weight:600}
 .pick button.y[aria-pressed=true]{background:var(--ok);color:var(--on-ok)}
 .pick button.m[aria-pressed=true]{background:var(--warn);color:var(--on-warn)}
@@ -983,7 +990,8 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .more-box{display:flex;gap:8px}
 .btn{
   border:1px solid var(--line);background:var(--card);color:var(--ink);
-  padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;transition:.15s;
+  padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;
+  transition:background .15s,color .15s,border-color .15s,opacity .15s,scale .15s;
 }
 .btn:hover{border-color:var(--ink);background:var(--paper-2)}
 .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
@@ -2143,7 +2151,8 @@ pre.code{
 .toast{
   position:fixed;left:50%;bottom:calc(var(--ab-h,64px) + 14px);transform:translate(-50%,14px);
   background:var(--ink);color:var(--paper);padding:10px 19px;border-radius:9px;
-  font-size:13.5px;z-index:99;opacity:0;pointer-events:none;transition:.22s;box-shadow:0 8px 26px rgba(0,0,0,.25);
+  font-size:13.5px;z-index:99;opacity:0;pointer-events:none;
+  transition:opacity .22s,transform .22s;box-shadow:0 8px 26px rgba(0,0,0,.25);
 }
 .toast.on{opacity:1;transform:translate(-50%,0)}
 
