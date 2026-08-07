@@ -361,7 +361,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    the browser's default button chrome so they look like they used to. */
 .bare{
   background:none;border:0;padding:0;margin:0;
-  font:inherit;color:inherit;text-align:left;
+  font:inherit;color:inherit;text-align:start;
   -webkit-appearance:none;appearance:none;
 }
 
@@ -663,7 +663,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 /* The one count on the page that had neither mono nor tabular figures, and it
    is rewritten on every filter change. */
-.chip .c{opacity:.55;font-size:11px;margin-left:3px;font-variant-numeric:tabular-nums}
+.chip .c{opacity:.55;font-size:11px;margin-inline-start:3px;font-variant-numeric:tabular-nums}
 
 /* Groups */
 .group{margin-bottom:34px}
@@ -678,7 +678,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    macOS and Consolas on Windows and both draw a slashed zero, which beside
    Han reads as a mark rather than a digit. tabular-nums buys the column
    alignment that was the only reason to reach for mono here. */
-.group-h .meta{font-size:12px;color:var(--canvas-ink-3);margin-left:auto;font-variant-numeric:tabular-nums}
+.group-h .meta{font-size:12px;color:var(--canvas-ink-3);margin-inline-start:auto;font-variant-numeric:tabular-nums}
 
 /* ═══════════════════════════════════════════════ Cards */
 /* Photo-topped tiles in an auto-fitting grid. auto-fill + minmax gives 3
@@ -903,7 +903,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
   background:var(--warn-soft);border:1px dashed color-mix(in srgb,var(--warn) 40%,transparent);color:var(--ink-2);
 }
 .verify-box b{color:var(--ink)}
-.verify-box ul{margin:6px 0 0;padding-left:18px}
+.verify-box ul{margin:6px 0 0;padding-inline-start:18px}
 .verify-box li{margin:2px 0}
 
 /* Tri-state. A centred pill sized to its own labels, not stretched to the
@@ -1009,7 +1009,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    "Manual save…" all the way right. When expanded, the buttons land on the
    same row and the bar keeps its height — placed right of the link they'd
    wrap and double it. */
-.actionbar-in .hint{margin-left:0;text-align:left;flex:1 1 auto}
+.actionbar-in .hint{margin-inline-start:0;text-align:start;flex:1 1 auto}
 .more-box{display:flex;gap:8px}
 .btn{
   border:1px solid var(--line);background:var(--card);color:var(--ink);
@@ -1020,7 +1020,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .btn.primary:hover{opacity:.87;background:var(--ink)}
 .btn:disabled{opacity:.4;cursor:not-allowed}
-.hint{font-size:12px;color:var(--ink-3);margin-left:auto;text-align:right;max-width:52ch}
+.hint{font-size:12px;color:var(--ink-3);margin-inline-start:auto;text-align:end;max-width:52ch}
 /* Auto-save failure is the one moment the user can lose data — it must not
    look like ordinary explanatory text */
 .hint.bad{color:var(--danger);font-weight:500}
@@ -1161,7 +1161,7 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
    the first attempt set it 15px in --ink against the body's 14px --ink-2, and a
    7% size step doesn't read as intent, it reads as a styling bug. A rule in the
    margin says "different kind of text" without touching the type at all. */
-.dlg-b .lede{border-left:2px solid var(--gold);padding-left:12px;margin-bottom:15px}
+.dlg-b .lede{border-inline-start:2px solid var(--gold);padding-inline-start:12px;margin-bottom:15px}
 .dlg-b .lede p:last-child{margin-bottom:0}
 .dlg-img{width:100%;border-radius:9px;margin-bottom:14px;display:block}
 .credit{font-size:11px;color:var(--ink-3);margin:-9px 0 15px}
@@ -1246,7 +1246,11 @@ pre.code{
    a map isn't text, and wider is strictly better. It matters even more since
    scheduling added a column: uncapped, the map keeps 794px instead of 668px.
    Widened with a negative margin-left, not transform — transform would change
-   the containing block for absolutely positioned descendants. */
+   the containing block for absolutely positioned descendants.
+   The one margin-left left physical while the rest of the sheet moved to
+   logical properties: this is a symmetric centring offset, not an inline-flow
+   inset, so it computes the same either way and reads clearer paired with the
+   physical `width` it exists to re-centre. */
 #view-map{
   --vw:min(1640px, calc(100vw - 40px));
   width:var(--vw);margin-left:calc(50% - var(--vw) / 2);
@@ -1277,7 +1281,7 @@ pre.code{
    nowrap protects it, and when space truly runs out the whole header wraps
    (flex-wrap on .dc-head). */
 .day-col .dc-head{flex-wrap:wrap}
-.day-col .dc-head .sp{margin-left:auto;font-weight:400;letter-spacing:0;white-space:nowrap}
+.day-col .dc-head .sp{margin-inline-start:auto;font-weight:400;letter-spacing:0;white-space:nowrap}
 .lnk{
   background:none;border:0;color:var(--ink-3);font-size:11px;padding:2px 6px;border-radius:4px;letter-spacing:0;
   min-height:24px;min-width:24px;display:inline-flex;align-items:center;justify-content:center;
@@ -1323,7 +1327,7 @@ pre.code{
    secondary info (date · count) shrinks to an ellipsis when too long — the
    full text lives in the button's aria-label. */
 .dhead b{font:600 12.5px/1 var(--sans);color:var(--ink);white-space:nowrap}
-.dhead .sub{margin-left:auto;font-size:10.5px;color:var(--ink-3);
+.dhead .sub{margin-inline-start:auto;font-size:10.5px;color:var(--ink-3);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .dlist{padding:3px 0;min-height:34px}
 
@@ -1398,11 +1402,11 @@ pre.code{
 }
 .addmenu button{
   background:var(--card);border:1px solid var(--line);border-radius:6px;
-  padding:5px 8px;font-size:11.5px;color:var(--ink-2);text-align:left;
+  padding:5px 8px;font-size:11.5px;color:var(--ink-2);text-align:start;
   transition:background .12s,color .12s,border-color .12s,scale .12s;
 }
 .addmenu button:hover{border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
-.dhead .d-del-day{opacity:0;margin-left:4px}
+.dhead .d-del-day{opacity:0;margin-inline-start:4px}
 /* :focus-within as well as :hover, and it is not optional here. opacity
    composites the focus ring along with the button, so a keyboard user could
    Tab onto this control and see nothing at all — not the button, not the
@@ -1482,7 +1486,7 @@ pre.code{
    sidebar top-heavy. */
 .ms-grp{display:flex;flex-wrap:wrap;align-items:center;gap:1px;padding:0 1px}
 .ms-grp .lbl{
-  flex:none;margin-right:4px;letter-spacing:.5px;
+  flex:none;margin-inline-end:4px;letter-spacing:.5px;
   font:600 10px/1 var(--sans);color:var(--ink-3);
 }
 .ms-grp button{
@@ -1587,11 +1591,11 @@ pre.code{
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);box-shadow:var(--shadow);
 }
 .mgroup button{
-  background:none;border:0;border-right:1px solid var(--line-soft);
+  background:none;border:0;border-inline-end:1px solid var(--line-soft);
   padding:6px 11px;font-size:12px;color:var(--ink-3);white-space:nowrap;
   transition:background .12s,color .12s,scale .12s;
 }
-.mgroup button:last-child{border-right:0}
+.mgroup button:last-child{border-inline-end:0}
 .mgroup button[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600}
 .mgroup button:hover:not(:disabled):not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 .mgroup button:disabled{opacity:.38;cursor:not-allowed}
@@ -1613,7 +1617,7 @@ pre.code{
    its natural size. */
 .msearch{min-width:0}
 .msearch input{
-  background:none;border:0;border-right:1px solid var(--line-soft);
+  background:none;border:0;border-inline-end:1px solid var(--line-soft);
   padding:6px 11px;font-size:12px;color:var(--ink);min-height:29px;
   flex:0 1 168px;width:auto;min-width:0;
 }
@@ -1630,7 +1634,7 @@ pre.code{
   overflow:hidden auto;max-height:min(46vh,340px);
 }
 #msq-panel .sr{
-  display:block;width:100%;text-align:left;background:none;border:0;
+  display:block;width:100%;text-align:start;background:none;border:0;
   border-bottom:1px solid var(--line-soft);padding:8px 11px;cursor:pointer;
 }
 #msq-panel .sr:last-child{border-bottom:0}
@@ -1853,10 +1857,10 @@ pre.code{
 .guide h4{font:600 16px/1.4 var(--sans);margin:26px 0 9px}
 .guide h5{font:600 13.5px/1.4 var(--sans);margin:19px 0 7px;color:var(--ink-2)}
 .guide p{margin:0 0 13px;color:var(--ink-2);font-size:15px;line-height:1.78}
-.guide ul,.guide ol{margin:0 0 15px;padding-left:23px;color:var(--ink-2)}
+.guide ul,.guide ol{margin:0 0 15px;padding-inline-start:23px;color:var(--ink-2)}
 .guide li{margin-bottom:6px;line-height:1.72}
 .guide blockquote{
-  margin:15px 0;padding:11px 16px;border-left:3px solid var(--accent);
+  margin:15px 0;padding:11px 16px;border-inline-start:3px solid var(--accent);
   background:var(--accent-soft);border-radius:0 7px 7px 0;color:var(--ink-2);font-size:14px;
 }
 .guide blockquote p{margin:0}
@@ -1871,7 +1875,7 @@ pre.code{
 }
 .table-wrap{overflow-x:auto;margin:0 0 17px;border:1px solid var(--line);border-radius:8px}
 .guide table,.card-table{width:100%;border-collapse:collapse;font-size:13.5px}
-.guide th,.guide td,.card-table td,.card-table th{padding:8px 12px;border-bottom:1px solid var(--line-soft);text-align:left}
+.guide th,.guide td,.card-table td,.card-table th{padding:8px 12px;border-bottom:1px solid var(--line-soft);text-align:start}
 .guide tbody tr:last-child td,.card-table tr:last-child td{border-bottom:0}
 /* Headers are recognized by th, not by "first row" — positional selectors
    fail silently when row order changes */
@@ -1879,16 +1883,16 @@ pre.code{
 
 /* Timeline: progressive enhancement for route.md list items that start with
    a time */
-.guide li.tl{list-style:none;position:relative;padding-left:16px;margin-bottom:11px}
+.guide li.tl{list-style:none;position:relative;padding-inline-start:16px;margin-bottom:11px}
 .guide li.tl::before{
   content:"";position:absolute;left:-9px;top:9px;width:7px;height:7px;border-radius:50%;
   background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);
 }
 .guide li.tl .t{
   font:600 12px/1 var(--mono);color:var(--accent);background:var(--accent-soft);
-  padding:3px 7px;border-radius:4px;margin-right:8px;white-space:nowrap;
+  padding:3px 7px;border-radius:4px;margin-inline-end:8px;white-space:nowrap;
 }
-.guide ul:has(li.tl){border-left:1px solid var(--line-soft);padding-left:20px;margin-left:5px}
+.guide ul:has(li.tl){border-inline-start:1px solid var(--line-soft);padding-inline-start:20px;margin-inline-start:5px}
 
 /* Weather strip */
 .wx{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 8px}
@@ -1912,7 +1916,7 @@ pre.code{
   background:var(--paper-2);padding:9px 13px;font:600 12.5px/1 var(--sans);
   border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:8px;
 }
-.sum-h span{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-3);font-weight:400}
+.sum-h span{margin-inline-start:auto;font-variant-numeric:tabular-nums;color:var(--ink-3);font-weight:400}
 /* Day separator row. One step lighter than .sum-h — it's a group inside the
    same table, not a new table */
 .sum-d{
@@ -1921,7 +1925,7 @@ pre.code{
   border-bottom:1px solid var(--line-soft);
   font:600 11.5px/1.35 var(--sans);color:var(--ink-2);letter-spacing:.3px;
 }
-.sum-d span{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-3);font-weight:400}
+.sum-d span{margin-inline-start:auto;font-variant-numeric:tabular-nums;color:var(--ink-3);font-weight:400}
 .ck{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--line-soft);font-size:13.5px}
 /* This column mixes numbers (per-day sequence) with icons, so it needs
    tabular-nums to column-align the digits and centering for the SVGs. */
@@ -1939,7 +1943,7 @@ pre.code{
 .ck .m.warn{color:var(--warn)}
 .ck .m.lod{color:var(--lodging)}
 .ck .n{flex:1;min-width:0}
-.ck .n .sub{color:var(--ink-3);font-size:11.5px;margin-left:7px}
+.ck .n .sub{color:var(--ink-3);font-size:11.5px;margin-inline-start:7px}
 .ck .why{font-size:11.5px;color:var(--ink-3);font-style:italic}
 /* Same fix as the dropped place card, and for a harder reason: this one
    prints. opacity:.55 composited the row's own text down to 2.59:1 for the
@@ -2001,10 +2005,10 @@ pre.code{
 }
 .bento .ck .m{width:auto;font-size:11px}
 .bento .ck .n{line-height:1.45;min-width:0}
-.bento .ck .n .sub{margin-left:5px;font-size:10px}
+.bento .ck .n .sub{margin-inline-start:5px;font-size:10px}
 .bento .ck .why{
-  grid-column:3;justify-self:end;text-align:right;
-  white-space:nowrap;font-size:10px;padding-left:8px;
+  grid-column:3;justify-self:end;text-align:end;
+  white-space:nowrap;font-size:10px;padding-inline-start:8px;
 }
 /* In a box that is one rating end to end, the mark repeats down every row and
    says nothing the header hasn't. The day boxes keep theirs — there it is the
@@ -2075,7 +2079,7 @@ pre.code{
   flex:none;display:flex;align-items:baseline;gap:8px;padding-top:5mm;
   font:11px/1 var(--sans);color:var(--ink-3);
 }
-.pg-foot .no{margin-left:auto;font-family:var(--mono)}
+.pg-foot .no{margin-inline-start:auto;font-family:var(--mono)}
 /* Inside a sheet the document is already on paper; the on-screen sheet
    styling of .guide would be a second sheet drawn on top of this one. */
 .pg-body>*:first-child{margin-top:0}
@@ -2106,7 +2110,7 @@ pre.code{
 .pgnav-list button{
   appearance:none;border:0;background:none;cursor:pointer;
   display:flex;gap:9px;align-items:baseline;
-  padding:5px 9px;border-radius:7px;text-align:left;width:100%;
+  padding:5px 9px;border-radius:7px;text-align:start;width:100%;
   font:500 12px/1.45 var(--sans);color:var(--canvas-ink-3);
   transition:background .12s,color .12s,scale .12s;
 }
@@ -2186,7 +2190,7 @@ pre.code{
   /* One card per row. Left to auto-fill, a 600px viewport would still fit two
      288px columns and the photos would be postage stamps. */
   .cards{grid-template-columns:1fr}
-  .hint{margin-left:0;text-align:left;max-width:none}
+  .hint{margin-inline-start:0;text-align:start;max-width:none}
   /* No padding-bottom override here any more — the base rule derives it from
      the measured bar height, which is the thing this breakpoint was standing
      in for. */
