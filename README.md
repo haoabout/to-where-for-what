@@ -135,8 +135,8 @@ python3 dev/test_validate.py                          # validator regression (43
 python3 skills/travel-planner/scripts/build.py <trip-dir> --serve
 ```
 
-`dev/` holds development-time material (regression tests, capability probes,
-the original draft) and isn't part of the install.
+`dev/` holds development-time material (regression tests, capability probes)
+and isn't part of the install.
 
 For local development a symlink is convenient — edits take effect immediately:
 
@@ -242,7 +242,7 @@ python3 dev/test_validate.py                          # 校验器回归（43 个
 python3 skills/travel-planner/scripts/build.py <行程目录> --serve
 ```
 
-`dev/` 里是开发期的东西（回归测试、能力探针、原始草稿），不参与安装。
+`dev/` 里是开发期的东西（回归测试、能力探针），不参与安装。
 
 本机开发建议软链接，改完立刻生效：
 
