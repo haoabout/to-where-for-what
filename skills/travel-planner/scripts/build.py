@@ -38,6 +38,11 @@ TEMPLATE = SKILL_ROOT / "assets" / "template-trip.html"
 
 DATA_MARK = "/*__TRIP_DATA__*/null"
 ROUTE_MARK = "/*__ROUTE_HTML__*/null"
+# The same guide body a second time, as the Markdown the AI actually wrote.
+# The page's Markdown export hands it back verbatim; reconstructing it from
+# ROUTE_MARK's HTML would be a lossy round-trip, and the ~13KB it costs is 2%
+# of a trip page.
+ROUTE_MD_MARK = '/*__ROUTE_MD__*/""'
 TRANSIT_MARK = "/*__TRANSIT__*/null"
 SORTABLE_MARK = "/*__SORTABLE__*/"
 BUILT_MARK = "/*__BUILT_AT__*/null"
@@ -379,6 +384,7 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     # A </script> inside a JSON string would close the tag early; escape it.
     data_js = json.dumps(data, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     route_js = json.dumps(md_to_html(route_md), ensure_ascii=False).replace("</", "<\\/")
+    route_md_js = json.dumps(route_md, ensure_ascii=False).replace("</", "<\\/")
     transit_js = json.dumps(transit, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
     theme, theme_warn = theme_css((data.get("trip") or {}).get("theme_hue"))
@@ -387,6 +393,7 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 
     html = html.replace(DATA_MARK, data_js)
     html = html.replace(ROUTE_MARK, route_js)
+    html = html.replace(ROUTE_MD_MARK, route_md_js)
     html = html.replace(TRANSIT_MARK, transit_js)
     html = html.replace(SORTABLE_MARK, sortable)
     html = html.replace(THEME_MARK, theme)

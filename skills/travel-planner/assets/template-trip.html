@@ -2131,6 +2131,9 @@ pre.code{
 .pgnav-act{margin-top:9px;padding-top:9px;border-top:1px solid var(--canvas-line);flex:none}
 .pgnav-act .btn{width:100%;justify-content:center}
 .pgnav-act .hint{display:block;margin-top:7px;padding:0 2px;font-size:10.5px;line-height:1.5;color:var(--canvas-ink-3)}
+/* The second export button follows a hint rather than the rule, so it needs
+   its own breathing room — .btn has no margin of its own. */
+.pgnav-act .hint + .btn{margin-top:9px}
 .pgnav-h{
   padding:2px 9px 7px;font:600 10.5px/1.4 var(--sans);
   color:var(--canvas-ink-3);letter-spacing:.4px;opacity:.75;
@@ -2419,6 +2422,12 @@ pre.code{
       <div class="pgnav-act" id="guide-actions">
         <button class="btn sm" id="pg-print">Export PDF</button>
         <span class="hint" id="pg-hint">A4 · choose “Save as PDF”, and turn headers and footers off</span>
+        <!-- Markdown's own explanation rides on the button's title rather than
+             taking a third hint line: folded into a panel this rail is capped
+             at min(58vh,420px), and .pgnav-act is flex:none — every line added
+             here comes straight out of the scrollable page list. -->
+        <button class="btn sm" id="pg-md">Export Markdown</button>
+        <span class="hint" id="pg-share">trip.html is one offline file — send it to whoever you're travelling with. For an AI, use the Markdown above; it's far smaller.</span>
       </div>
     </nav>
     <!-- Below the width where a rail fits in the gutter, the same list folds
@@ -2470,6 +2479,11 @@ pre.code{
    ═══════════════════════════════════════════════════════════════════ */
 const DATA       = /*__TRIP_DATA__*/null;
 const ROUTE_HTML = /*__ROUTE_HTML__*/null;
+/* The same body as ROUTE_HTML, but the Markdown it was rendered from. Carried
+   so the Markdown export can hand back what the author actually wrote —
+   walking ROUTE_HTML back to Markdown would be lossy, and this page is often
+   the only copy its reader has. */
+const ROUTE_MD   = /*__ROUTE_MD__*/"";
 const TRANSIT    = /*__TRANSIT__*/null;
 const BUILT_AT   = /*__BUILT_AT__*/null;
 const STANDALONE = __STANDALONE__;
@@ -2650,6 +2664,13 @@ en: {
   checklistIntro:"All candidate places, the ones you marked no included, so you can reconsider them.",
   pgPrint:"Export PDF", pgNav:"Pages", pgNavHead:"A4 · {n} pages", pgNavToc:"Contents",
   pgHint:"A4 · choose “Save as PDF”, and turn headers and footers off",
+  pgMd:"Export Markdown",
+  pgMdHint:"Plain text — paste it into your notes or Notion, or hand it to an AI",
+  pgShare:"{f} is one offline file — send it to whoever you're travelling with. For an AI, use the Markdown above; it's far smaller.",
+  mdItinerary:"The schedule",
+  mdNote:"Note", mdKv:"{k}: {v}",
+  mdTotal:"{n} places scheduled; {p} of them had a price that could be read, totalling ≈ {cur}{sum}.",
+  mdFooter:"Exported from “{title}” on {at}.",
   contd:" (cont.)",
   staleNote:"Data verified {n} days ago; hours may have changed",
   noGuideBig:"No guide yet",
@@ -2826,6 +2847,13 @@ zh: {
   checklistIntro:"包含所有候选地点，标了不想去的也列在这里，方便你回头判断要不要捡回来。",
   pgPrint:"导出 PDF", pgNav:"页面", pgNavHead:"A4 · 共 {n} 页", pgNavToc:"目录",
   pgHint:"A4 · 在打印窗口选「存储为 PDF」，并关掉页眉页脚",
+  pgMd:"导出 Markdown",
+  pgMdHint:"纯文本，粘进备忘录、Notion，或者直接丢给 AI",
+  pgShare:"{f} 是单个离线文件，直接发给同行人。给 AI 读，用上面的 Markdown 更省。",
+  mdItinerary:"行程安排",
+  mdNote:"备注", mdKv:"{k}：{v}",
+  mdTotal:"已排入 {n} 个点，其中 {p} 项能读出价格，合计约 {cur}{sum}。",
+  mdFooter:"导出自「{title}」，{at}。",
   contd:"（续）",
   staleNote:"数据核验于 {n} 天前，开放时间可能已变",
   noGuideBig:"攻略还没生成",
@@ -3749,6 +3777,20 @@ function askReason(id){
 }
 
 /* ─────────────────────────────────────────────── Export */
+
+/* Blob → anchor → click, the only way a page with no server behind it can put
+   a file on disk. Three callers wanted it (places.json, places.csv, guide.md),
+   so it lives here rather than three times over. The revoke is deferred, not
+   immediate: Safari reads the URL after the click returns, and revoking in the
+   same tick produced an empty file. */
+function saveFile(text, name, mime){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type:mime }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 function payload(){
   const out = JSON.parse(JSON.stringify(DATA));
   const cm = new Map(PLACES.map(p => [p.id, p]));
@@ -3812,6 +3854,124 @@ function shortCode(){
   L.push(tf("scSummary", { y: yes.length, m: maybe.length, n: no.length,
                            u: PLACES.length - yes.length - maybe.length - no.length })
     + (days.length ? tf("scDays", { d: days.length, i: items }) : T.scNoDays));
+  return L.join("\n");
+}
+
+/* ── Markdown ──────────────────────────────────────────────────
+   The guide, as a document rather than a page: the body exactly as the author
+   wrote it, then the schedule and the checklist rebuilt from live state.
+
+   It is not a transcript of the guide view. On screen the costs and the
+   checklist are two-column bento boxes; read top to bottom that shape means
+   nothing, so ticket prices ride along with the stop they belong to and only
+   the total survives as a line of its own — one section fewer than the page,
+   and one repetition fewer.
+
+   The grouping deliberately matches renderChecklist(): with a schedule the
+   "yes but nowhere" pile comes first and the rest is maybe/unrated/no; without
+   one, all four ratings stand on their own. Two different answers to "what did
+   I drop" would be worse than either. */
+function toMarkdown(){
+  // Free text (names, notes, skip reasons) goes inside ** ** and could carry
+  // markdown punctuation of its own; a stray * would eat the rest of the line.
+  const q = s => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
+  const L = [];
+
+  if(ROUTE_MD.trim()){
+    // route.md opens with its own `#` title, so nothing is prepended here.
+    L.push(ROUTE_MD.trim(), "", "---", "");
+  }
+
+  const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
+  const scheduled = new Set(days.flatMap(d => d.places.map(e => e.id)));
+
+  if(days.length){
+    L.push(`## ${T.mdItinerary}`, "");
+    // Deduplicated the same way renderCost does: one place on two days is
+    // still one ticket. The two totals have to agree — a guide whose Markdown
+    // and whose cost panel quote different numbers is worse than neither.
+    const counted = new Set();
+    let sum = 0, parsed = 0, n = 0, cur = "";
+
+    for(const d of days){
+      const wd = d.date ? WD_NAMES[((new Date(d.date + "T00:00:00").getDay() + 6) % 7) + 1] : "";
+      // Date and weekday separated by a space, not wrapped in brackets: the
+      // bracket that reads right depends on the language, the space doesn't.
+      // Same shape the weather cards use.
+      L.push(`### ${tf("dayN", { n: d.n })}` + (d.date ? ` · ${d.date}${wd ? " " + wd : ""}` : ""), "");
+
+      let seq = 0;
+      for(const e of d.places){
+        const p = BY_ID[e.id];
+        if(!p) continue;
+        const lod = isLodging(p);
+        const head = lod ? T.lodging : String(++seq);
+        L.push(`- **${q(head)} · ${q(p.name)}**`
+          + [p.area, !lod && p.duration_min ? tf("aboutMin", { n: p.duration_min }) : ""]
+              .filter(Boolean).map(x => ` · ${q(x)}`).join(""));
+
+        /* One fact per line, not one line per stop. These are the same fields
+           the detail dialog lays out as a definition list, and they run long —
+           a single opening-hours string here is 90 characters and a ticket
+           string with per-age prices is longer. Strung together they were a
+           200-character line that nothing wraps usefully; as separate bullets
+           the reader can find the one they came for. */
+        const facts = [
+          [T.kvHours,  p.hours],
+          [T.kvClosed, p.closed],
+          [T.kvTicket, p.ticket],
+          [T.mdNote,   e.note],
+        ].filter(([, v]) => v);
+        for(const [k, v] of facts) L.push(`  - ${tf("mdKv", { k, v: q(v) })}`);
+        // Booking stands on its own line without a label: the sentences name
+        // themselves ("Booking required to enter"), and "Booking: Booking
+        // required to enter" says it twice.
+        const bk = { required:T.bkRequiredLong, recommended:T.bkRecommendedLong }[p.booking];
+        if(bk) L.push(`  - ${q(bk)}`);
+
+        if(!lod && !counted.has(p.id)){
+          counted.add(p.id);
+          n++;
+          if(/[¥￥]|日元|円/.test(p.ticket || "")) cur = "¥";
+          const v = GUIDE.parseMoney(p.ticket);
+          if(v != null){ sum += v; parsed++; }
+        }
+      }
+      L.push("");
+    }
+    // Same caveat the cost panel carries. A bare total invites being read as
+    // "what the trip costs", which it never was.
+    L.push(tf("mdTotal", { n, p: parsed, cur, sum: sum.toLocaleString() })
+      + " " + T.costOnly, "");
+  }
+
+  L.push(`## ${T.checklistTitle}`, "");
+  const row = p => `- **${q(p.name)}**` + (p.area ? ` · ${q(p.area)}` : "")
+    + (p.choice_reason ? ` — ${q(p.choice_reason)}` : "");
+
+  const missed = days.length
+    ? PLACES.filter(p => p.choice === "yes" && !isLodging(p) && !scheduled.has(p.id))
+    : [];
+  if(missed.length) L.push(`### ${T.missedTitle}`, "", ...missed.map(row), "");
+
+  const rest = PLACES.filter(p => !isLodging(p) && !scheduled.has(p.id) && !missed.includes(p));
+  const by = {};
+  rest.forEach(p => (by[p.choice || "none"] = by[p.choice || "none"] || []).push(p));
+  const MARK = { yes:T.markYes, maybe:T.markMaybe, no:T.markNo, none:T.markNone };
+  for(const k of (days.length ? ["maybe", "none", "no"] : ["yes", "maybe", "none", "no"])){
+    const list = by[k];
+    if(!list || !list.length) continue;
+    L.push(`### ${days.length ? T.unscheduled + " · " : ""}${MARK[k]}`, "", ...list.map(row), "");
+  }
+
+  const now = new Date();
+  const at = `${isoLocal(now)} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  /* Source and time, nothing else. The rail's advice about passing the page
+     itself around does not belong here: read from inside the file, "use the
+     Markdown instead" is advice to someone already holding it. */
+  L.push("---", "",
+    tf("mdFooter", { title: tf("docTitle", { dest: TRIP.destination || T.trip }), at }), "");
+
   return L.join("\n");
 }
 
@@ -4019,10 +4179,7 @@ async function doSave(){
 }
 
 function download(isFallback){
-  const b = new Blob([payload()], { type:"application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(b); a.download = "places.json"; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  saveFile(payload(), "places.json", "application/json");
   toast(isFallback ? T.dlFallback : T.dlDone);
   if(isFallback) setTimeout(showCode, 900);   // downloads can be blocked too; offer one more fallback
 }
@@ -6188,10 +6345,7 @@ const MAP = (() => {
     return "﻿" + rows.map(r => r.map(csvCell).join(",")).join("\n");
   }
   function save(text, name, mime){
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([text], { type:mime }));
-    a.download = name; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    saveFile(text, name, mime);
     toast(tf("exported", { name, n: selected().length }));
   }
 
@@ -6322,6 +6476,15 @@ window.initMap = MAP.init;
    guide on sheets first, so this exports the same layout at any window size. */
 const pgBtn = $("#pg-print");
 if(pgBtn) pgBtn.onclick = () => print();
+/* The Markdown twin of the PDF: same guide, in the form you can paste, edit
+   and hand to an AI. "guide.md" rather than the destination's name, matching
+   places.csv / places.json / guide.html — every file this page writes is named
+   for what it is. */
+const mdBtn = $("#pg-md");
+if(mdBtn) mdBtn.onclick = () => {
+  saveFile(toMarkdown(), "guide.md", "text/markdown;charset=utf-8");
+  toast(tf("exported", { name:"guide.md", n: PLACES.length }));
+};
 $("#exp-csv").onclick = () => MAP.exportCSV();
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -7174,6 +7337,11 @@ function applyStaticI18n(){
   attr("#tab-guide", "title", T.guideTabDisabled);
   txt("#pg-print", T.pgPrint);
   txt("#pg-hint", T.pgHint);
+  txt("#pg-md", T.pgMd);
+  { const b = $("#pg-md"); if(b) b.title = T.pgMdHint; }
+  // The standalone build drops the other two views but keeps this rail, so the
+  // file it tells you to pass on has to be the file you are actually looking at.
+  txt("#pg-share", tf("pgShare", { f: STANDALONE ? "guide.html" : "trip.html" }));
   attr("#pgnav", "aria-label", T.pgNav);
   txt("#exp-csv", T.exportCsv);
   // The hint has no room beside a control floating on the basemap; it rides

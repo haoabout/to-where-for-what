@@ -427,6 +427,12 @@ To share the guide alone (without the filtering UI):
 <PY> <SKILL_ROOT>/scripts/build.py trips/<trip> --standalone   # outputs guide.html
 ```
 
+The guide view also exports itself as Markdown (`guide.md`): `route.md`'s body
+verbatim — build.py embeds the source alongside the rendered HTML for exactly
+this — followed by the schedule and the checklist rebuilt from the user's
+current choices. That is the form to hand back to an AI; the built page is
+~600KB, most of it template.
+
 ---
 
 ## File layout
