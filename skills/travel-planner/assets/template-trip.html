@@ -784,7 +784,20 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    box. Button internals also differ across engines, so nothing about this
    layout should depend on them. */
 .nm-box{min-height:calc(2 * var(--nm-size) * var(--nm-lh))}
-.nm:hover{color:var(--accent)}
+/* The two place-name hovers, together, because they were the same no-op.
+   Both said color:var(--accent) on an element that inherits --ink, and on
+   this palette --accent and --ink are both #0E0E0E — 1.00:1, a hover that
+   changed nothing. Plain <a> gets away with the same declaration because the
+   browser still underlines it; these are <button class="bare">, which gets no
+   default decoration, so the page's primary "this name opens the details"
+   affordance had no pointer feedback at all.
+   An underline rather than a colour: there is no darker ink to move to, and
+   moving lighter would read as disabled. Offset far enough to clear the
+   descenders on the Latin in a mixed name, and kept at 1px so it does not
+   thicken under the 900-weight serif the card title is set in. */
+.nm:hover,.spot .sn:hover{
+  text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;
+}
 /* The tier badge belongs to the name's first line, so it gets a box exactly one
    name-line tall and centres inside it. Aligned to the top of .nm instead, it
    hung off the cap height of a 21.6px line box while its own box is 19.5px —
@@ -975,7 +988,6 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .spot{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;flex-wrap:wrap}
 .spot .sn{cursor:pointer;font-weight:500}
 .spot .sn:focus-visible{outline-offset:1px}
-.spot .sn:hover{color:var(--accent)}
 .spot .sd{color:var(--ink-3);font-size:11.5px}
 /* A photo stop is one line inside a card, so its copy sits at the line's
    right end rather than centred, and runs a size smaller. */
