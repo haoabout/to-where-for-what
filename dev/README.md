@@ -63,5 +63,5 @@ still wouldn't catch the Firefox/Safari users who genuinely need the fallback.
 
 The protocol affects **something else entirely**: `file://` sends no
 `Referer`, so the official OSM raster tiles are unavailable (see the map
-sections under `skills/travel-planner/references/`). The two dimensions must
+sections under `skills/to-where-for-what/references/`). The two dimensions must
 be judged separately.

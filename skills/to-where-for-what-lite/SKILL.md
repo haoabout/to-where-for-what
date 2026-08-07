@@ -1,13 +1,13 @@
 ---
-name: lite-search
-description: Lightweight place recommendations delivered directly in conversation — search, verify, list; no files, no full planning pipeline. Trigger on intent, in whatever language the user writes (中文/English/日本語/ไทย/…). Two scenarios: ① the user asks what a city is worth visiting («曼谷有什么好玩的» "what should I see in Bangkok" «大阪のおすすめは？»); ② the user is somewhere right now and wants nearby ideas («我现在在恰图恰附近» "what's around here this afternoon" «近くで何か面白いものある？»). Use this when they only want suggestions and haven't mentioned an itinerary page, planning, or a multi-day schedule; use travel-planner when they ask to plan a trip, build an itinerary, or make a travel guide. Reply in the user's language.
+name: to-where-for-what-lite
+description: Lightweight place recommendations delivered directly in conversation — search, verify, list; no files, no full planning pipeline. Trigger on intent, in whatever language the user writes (中文/English/日本語/ไทย/…). Two scenarios: ① the user asks what a city is worth visiting («曼谷有什么好玩的» "what should I see in Bangkok" «大阪のおすすめは？»); ② the user is somewhere right now and wants nearby ideas («我现在在恰图恰附近» "what's around here this afternoon" «近くで何か面白いものある？»). Use this when they only want suggestions and haven't mentioned an itinerary page, planning, or a multi-day schedule; use to-where-for-what when they ask to plan a trip, build an itinerary, or make a travel guide. Reply in the user's language.
 ---
 
 # Lite Search — casual place recommendations
 
 Search → verify → **list directly in the conversation**. No files, no scripts, no questionnaire.
 
-Division of labor with travel-planner: **this skill answers "what's worth going to";
+Division of labor with to-where-for-what: **this skill answers "what's worth going to";
 that one produces "how to schedule the visits".** When the user hasn't mentioned an
 itinerary page, planning, or a guide, default to this skill — upgrading afterwards is
 smooth (see the last section), while dragging someone who asked a casual question
@@ -46,8 +46,8 @@ of not producing a file.
 
 ## Verification discipline (lightweight ≠ unverified)
 
-Anti-hallucination rules are shared with travel-planner — see
-[../travel-planner/references/research-playbook.md](../travel-planner/references/research-playbook.md):
+Anti-hallucination rules are shared with to-where-for-what — see
+[../to-where-for-what/references/research-playbook.md](../to-where-for-what/references/research-playbook.md):
 
 - **At least one real source per recommendation** (official site or an
   authoritative page), linked in the entry.
@@ -81,20 +81,20 @@ on why it's worth it:
 When the user follows up with "help me schedule these" or "make it a trip page",
 offer **two tiers** and let them choose:
 
-1. **Mini itinerary**: use just the recommended spots — run the travel-planner
+1. **Mini itinerary**: use just the recommended spots — run the to-where-for-what
    flow but skip the large-scale search, complete the data fields, lay out a 1–2
    day route. Fits short stays with clear targets.
-2. **Full planning**: supplement the search up to travel-planner's category
+2. **Full planning**: supplement the search up to to-where-for-what's category
    quotas (35–50 places) and run the standard pipeline.
 
 Either way: **the lightweight verification done here does not count as contract
 verification.** This skill checked "is it open now"; `places.json` needs closure
-days for the actual travel dates, tickets, booking rules (see travel-planner's
+days for the actual travel dates, tickets, booking rules (see to-where-for-what's
 data-schema.md). Recommended spots **don't need re-searching, but every field
 must be re-verified against the full contract** — never copy lite results into
 the dataset as-is.
 
 Also: if `trips/` already contains an itinerary for this city (how to find it:
-travel-planner's "before you start" section), casually offer to add some of the
+to-where-for-what's "before you start" section), casually offer to add some of the
 recommendations to the trip page; add only what the user confirms (with full
 research, into places.json). No existing trip — don't bring it up.

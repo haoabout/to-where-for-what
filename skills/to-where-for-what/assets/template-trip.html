@@ -3995,7 +3995,7 @@ function patch(){
 
 function shortCode(){
   const g = v => PLACES.filter(p => p.choice === v);
-  const L = [`#travel-planner v1 · ${TRIP.destination || ""} · ${isoLocal(new Date())}`];
+  const L = [`#to-where-for-what v1 · ${TRIP.destination || ""} · ${isoLocal(new Date())}`];
   const yes = g("yes"), maybe = g("maybe"), no = g("no");
   if(yes.length)   L.push("+ " + yes.map(p => p.id).join(" "));
   if(maybe.length) L.push("? " + maybe.map(p => p.id).join(" "));

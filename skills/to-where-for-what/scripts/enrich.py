@@ -36,7 +36,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-UA = "travel-planner-enrich/1.0 (https://github.com/; trip planning skill)"
+UA = "to-where-for-what-enrich/1.0 (https://github.com/; trip planning skill)"
 NOMINATIM_QPS = 1.1          # policy demands ≤1 req/s; leave a little headroom
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 

@@ -10,7 +10,7 @@ import copy
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/travel-planner/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/to-where-for-what/scripts"))
 import validate  # noqa: E402
 
 

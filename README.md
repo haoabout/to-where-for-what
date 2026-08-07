@@ -1,4 +1,4 @@
-# travel-planner
+# to-where-for-what
 
 A trip-planning skill for AI coding assistants. It produces **a single
 `trip.html`** — shortlist, map and guide in one file, openable by
@@ -23,10 +23,10 @@ Works with Claude Code, Codex, Cursor, OpenCode and 70+ other tools (via the
 [Vercel skills CLI](https://github.com/vercel-labs/skills)). Once installed,
 just say "help me plan a trip to Osaka" and it triggers.
 
-Manual install: copy **both** `skills/travel-planner/` and `skills/lite-search/`
+Manual install: copy **both** `skills/to-where-for-what/` and `skills/to-where-for-what-lite/`
 into `~/.claude/skills/` (or your tool's equivalent skills directory). They are
-a pair — `lite-search` answers "what's worth seeing in X" straight in the
-conversation, and `travel-planner` hands off to it whenever you haven't asked
+a pair — `to-where-for-what-lite` answers "what's worth seeing in X" straight in the
+conversation, and `to-where-for-what` hands off to it whenever you haven't asked
 for an itinerary. Install only the planner and a casual question drags you into
 the full opening questionnaire.
 
@@ -88,7 +88,7 @@ via `Intl`.
 
 ## Long-term preferences
 
-Stored at `~/.travel-planner/preferences.md` and reused across trips:
+Stored at `~/.to-where-for-what/preferences.md` and reused across trips:
 transport habits, stamina, interest weights, dietary restrictions, budget
 tier, guide verbosity.
 
@@ -132,7 +132,7 @@ choice; it's asked once on first use and recorded in the preferences file.
 
 ```bash
 python3 dev/test_validate.py                          # validator regression (43 cases)
-python3 skills/travel-planner/scripts/build.py <trip-dir> --serve
+python3 skills/to-where-for-what/scripts/build.py <trip-dir> --serve
 ```
 
 `dev/` holds development-time material (regression tests, capability probes)
@@ -141,14 +141,14 @@ and isn't part of the install.
 For local development a symlink is convenient — edits take effect immediately:
 
 ```bash
-ln -s "$PWD/skills/travel-planner" ~/.claude/skills/travel-planner
+ln -s "$PWD/skills/to-where-for-what" ~/.claude/skills/to-where-for-what
 ```
 
 ## License
 
 [MIT](LICENSE). The inlined [SortableJS](https://github.com/SortableJS/Sortable)
 1.15.7 is MIT too — see
-[`assets/vendor/README.md`](skills/travel-planner/assets/vendor/README.md).
+[`assets/vendor/README.md`](skills/to-where-for-what/assets/vendor/README.md).
 
 Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright)
 contributors.
@@ -176,7 +176,7 @@ npx skills add haoabout/to-where-for-what
 
 支持 Claude Code、Codex、Cursor、OpenCode 等 70+ 工具（走 [Vercel skills CLI](https://github.com/vercel-labs/skills)）。装完直接说「帮我规划去大阪的行程」就会触发。
 
-手动安装：把 `skills/travel-planner/` 和 `skills/lite-search/` **两个目录**都拷进 `~/.claude/skills/`（或你的工具对应的 skills 目录）。它们是一对——`lite-search` 负责在对话里直接回答「X 有什么好玩的」，`travel-planner` 在你没提行程页时会主动把问题交给它。只装规划那个的话，一句随口的问题会被拖进完整的开场问卷。
+手动安装：把 `skills/to-where-for-what/` 和 `skills/to-where-for-what-lite/` **两个目录**都拷进 `~/.claude/skills/`（或你的工具对应的 skills 目录）。它们是一对——`to-where-for-what-lite` 负责在对话里直接回答「X 有什么好玩的」，`to-where-for-what` 在你没提行程页时会主动把问题交给它。只装规划那个的话，一句随口的问题会被拖进完整的开场问卷。
 
 **依赖**：Python 3.9+，标准库即可，不需要 pip install。地图和天气要联网。
 
@@ -209,7 +209,7 @@ npx skills add haoabout/to-where-for-what
 
 ## 长期偏好
 
-存在 `~/.travel-planner/preferences.md`，跨行程复用：交通习惯、体力、兴趣权重、忌口、预算档、攻略详略。
+存在 `~/.to-where-for-what/preferences.md`，跨行程复用：交通习惯、体力、兴趣权重、忌口、预算档、攻略详略。
 
 **刻意放在 skill 目录之外**——你更新或重装 skill 时（git pull、下载 zip、删掉重装都算）不会碰到它。skill 目录里只有模板。
 
@@ -239,7 +239,7 @@ npx skills add haoabout/to-where-for-what
 
 ```bash
 python3 dev/test_validate.py                          # 校验器回归（43 个用例）
-python3 skills/travel-planner/scripts/build.py <行程目录> --serve
+python3 skills/to-where-for-what/scripts/build.py <行程目录> --serve
 ```
 
 `dev/` 里是开发期的东西（回归测试、能力探针），不参与安装。
@@ -247,11 +247,11 @@ python3 skills/travel-planner/scripts/build.py <行程目录> --serve
 本机开发建议软链接，改完立刻生效：
 
 ```bash
-ln -s "$PWD/skills/travel-planner" ~/.claude/skills/travel-planner
+ln -s "$PWD/skills/to-where-for-what" ~/.claude/skills/to-where-for-what
 ```
 
 ## 许可
 
-[MIT](LICENSE)。内联的 [SortableJS](https://github.com/SortableJS/Sortable) 1.15.7 同为 MIT，见 [`assets/vendor/README.md`](skills/travel-planner/assets/vendor/README.md)。
+[MIT](LICENSE)。内联的 [SortableJS](https://github.com/SortableJS/Sortable) 1.15.7 同为 MIT，见 [`assets/vendor/README.md`](skills/to-where-for-what/assets/vendor/README.md)。
 
 地图数据 © [OpenStreetMap](https://www.openstreetmap.org/copyright) 贡献者。

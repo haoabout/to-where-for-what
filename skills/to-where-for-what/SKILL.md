@@ -1,6 +1,6 @@
 ---
-name: travel-planner
-description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, use lite-search to recommend directly in conversation instead of starting this pipeline.
+name: to-where-for-what
+description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, use to-where-for-what-lite to recommend directly in conversation instead of starting this pipeline.
 ---
 
 # Trip Planning
@@ -107,7 +107,7 @@ things at a time, and when a gap doesn't block starting, assume and say so.
 
 ## Preferences file
 
-Long-term preferences live in **`~/.travel-planner/preferences.md`**, reused
+Long-term preferences live in **`~/.to-where-for-what/preferences.md`**, reused
 across trips and across projects.
 
 **Deliberately outside the skill directory**: updating or reinstalling the skill
@@ -116,7 +116,7 @@ skill directory only ships the `preferences.template.md` template.
 
 On startup:
 
-1. Read `~/.travel-planner/preferences.md`. If it doesn't exist, copy the content
+1. Read `~/.to-where-for-what/preferences.md`. If it doesn't exist, copy the content
    of `<SKILL_ROOT>/preferences.template.md` over verbatim and tell the user
    "first run — I've created a preferences file for you".
 2. When the file exists but lacks a section the template has since added,
@@ -235,7 +235,7 @@ Resolve in this order:
 3. Otherwise ask the user, suggesting **`~/travel-plans/`** as the default, and
    write the answer into `preferences.md`
 
-The default is not `~/.travel-planner/trips/` (HTML files the user opens and
+The default is not `~/.to-where-for-what/trips/` (HTML files the user opens and
 shares don't belong in a hidden directory) and not `~/Documents` (the directory
 name varies by system language).
 

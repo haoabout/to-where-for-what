@@ -83,7 +83,7 @@ REQUIRED_ANY = ["tier", "scale", "status", "booking", "coord",
 # UAs outright, and using one would misreport plenty of healthy official sites
 # as dead links.
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/140.0 Safari/537.36 travel-planner-validate/1.0")
+      "(KHTML, like Gecko) Chrome/140.0 Safari/537.36 to-where-for-what-validate/1.0")
 STALE_DAYS = 30
 DUPE_METERS = 25
 
