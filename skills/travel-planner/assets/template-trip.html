@@ -492,14 +492,30 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* The small counts on the right of view ①'s toolbar. The list view is where
    choices get made, so a live count of the four buckets is most useful here;
    the map view hangs the same numbers on its filter buttons instead. */
-.tally{display:flex;gap:11px;font-size:12px;color:var(--canvas-ink-3);margin-left:auto;white-space:nowrap}
-.tally span{display:flex;align-items:center;gap:4px}
-.dot{width:8px;height:8px;border-radius:50%;flex:none}
-/* Undecided is hollow: it used to share --line-2 with "no", differing only by
-   45% opacity, and the two gray dots were indistinguishable.
-   Hollow = not yet decided, which happens to match the map markers' own
-   "hollow = not yet scheduled" intuition. */
-.d-yes{background:var(--ok)} .d-maybe{background:var(--warn)} .d-no{background:var(--line-2)} .d-none{background:transparent;border:1.5px solid var(--line-2)}
+.tally{display:flex;gap:6px;font-size:12px;margin-left:auto;white-space:nowrap}
+/* Four solid pills rather than dot-plus-label. The colour now *is* the pill, so
+   an 8px swatch alongside it was saying the same thing twice, and four hairline
+   dots on the paper read as debris at this size. Labels stay: the fill carries
+   the meaning for anyone who can see it, the words carry it for everyone else. */
+.tally span{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 11px;border-radius:999px;font-weight:500;
+}
+/* Mono so the counts sit on one rhythm across four pills of different widths —
+   same reason .group-h .meta is mono. Full opacity, not dimmed: on these solid
+   fills, fading the number is contrast the small type cannot spare. */
+.tally .n{font:600 11px/1 var(--mono)}
+/* The tri-state's own three fills, reused verbatim — same four buckets, so
+   there is one place to change a choice colour, not two. Measured pairs are
+   documented at --on-ok / --on-warn above.
+   Undecided has no counterpart there (it is the *unpressed* state), so it takes
+   the tri-state's track colour: filled, but the quietest thing in the row —
+   which is what "nobody has decided this yet" should look like. --ink-3 on
+   --fill measures 5.88:1. */
+.t-yes{background:var(--ok);color:var(--on-ok)}
+.t-maybe{background:var(--warn);color:var(--on-warn)}
+.t-no{background:var(--ink-3);color:var(--paper)}
+.t-none{background:var(--fill);color:var(--ink-3)}
 
 /* ═══════════════════════════════════════════════ Main */
 main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
@@ -3109,14 +3125,14 @@ function updateProgress(){
     if(c) c.textContent = n[b.dataset.c] ?? 0;
   }
   const t = $("#tally");
-  // Numbers must come with words. Dots alone put all the meaning on color —
-  // a screen reader hears four bare numbers, color-blind users see four
-  // dots; and the map view's matching filter buttons already carry the words.
+  // Numbers must come with words. The pill's fill alone puts all the meaning on
+  // color — a screen reader hears four bare numbers, color-blind users see four
+  // capsules; and the map view's matching filter buttons already carry the words.
   if(t) t.innerHTML =
-    `<span><i class="dot d-yes"></i>${T.yes} ${n.yes}</span>
-     <span><i class="dot d-maybe"></i>${T.maybe} ${n.maybe}</span>
-     <span><i class="dot d-no"></i>${T.no} ${n.no}</span>
-     <span><i class="dot d-none"></i>${T.none} ${n.none}</span>`;
+    `<span class="t-yes">${T.yes}<b class="n">${n.yes}</b></span>
+     <span class="t-maybe">${T.maybe}<b class="n">${n.maybe}</b></span>
+     <span class="t-no">${T.no}<b class="n">${n.no}</b></span>
+     <span class="t-none">${T.none}<b class="n">${n.none}</b></span>`;
 }
 
 /* ─────────────────────────────────────────────── Choices & stashing */
