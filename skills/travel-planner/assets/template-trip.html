@@ -237,7 +237,13 @@
   /* The theme's --tracking-normal is -0.025em applied to body. Here it is a
      token used only on the display headings: negative tracking tightens Latin
      nicely but crowds Han glyphs, which are drawn to a fixed em box, and this
-     page's body copy is almost entirely Han. */
+     page's body copy is almost entirely Han.
+     That reasoning was applied to the body copy and then not to the two places
+     the token actually reaches — .title, the destination name, and the guide's
+     h2/h3 route headings, which on a Chinese trip are the largest runs of Han
+     on the page. Held to zero by output language just below rather than
+     deleted outright: the tightening is genuinely right for a Latin
+     destination, and this template builds those too. */
   --tracking:-0.025em;
   --r:20px;               /* --radius, 1.25rem */
   /* Place cards run rounder than the rest of the chrome. They are the one
@@ -802,6 +808,16 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    a local name is rendered in serif needs adding to the second selector. */
 :lang(ja){font-family:var(--sans-ja)}
 .dlg-h h3 :lang(ja){font-family:var(--serif-ja)}
+
+/* Display tracking, off for the languages it hurts. boot() writes the trip's
+   output language onto <html>, so this reads the same value the rest of the
+   page is rendered in — zh-CN matches :lang(zh), and so on. Only the two
+   display headings take var(--tracking) at all, but on a Chinese trip those
+   are the destination name and every route heading in the guide, and Han is
+   drawn to a fixed em box that negative tracking simply crowds.
+   Kept as a token override rather than a per-rule one so a third heading
+   picking up --tracking later inherits the right answer. */
+:root:lang(zh),:root:lang(ja),:root:lang(ko){--tracking:normal}
 /* Scoped to the card header: .loc is also the detail dialog's h3, where it
    trails the name inline and must stay inline. */
 .hd .loc{
