@@ -67,14 +67,16 @@ PILLS = [
     ("pace", "--pill-pace", 0.744, 0.057, 45),
 ]
 
-# The navigation's own hue, kept clear of the destination pill. Only that pill
-# needs the exclusion: whether a colour gets mistaken for the navigation depends
-# on chroma rather than hue — the nav is a saturated cyan at C .135, and the
-# other three pills sit at C .057–.082, where a pale blue-grey reads as nothing
-# of the sort. Restricting one pill instead of all four is what leaves 300° of
-# usable hue rather than 120°.
-NAV_HUE_BLOCK = (198, 258)
-
+# There is no reserved navigation hue any more. NAV_HUE_BLOCK = (198, 258)
+# lived here to keep the destination pill from being mistaken for the nav,
+# on the stated premise that "the nav is a saturated cyan at C .135". That
+# stopped being true when the title band was rebuilt: --pill-nav is #E7E2DB,
+# oklch(0.915 0.011 76.6), and --pill-nav-on is #F6F6F6, oklch(0.973 0 90) —
+# a warm grey and a neutral grey, chroma .011 and .000. Nothing can be
+# mistaken for them on hue.
+# Left in place the check refused 60° of the circle, all of it blue, and said
+# so in a warning that was simply wrong: theme_hue 200 builds #48D1D8 and was
+# told "it will read as the nav's cyan".
 PAPER_Y = 0.8780  # relative luminance of --paper #F4F4F0
 INK_Y = 0.0048    # relative luminance of --ink   #0E0E0E
 MIN_ON_PAPER = 1.60   # the pill must stay off the canvas; today's worst is 1.65
@@ -156,12 +158,6 @@ def theme_css(hue) -> tuple[str, list[str]]:
     decls = []
     for role, var, L, C, off in PILLS:
         h = (hue + off) % 360
-        if role == "name" and NAV_HUE_BLOCK[0] <= h <= NAV_HUE_BLOCK[1]:
-            warn.append(
-                f"theme_hue {hue:.0f} puts the destination pill at hue {h:.0f}, inside the "
-                f"navigation's reserved band {NAV_HUE_BLOCK[0]}–{NAV_HUE_BLOCK[1]}; "
-                "it will read as the nav's cyan. Pick another hue."
-            )
         css_hex, y = _hex_and_luminance(L, C, h)
         # Step lightness down until the pill clears the canvas behind it.
         guard = 0
