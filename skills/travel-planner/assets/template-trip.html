@@ -1646,6 +1646,27 @@ pre.code{
   .map-wrap{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(180px,34vh) 1fr;height:auto}
   .map-wrap .map-main{grid-column:1 / -1;height:min(56vh,540px)}
 }
+/* ③ phone — all three stacked.
+   The two-column form was held all the way down on the argument that ~165px
+   a column is enough, since name ellipses absorb the squeeze. Looked at on a
+   phone, that is where it stops being true: the day column spends ~51px of
+   its width on the ↑↓× buttons alone, so at 375px the names render as a
+   single character plus an ellipsis ("大…", "国…") and the rows are guessing
+   games rather than a schedule.
+   The reason the 1×3 mode was dropped — that stacking turns "drag into a day"
+   into a cross-screen scroll — is real but not disqualifying: tapping a pool
+   dot toggles the place into the current day (toggleInCurDay, wired at the
+   .pin click), so scheduling never depended on the drag. And dragging across
+   a scroll boundary is the awkward gesture on touch anyway.
+   Each pane gets its own height rather than sharing one grid track: they are
+   three independent scrollers stacked, and a phone screen cannot show all
+   three at once regardless, so the view scrolls as a page. */
+@media (max-width:560px){
+  .map-wrap{grid-template-columns:minmax(0,1fr);grid-template-rows:none;height:auto}
+  .map-side{height:min(44vh,340px)}
+  .day-col{height:min(44vh,340px)}
+  .map-wrap .map-main{grid-column:auto;height:min(52vh,440px)}
+}
 
 /* ═══════════════════════════════════════════════ Guide view */
 /* A sheet of paper on the canvas. The other two views are already made of
