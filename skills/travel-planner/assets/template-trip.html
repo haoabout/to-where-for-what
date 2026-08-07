@@ -2896,13 +2896,13 @@ function render(){
      fell back to whatever order the data happened to be in. */
   const groups = new Map();
   for(const p of tops){
-    const key = ui.group === "area" ? (p.area || " other") : (p.tier || " stub");
+    const key = ui.group === "area" ? (p.area || "\u0000other") : (p.tier || "\u0000stub");
     if(!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
   const label = k => ui.group === "area"
-    ? (k === " other" ? T.otherArea : k)
-    : (k === " stub" ? T.stubGroup : tf("tierGroup", { t: k }));
+    ? (k === "\u0000other" ? T.otherArea : k)
+    : (k === "\u0000stub" ? T.stubGroup : tf("tierGroup", { t: k }));
 
   const keys = [...groups.keys()].sort((a,b) => {
     // Tiers must sort S→A→B→C, not alphabetically (that would put S last)
