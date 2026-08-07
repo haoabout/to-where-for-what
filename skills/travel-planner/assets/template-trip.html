@@ -385,13 +385,14 @@ button{font:inherit;color:inherit;cursor:pointer}
   background:var(--canvas);
   border-bottom:1px solid var(--canvas-line);
   color:var(--canvas-ink);
-  /* Backstop for band-in's 16px slide (see below). Nothing overflows today —
+  /* Backstop for band-in's 25px slide (see below). Nothing overflows today —
      measured at 375/620/900/1280 with every element frozen at full rightward
-     displacement, the closest any of them comes to the viewport edge is 37px,
-     because .metas never reaches .top-in's content edge and .top-in holds 20px
-     of inline padding besides. This is insurance against that margin being
-     spent later: without it, a longer pill or tighter padding grows a
-     horizontal scrollbar for the first second of every load, silently.
+     displacement, the closest any of them comes to the viewport edge is 12px,
+     at 375 where .metas' pills wrap and run furthest right. That is the whole
+     remaining margin: .top-in's 20px of inline padding, minus the 25px slide,
+     plus the few px .metas stops short of the content edge. Widen the slide
+     much further and it does overflow, so the clip stops being insurance and
+     starts being the thing holding the layout together.
      clip, not hidden: hidden would make this a scroll container. Applied to the
      sticky element itself, which is safe — it is an ancestor's overflow that
      breaks stickiness, not your own. Nothing in the header is meant to escape
@@ -480,9 +481,9 @@ button{font:inherit;color:inherit;cursor:pointer}
    do not enter the document together. The h1 is in the HTML from
    parse; the pills are createElement'd in boot(), after ~5000 more lines of
    markup and the inlined Sortable. Their animations would start tens of
-   milliseconds apart — more than one 70ms stagger step, enough to scramble the
-   order. The class lands once, after the band is complete, so every element
-   starts on the same style recalc.
+   milliseconds apart — a large fraction of a 70ms stagger step, enough to
+   scramble the order. The class lands once, after the band is complete, so
+   every element starts on the same style recalc.
 
    --i is written by boot() in DOM order instead of being hardcoded per class,
    because the sequence is not fixed: boot() drops any pill whose value is
@@ -496,10 +497,10 @@ button{font:inherit;color:inherit;cursor:pointer}
   .brand.in > .title,
   .brand.in .mpill,
   .brand.in .stale{
-    animation:band-in .45s cubic-bezier(.2,.8,.25,1) backwards;
+    animation:band-in .5s cubic-bezier(.2,.8,.25,1) backwards;
     animation-delay:calc(var(--i,0) * 70ms);
   }
-  @keyframes band-in{from{opacity:0;transform:translateX(16px)}}
+  @keyframes band-in{from{opacity:0;transform:translateX(25px)}}
 }
 
 /* Navigation. flex:none — it is pinned, and its position is the thing users
