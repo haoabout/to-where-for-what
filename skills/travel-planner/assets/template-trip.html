@@ -2078,8 +2078,16 @@ pre.code{
 /* ═══════════════════════════════════════════════ Empty states / toast */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
 .empty-state .big{font:400 21px var(--serif);color:var(--ink-2);margin-bottom:9px}
+/* Stands clear of the action bar by measuring it, not by guessing at it.
+   bottom:78px was tuned against a desktop bar of about 40px. The bar's height
+   is the status line's height, and that line wraps: measured in the shipping
+   Chinese it stands 127px at 375px wide and 147px at 320px — so the toast sat
+   entirely inside the bar's band, and at z-index 99 against the bar's 60 it
+   painted on top of the Save button and the very status text it was
+   reporting on. layoutMap() already measures the bar into --ab-h for exactly
+   this purpose; .pgnav-btn above uses the identical expression. */
 .toast{
-  position:fixed;left:50%;bottom:78px;transform:translate(-50%,14px);
+  position:fixed;left:50%;bottom:calc(var(--ab-h,64px) + 14px);transform:translate(-50%,14px);
   background:var(--ink);color:var(--paper);padding:10px 19px;border-radius:9px;
   font-size:13.5px;z-index:99;opacity:0;pointer-events:none;transition:.22s;box-shadow:0 8px 26px rgba(0,0,0,.25);
 }
