@@ -4,11 +4,12 @@ __pycache__/
 .venv/
 node_modules/
 
-# Build artifacts: regenerable from places.json + route.md + the template
-trips/*/trip.html
-trips/*/guide.html
+# Trips are the user's own data, not part of the skill: real dates, real
+# lodging, real choices. Nothing in the skill or its docs reads this directory
+# — the 2026-09-osaka paths in README.md and SKILL.md are illustrative — so it
+# has no business in a public repo. Ignored wholesale rather than per-file so
+# a new trip can't arrive already staged.
+trips/
 
 # Development-time scratch files
 .tmp/
-trips/*/.server.pid
-trips/*/guide.html
