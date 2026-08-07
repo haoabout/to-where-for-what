@@ -1437,11 +1437,27 @@ pre.code{
 .mgroup button:disabled{opacity:.38;cursor:not-allowed}
 
 /* Place search. The input and the search button share one mgroup capsule,
-   matching the basemap switcher's styling */
+   matching the basemap switcher's styling.
+
+   min-width:0 on both the capsule and the input is what keeps the button
+   inside the capsule. A flex item's min-width defaults to auto — its
+   min-content width — so the capsule refused to shrink below input 168px +
+   button, and .mgroup's overflow:hidden then clipped whatever stuck out.
+   Measured at 375px, where .map-bar is squeezed to 162px by the zoom/toggle
+   reserve: the capsule needed 194px, and #msq-go rendered at x 180–226
+   against a clip edge at 195 — the button was entirely outside, invisible
+   and unclickable, leaving the undiscoverable Enter handler as the only way
+   to search.
+   The 168px stays as the flex *basis*, so nothing changes at widths where it
+   fits; the input is the only item allowed to shrink, and the button keeps
+   its natural size. */
+.msearch{min-width:0}
 .msearch input{
   background:none;border:0;border-right:1px solid var(--line-soft);
-  padding:6px 11px;font-size:12px;color:var(--ink);width:168px;min-height:29px;
+  padding:6px 11px;font-size:12px;color:var(--ink);min-height:29px;
+  flex:0 1 168px;width:auto;min-width:0;
 }
+.msearch>button{flex:none}
 .msearch input::placeholder{color:var(--ink-3)}
 .msearch input:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px 0 0 8px}
 /* The result panel overlapping the legend's spot is fine — they never appear
