@@ -746,24 +746,31 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    The dividers went with it: a full-height hairline next to a floating pill
    reads as a seam the pill is failing to line up with. What separates the
    three now is the track itself. */
+/* Same segmented pill as the tab bar, and now built from the same parts: the
+   tab bar's own track colour, its 5px padding ring, no outline. The heavy rule
+   came off for the reason it came off the title band — an outline here while the
+   bar above has none makes two instances of one pattern read as two components.
+   Nothing is lost by dropping it: --fill on a card measures 1.28:1, slightly
+   *stronger* than the tab bar against the canvas (1.17:1), so the track still
+   draws itself. */
 .pick{
   display:grid;grid-template-columns:repeat(3,1fr);
   margin:11px auto 0;width:fit-content;max-width:100%;
-  border:1px solid var(--line);border-radius:999px;
-  padding:3px;background:var(--paper-2);
+  border-radius:999px;
+  padding:5px;background:var(--fill);
 }
 .pick button{
   background:transparent;border:0;border-radius:999px;
   padding:7px 15px;font-size:12.5px;color:var(--ink-3);transition:.12s;
 }
-/* Neutral rather than the theme's yellow, and scoped to this one control.
-   .pick is the same segmented-pill idiom as the tab bar — filled track, padding
-   ring, transparent segments, one filled — so a hover that flashes yellow here
-   while the tab bar's stays quiet makes two instances of one pattern behave like
-   two different components. --fill is the tab bar's own track colour.
+/* The tab bar's hover, literally: a wash of white over the track rather than the
+   theme's yellow, so two instances of one pattern behave the same way under the
+   pointer. It cannot be --fill any more — that is the track's own colour now,
+   and hovering would show nothing. At 1.12:1 over the track this is deliberately
+   faint; the segment that matters is the pressed one, and it is filled solid.
    The other twelve --accent-soft hovers are left alone: they belong to chips,
    menus and list rows, which are not this pattern. */
-.pick button:hover:not([aria-pressed=true]){background:var(--fill);color:var(--ink)}
+.pick button:hover:not([aria-pressed=true]){background:rgba(255,255,255,.45);color:var(--ink)}
 .pick button[aria-pressed=true]{font-weight:600}
 .pick button.y[aria-pressed=true]{background:var(--ok);color:var(--on-ok)}
 .pick button.m[aria-pressed=true]{background:var(--warn);color:var(--on-warn)}
@@ -929,8 +936,9 @@ textarea{
   /* Pinned to the dialog's floor the way .dlg-h is pinned to its ceiling, so
      the rating stays reachable however far down the practical info you have
      scrolled. Deliberately unfilled: a painted bar here would read as a second
-     piece of chrome competing with the header, and the buttons carry their own
-     outlines already. */
+     piece of chrome competing with the header, and the controls already draw
+     themselves — the tri-state by its filled track, the schedule button by its
+     outline. */
   position:sticky;bottom:0;z-index:2;
   /* Three tracks so the pill is centred on the dialog, not on whatever is left
      after the schedule button — the pill's position must not move when that
