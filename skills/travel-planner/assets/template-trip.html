@@ -400,7 +400,15 @@ button{font:inherit;color:inherit;cursor:pointer}
   overflow-x:clip;
 }
 .top a{color:var(--canvas-accent)}
-.top-in{max-width:1180px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:16px}
+/* stretch, not center: the nav pill and the destination pill are the band's two
+   end-caps and were visibly different heights — measured 43.4 against 58.7 at
+   1280, the nav sitting 15px short and floating in the middle. Stretch hands
+   .navwrap the row's height and .tabs fills it, so both caps share a top and a
+   bottom edge the way .title and .metas already do inside .brand.
+   It also works in the other direction: on a trip with no dates, party or pace
+   .metas is empty and the nav is the taller of the two, and .brand — already
+   stretch — grows .title to meet it. Neither side is pinned to the other. */
+.top-in{max-width:1180px;margin:0 auto;padding:11px 20px;display:flex;align-items:stretch;gap:16px}
 
 /* The title band is one row: destination on the left, the trip's facts beside
    it in a fixed two-row block, navigation pinned right.
@@ -511,8 +519,14 @@ button{font:inherit;color:inherit;cursor:pointer}
    it is the only thing that still draws the outer pill as a shape once the
    selected tab is inside it. At 3px that ring was thinner than the gap between
    tabs and the two pills read as one smudge; 5px is what separates them. */
+/* align-items:stretch follows from .top-in's: once the outer pill is as tall as
+   the destination's, centring the tabs inside it would leave a 10px ring above
+   and below against 5px at the ends. The ring is the only thing drawing the
+   outer pill as a shape (see below), and a ring that thickness-varies stops
+   reading as one. Stretching the tabs keeps it 5px the whole way round; the
+   labels stay centred on .tab's own align-items. */
 .tabs{
-  display:flex;gap:2px;align-items:center;
+  display:flex;gap:2px;align-items:stretch;
   background:var(--pill-nav);border-radius:999px;padding:5px;
 }
 .tab{
