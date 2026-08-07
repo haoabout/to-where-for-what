@@ -2051,9 +2051,13 @@ pre.code{
     <div class="toolbar">
       <input class="search" id="q" type="search" placeholder="Search names, highlights, tags…" autocomplete="off"
         aria-label="Search places">
+      <!-- By-tier first because it is the default (ui.group starts at "tier"),
+           which puts the pressed segment on the left the way the neighbouring
+           scope control does with All. A default that sits second reads as the
+           second option even while it is the one in effect. -->
       <div class="seg" role="group" id="seg-group" aria-label="Group by">
-        <button id="by-area" aria-pressed="false">By area</button>
         <button id="by-tier" aria-pressed="true">By tier</button>
+        <button id="by-area" aria-pressed="false">By area</button>
       </div>
       <div class="seg" role="group" id="seg-scope" aria-label="Show">
         <button id="f-all"  aria-pressed="true">All</button>
