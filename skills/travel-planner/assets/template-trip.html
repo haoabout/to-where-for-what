@@ -4819,9 +4819,55 @@ const MAP = (() => {
     el.style.display = shown(p) ? "" : "none";
   }
 
+  /* Focus has to survive refresh(). Both columns are repainted by assigning
+     innerHTML, which destroys the button that was just pressed and drops
+     focus to <body> — so ↑ ↓ × and the pool dot each ejected a keyboard user
+     to the top of the document, and dragging is pointer-only, meaning these
+     buttons are the *entire* keyboard path for scheduling. The list view hit
+     this exact wall and solved it in place (see setChoice's note about
+     re-Tabbing ~200 times); here the row order genuinely changes, so a full
+     repaint is right and the focus has to be carried across it instead.
+     Nothing is stolen: mark() returns null unless focus was already inside
+     one of the two rebuilt columns. */
+  function focusMark(){
+    const el = document.activeElement;
+    if(!el || el === document.body) return null;
+    const item = el.closest && el.closest(".ditem");
+    if(item) return { kind:"sched", card:item.dataset.card, day:item.dataset.day,
+                      i:+item.dataset.i, op: el.classList.contains("dop") ? el.dataset.op : null };
+    const mi = el.closest && el.closest(".mi");
+    if(mi) return { kind:"pool", card:mi.dataset.card, pin: el.classList.contains("pin") };
+    return null;
+  }
+  function focusRestore(m){
+    if(!m) return;
+    if(m.kind === "pool"){
+      const row = [...$$(".mi")].find(r => r.dataset.card === m.card);
+      const el = row && (m.pin ? row.querySelector(".pin") : row.querySelector(".t"));
+      if(el) el.focus();
+      return;
+    }
+    const rows = [...$$(`.ditem[data-day="${m.day}"]`)];
+    if(!rows.length) return;
+    /* Follow the row's identity first, not its index: after ↑ the item you
+       moved is one slot higher, and holding ↑ should keep walking *it* up
+       rather than sliding focus onto whatever took its old place. One place
+       may sit in a day more than once, so among the copies take the one
+       nearest to where it was. Falling back to the index covers ×, where the
+       card is gone and the right landing spot is the row that moved up into
+       the gap — which is what makes deleting several in a row work. */
+    const same = rows.filter(r => r.dataset.card === m.card);
+    const row = same.length
+      ? same.reduce((a, b) => Math.abs(+b.dataset.i - m.i) < Math.abs(+a.dataset.i - m.i) ? b : a)
+      : rows[Math.min(m.i, rows.length - 1)];
+    const el = (m.op && row.querySelector(`.dop[data-op="${m.op}"]`)) || row.querySelector(".dnm");
+    if(el) el.focus();
+  }
+
   function refresh(){
+    const fm = focusMark();
     renderDays();
-    if(!st.ready) return;
+    if(!st.ready){ focusRestore(fm); return; }
     pts().forEach(p => {
       const m = st.markers.get(p.id);
       const el = st.engine === "maplibre" ? m?.getElement?.() : null;
@@ -4830,6 +4876,7 @@ const MAP = (() => {
     if(st.engine === "static") renderStatic();
     if(st.engine === "leaflet"){ addMarkers(); }
     renderSide();
+    focusRestore(fm);
   }
 
   /* The sidebar's small dots follow the same semantics as map markers:
