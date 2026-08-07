@@ -95,8 +95,13 @@
   --pill-who:#C6B4E6;  --pill-pace:#CE9E9E;
   /*__THEME__*/
   /* Navigation. Deliberately *not* themed: it is the one constant surface on
-     the page, and "different trip, same tool" is the sentence it gets to say. */
-  --pill-nav:#30BEF1; --pill-nav-on:#C2E6F3;
+     the page, and "different trip, same tool" is the sentence it gets to say.
+     Both are near-paper neutrals, which puts all the weight on two numbers that
+     are *not* about text: the group separates from the canvas by 1.17:1 and the
+     selected tab from the group by 1.19:1. With no outline and no shadow left on
+     either, the 700 weight and .tabs' padding ring are the whole signal for
+     which view is current. (Type itself is comfortable: 14.98:1 / 17.86:1.) */
+  --pill-nav:#E7E2DB; --pill-nav-on:#F6F6F6;
   /* Gold. Two jobs: the S badge's fill and the pitch lede's margin rule — an
      ornament in both, never a status, which is why it isn't in the block below.
      It cannot be --accent-soft: that lemon is already the caution fill
@@ -398,9 +403,13 @@ button{font:inherit;color:inherit;cursor:pointer}
    learn. .navwrap exists so the group can be given a full-width row of its own
    on narrow screens without the nav pill itself stretching. */
 .navwrap{flex:none;display:flex}
+/* padding is the ring of group colour left visible around the selected tab, so
+   it is the only thing that still draws the outer pill as a shape once the
+   selected tab is inside it. At 3px that ring was thinner than the gap between
+   tabs and the two pills read as one smudge; 5px is what separates them. */
 .tabs{
   display:flex;gap:2px;align-items:center;
-  background:var(--pill-nav);border-radius:999px;padding:3px;
+  background:var(--pill-nav);border-radius:999px;padding:5px;
 }
 .tab{
   background:none;border:0;border-radius:999px;white-space:nowrap;
@@ -408,12 +417,18 @@ button{font:inherit;color:inherit;cursor:pointer}
   display:flex;align-items:center;transition:background .14s,color .14s;
 }
 .tab:hover:not(:disabled):not([aria-selected=true]){background:rgba(255,255,255,.45)}
-/* --pill-nav and --pill-nav-on both carry --ink safely (8.97:1 / 14.62:1) but
-   differ from each other by only 1.63:1, and the pills carry no outline. So the
-   selected state cannot speak through colour alone: the 700 weight and the
-   shadow are the same statement said two more ways. Drop either and this needs
-   re-measuring. */
-.tab[aria-selected=true]{background:var(--pill-nav-on);color:var(--ink);font-weight:700;box-shadow:var(--shadow)}
+/* --pill-nav and --pill-nav-on both carry --ink safely (14.98:1 / 17.86:1) but
+   differ from each other by only 1.19:1, and neither pill has an outline or a
+   shadow.
+
+   The 600 → 700 step between an unselected and a selected tab looks like a
+   second cue but is not one everywhere: measured on macOS the two rasterise to
+   *identical pixels*, because this CJK stack has no cut above Semibold. So on
+   that platform which view you are in is said by two things only — the 1.19:1
+   fill, and the ring of group colour that .tabs' padding holds open around the
+   selected tab. That padding is therefore load-bearing, not decorative: thin it
+   and the two pills merge into one smudge. */
+.tab[aria-selected=true]{background:var(--pill-nav-on);color:var(--ink);font-weight:700}
 .tab:disabled{color:color-mix(in srgb,var(--ink) 35%,transparent);cursor:not-allowed}
 
 /* First breakpoint: navigation drops first. When the row can no longer hold
