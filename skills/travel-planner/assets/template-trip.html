@@ -1291,7 +1291,13 @@ pre.code{
 }
 .addmenu button:hover{border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
 .dhead .d-del-day{opacity:0;margin-left:4px}
-.dhead:hover .d-del-day{opacity:1}
+/* :focus-within as well as :hover, and it is not optional here. opacity
+   composites the focus ring along with the button, so a keyboard user could
+   Tab onto this control and see nothing at all — not the button, not the
+   outline the global :focus-visible draws. The .dops row two screens up
+   already pairs the two selectors for exactly this reason; this rule was
+   written from the same pattern and lost the focus half. */
+.dhead:hover .d-del-day,.dhead:focus-within .d-del-day{opacity:1}
 @media (hover:none){ .dhead .d-del-day{opacity:1} }
 .map-side{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
