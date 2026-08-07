@@ -385,6 +385,18 @@ button{font:inherit;color:inherit;cursor:pointer}
   background:var(--canvas);
   border-bottom:1px solid var(--canvas-line);
   color:var(--canvas-ink);
+  /* Backstop for band-in's 16px slide (see below). Nothing overflows today —
+     measured at 375/620/900/1280 with every element frozen at full rightward
+     displacement, the closest any of them comes to the viewport edge is 37px,
+     because .metas never reaches .top-in's content edge and .top-in holds 20px
+     of inline padding besides. This is insurance against that margin being
+     spent later: without it, a longer pill or tighter padding grows a
+     horizontal scrollbar for the first second of every load, silently.
+     clip, not hidden: hidden would make this a scroll container. Applied to the
+     sticky element itself, which is safe — it is an ancestor's overflow that
+     breaks stickiness, not your own. Nothing in the header is meant to escape
+     it (there is no menu or popover in here, only .brand and .navwrap). */
+  overflow-x:clip;
 }
 .top a{color:var(--canvas-accent)}
 .top-in{max-width:1180px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:16px}
@@ -452,6 +464,42 @@ button{font:inherit;color:inherit;cursor:pointer}
   background:var(--warn-soft);color:var(--ink);
   border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);
   padding:1px 8px;border-radius:20px;font-size:11.5px;white-space:nowrap;
+}
+
+/* The band's entrance: destination first, then each fact, each sliding a short
+   way leftward as it fades up. Runs once per load and never again — see boot(),
+   which builds this band exactly once and is the only writer of #metas.
+
+   The transparent start exists ONLY as a keyframe, never as a resting style on
+   the element. Write opacity:0 on .title and a reduced-motion visitor — for
+   whom this whole block does not exist — gets a permanently blank header. Same
+   reason the reduce policy below is a list of specific rules rather than a
+   blanket kill: what stops has to be the movement, not the content.
+
+   The gate is .brand.in rather than the bare selectors because these elements
+   do not enter the document together. The h1 is in the HTML from
+   parse; the pills are createElement'd in boot(), after ~5000 more lines of
+   markup and the inlined Sortable. Their animations would start tens of
+   milliseconds apart — more than one 70ms stagger step, enough to scramble the
+   order. The class lands once, after the band is complete, so every element
+   starts on the same style recalc.
+
+   --i is written by boot() in DOM order instead of being hardcoded per class,
+   because the sequence is not fixed: boot() drops any pill whose value is
+   empty, and .stale appears only on data older than 30 days. Per-class delays
+   would leave a hole in the middle of the stagger for a trip with no party.
+
+   backwards, not both: the delay needs the start state held, but nothing needs
+   holding afterwards — and a lingering transform would make .title a
+   containing block for fixed descendants. */
+@media (prefers-reduced-motion:no-preference){
+  .brand.in > .title,
+  .brand.in .mpill,
+  .brand.in .stale{
+    animation:band-in .45s cubic-bezier(.2,.8,.25,1) backwards;
+    animation-delay:calc(var(--i,0) * 70ms);
+  }
+  @keyframes band-in{from{opacity:0;transform:translateX(16px)}}
 }
 
 /* Navigation. flex:none — it is pinned, and its position is the thing users
@@ -7395,6 +7443,11 @@ function boot(){
   ];
   const metas = $("#metas");
   metas.textContent = "";
+  /* --i is the entrance stagger's position, counted over what actually gets
+     built rather than assigned per class — a trip with no party or no pace
+     would otherwise leave a hole in the middle of the sequence. Starts at 1:
+     .title is step 0 and takes it from band-in's var() fallback. */
+  let mi = 1;
   for(const row of rows){
     const pills = row.filter(([, v]) => v);
     if(!pills.length) continue;
@@ -7404,6 +7457,7 @@ function boot(){
       const s = document.createElement("span");
       s.className = "mpill " + cls;
       s.textContent = v;
+      s.style.setProperty("--i", mi++);
       r.appendChild(s);
     }
     metas.appendChild(r);
@@ -7415,8 +7469,13 @@ function boot(){
     const w = document.createElement("span");
     w.className = "stale";
     w.textContent = tf("staleNote", { n: vd });
+    w.style.setProperty("--i", mi++);
     (metas.lastElementChild || metas).appendChild(w);
   }
+  /* The band is complete — start every element's entrance from here, one style
+     recalc, so the stagger reads in order. See band-in for why this cannot be
+     left to the elements' own arrival times. */
+  $(".brand").classList.add("in");
 
   const restoredAdded = loadAdded();   // before loadItin: the schedule draft may reference stub ids
   const restored = loadLocal();
