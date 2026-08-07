@@ -501,10 +501,15 @@ button{font:inherit;color:inherit;cursor:pointer}
   display:flex;align-items:center;gap:5px;
   padding:4px 11px;border-radius:999px;font-weight:500;
 }
-/* Mono so the counts sit on one rhythm across four pills of different widths —
-   same reason .group-h .meta is mono. Full opacity, not dimmed: on these solid
-   fills, fading the number is contrast the small type cannot spare. */
-.tally .n{font:600 11px/1 var(--mono)}
+/* tabular-nums rather than --mono. Even figure widths were the only thing mono
+   was here for, and this is the cheaper way to get them: --mono names fonts it
+   does not embed (see the stack), so in practice it resolves to Menlo on macOS
+   and Consolas on Windows — both of which draw a slashed zero by default, and
+   neither exposes it as a toggleable feature. A slashed zero is a disambiguator
+   for code; next to a Han label in a 12px pill it is just noise.
+   Full opacity, not dimmed: on these solid fills, fading the number is contrast
+   the small type cannot spare. */
+.tally .n{font-weight:700;font-variant-numeric:tabular-nums}
 /* The tri-state's own three fills, reused verbatim — same four buckets, so
    there is one place to change a choice colour, not two. Measured pairs are
    documented at --on-ok / --on-warn above.
