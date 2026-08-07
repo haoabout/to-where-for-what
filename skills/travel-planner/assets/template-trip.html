@@ -244,7 +244,19 @@
      first time this size changes. */
   --nm-size:16px;
   --nm-lh:1.35;
-  --shadow-lift:0 10px 22px rgba(0,0,0,.13), 0 3px 7px rgba(0,0,0,.07);
+  /* Hard shadows, for the place cards only — the brutalist kind: zero blur, a
+     solid opaque colour, offset on the diagonal. What it draws is a second
+     silhouette of the card rather than a haze under it, which is why it only
+     works on a shape that already has a heavy outline to be the silhouette of.
+     Both are drawn in the card's *own* outline colours, so the hover reads as
+     that outline thickening and sliding out from under the card rather than as
+     a light source appearing. --line-2 at rest keeps the resting state as quiet
+     as the soft version it replaces; the jump to --line is the whole event.
+     Scoped to .card: --shadow stays soft for the eight other things that use it
+     (dialogs, map capsules, the A4 sheets), where a hard edge would read as a
+     misprint rather than as depth. */
+  --shadow-card:3px 3px 0 var(--line-2);
+  --shadow-lift:7px 7px 0 var(--line);
   /* The theme ships eight shadow steps, 2xs through 2xl. Measured on the source
      page, only one of them is ever applied: --shadow-xs, at alpha .08, on 30 of
      327 elements — 83% carry no shadow at all. --shadow / --shadow-sm (alpha
@@ -552,7 +564,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    of black boxes and buried the cards it was supposed to emphasise. */
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
-  box-shadow:var(--shadow);overflow:hidden;
+  box-shadow:var(--shadow-card);overflow:hidden;
   transition:border-color .15s,opacity .2s,transform .15s ease-out,box-shadow .15s ease-out;
   display:flex;flex-direction:column;padding:var(--card-pad);
   /* The whole card opens the detail dialog (see the click handler), so the
@@ -562,9 +574,15 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* Lifts on hover. The resting shadow is deliberately almost nothing — depth
    on this page is the outline's job — so the lift is what carries "this is a
    thing you can pick up", and it needs a real shadow under it or the card
-   just appears to have jumped. */
+   just appears to have jumped.
+
+   The travel is diagonal now, up *and* left, against a shadow that grows down
+   and right: with a hard shadow the gap between the card and its silhouette is
+   the entire depth cue, so moving along the same axis the shadow grows on is
+   what opens that gap. 3px of travel against 4px of extra offset reads as 7px
+   of lift while the card itself barely moves. */
 .card:hover{
-  border-color:var(--ink);transform:translateY(-3px);box-shadow:var(--shadow-lift);
+  border-color:var(--ink);transform:translate(-3px,-3px);box-shadow:var(--shadow-lift);
 }
 .card[data-choice=no]{opacity:.5}
 .card[data-choice=no]:hover{opacity:.82}
