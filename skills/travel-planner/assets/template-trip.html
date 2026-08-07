@@ -341,7 +341,7 @@ button{font:inherit;color:inherit;cursor:pointer}
    the movement stops. */
 @media (prefers-reduced-motion:no-preference){
   .tab:active:not(:disabled),
-  .chip:active,.seg button:active,.pick button:active,.btn:active:not(:disabled),
+  .chip:active,.seg button:active,.tally button:active,.pick button:active,.btn:active:not(:disabled),
   .ms-fil button:active,.ms-grp button:active,.mgroup button:active:not(:disabled),
   .dop:active:not(:disabled),.addmenu button:active,
   .pgnav-list button:active,.pgnav-btn:active,.mi .pin:active{
@@ -615,14 +615,26 @@ button{font:inherit;color:inherit;cursor:pointer}
    out as 45.6px, starting the tally at x=66 while the search field, both
    segmented groups, the chips and every card started at 20. A rule that is
    inert where it was aimed and harmful where it was not. */
-.tally{display:flex;gap:6px;font-size:12px;white-space:nowrap}
+.tally{display:flex;gap:6px;white-space:nowrap}
 /* Four solid pills rather than dot-plus-label. The colour now *is* the pill, so
    an 8px swatch alongside it was saying the same thing twice, and four hairline
    dots on the paper read as debris at this size. Labels stay: the fill carries
-   the meaning for anyone who can see it, the words carry it for everyone else. */
-.tally span{
+   the meaning for anyone who can see it, the words carry it for everyone else.
+   They are buttons, not readouts: each one filters its own bucket out of the
+   list, the way the map's .mfil group does. All four start on, so the resting
+   state is exactly the four pills that were here before.
+   The box is .seg button's, to the pixel: 8 + 16 + 8 + 2 = 34px, the height of
+   the search field and the segmented control beside it.
+   The border is 1px at all times and merely goes transparent when selected.
+   Adding it only in the deselected state would resize the pill on every
+   toggle and shove its three neighbours sideways — the same trap .ms-fil
+   documents below, and its reason for using an inset shadow there.
+   font-size moved off .tally and onto the button, matching .chip's 12.5px. */
+.tally button{
   display:flex;align-items:center;gap:5px;
-  padding:4px 11px;border-radius:999px;font-weight:500;
+  padding:8px 13px;font-size:12.5px;line-height:16px;font-weight:500;
+  border:1px solid transparent;border-radius:999px;
+  transition:background .15s,color .15s,border-color .15s,box-shadow .12s,scale .12s;
 }
 /* tabular-nums rather than --mono. Even figure widths were the only thing mono
    was here for, and this is the cheaper way to get them: --mono names fonts it
@@ -640,10 +652,32 @@ button{font:inherit;color:inherit;cursor:pointer}
    the tri-state's track colour: filled, but the quietest thing in the row —
    which is what "nobody has decided this yet" should look like. --ink-3 on
    --fill measures 5.88:1. */
-.t-yes{background:var(--ok);color:var(--on-ok)}
-.t-maybe{background:var(--warn);color:var(--on-warn)}
-.t-no{background:var(--ink-3);color:var(--paper)}
-.t-none{background:var(--fill);color:var(--ink-3)}
+.tally button[aria-pressed=true].t-yes{background:var(--ok);color:var(--on-ok)}
+.tally button[aria-pressed=true].t-maybe{background:var(--warn);color:var(--on-warn)}
+.tally button[aria-pressed=true].t-no{background:var(--ink-3);color:var(--paper)}
+.tally button[aria-pressed=true].t-none{background:var(--fill);color:var(--ink-3)}
+/* Deselected drains rather than recolours, and one rule covers all four.
+   A grey *fill* was the obvious alternative and is unusable here: undecided's
+   selected state is already a --fill grey, so its two states would be the same
+   pill. Hollow works for all four because it is the absence of the fill, and
+   every one of them has a fill to lose. The strikethrough is on the count
+   alone — the number is the thing being excluded from the list below. */
+/* No opacity on top of this. Fading the whole button to .55 read well and
+   measured 2.6:1 for the label against the paper — under the 3:1 floor, on a
+   control you still have to read and press. Losing a saturated fill for an
+   empty shell is already about the largest state change available here; the
+   strikethrough says the rest. --ink-3 on --paper is 7.4:1. */
+.tally button[aria-pressed=false]{
+  background:none;border-color:var(--line-soft);color:var(--ink-3);
+}
+.tally button[aria-pressed=false] .n{text-decoration:line-through}
+/* Deselected hover: "click and it comes back", in the page's shared yellow. */
+.tally button[aria-pressed=false]:hover{border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
+/* Selected hover deepens the outline and leaves the fill alone. All four
+   default to on, so the common case is four lit pills; touching the
+   background there would read as "this one just switched off". Same call as
+   .ms-fil's, and inset means the box never changes size. */
+.tally button[aria-pressed=true]:hover{box-shadow:inset 0 0 0 1px var(--ink)}
 
 /* ═══════════════════════════════════════════════ Main */
 /* The bottom padding clears the fixed action bar, so it is derived from the
@@ -2382,18 +2416,16 @@ pre.code{
       <input class="search" id="q" type="search" placeholder="Search names, highlights, tags…" autocomplete="off"
         aria-label="Search places">
       <!-- By-tier first because it is the default (ui.group starts at "tier"),
-           which puts the pressed segment on the left the way the neighbouring
-           scope control does with All. A default that sits second reads as the
-           second option even while it is the one in effect. -->
+           which puts the pressed segment on the left. A default that sits
+           second reads as the second option even while it is the one in
+           effect. -->
       <div class="seg" role="group" id="seg-group" aria-label="Group by">
         <button id="by-tier" aria-pressed="true">By tier</button>
         <button id="by-area" aria-pressed="false">By area</button>
       </div>
-      <div class="seg" role="group" id="seg-scope" aria-label="Show">
-        <button id="f-all"  aria-pressed="true">All</button>
-        <button id="f-todo" aria-pressed="false">Unrated</button>
-      </div>
-      <div class="tally" id="tally"></div>
+      <!-- Filled by renderTally(); the aria-label is replaced with the map's
+           own T.filterAria, because these four are that same control. -->
+      <div class="tally" id="tally" role="group" aria-label="Filter by choice"></div>
     </div>
     <div class="chips" id="chips"></div>
     <!-- Sibling of #chips, not a child: #chips is what gets clamped, and a
@@ -2576,7 +2608,6 @@ en: {
   csvHint:"CSV imports straight into Google My Maps",
   searchPh:"Search names, highlights, tags…", searchAria:"Search places",
   groupAria:"Group by", byArea:"By area", byTier:"By tier",
-  scopeAria:"Show", fAll:"All", fTodo:"Unrated",
   filterAria:"Filter by choice",
   groupLbl:"Group", byChoice:"By choice",
   yes:"Yes", maybe:"Maybe", no:"No", none:"Unrated",
@@ -2762,7 +2793,6 @@ zh: {
   csvHint:"CSV 可直接导入 Google My Maps",
   searchPh:"搜索名称、亮点、标签…", searchAria:"搜索景点",
   groupAria:"分组方式", byArea:"按区域", byTier:"按推荐度",
-  scopeAria:"显示范围", fAll:"全部", fTodo:"未表态",
   filterAria:"显示哪些选择",
   // 「选择」而不是「想去程度」：这个维度在页面里已经叫「选择」了
   // （filterAria 是「显示哪些选择」、保存按钮是「保存选择和日程」），
@@ -3095,7 +3125,13 @@ let fileHandle = null;
    and two empty cells. Tier splits the same 47 into four full groups, and
    "which are the good ones" is the question the list is for anyway. Area is
    still one click away, and is the better view once you're routing a day. */
-const ui = { group:"tier", scope:"all", q:"", cats:new Set(), tags:new Set(), unv:false };
+/* ui.show is the four choice buckets the list is currently showing — all of
+   them, until someone switches one off on a tally pill. Deliberately not the
+   same Set as the map's st.show: the two views are different jobs, and
+   arriving at one to find the other had rewritten its filters is the more
+   surprising behaviour. Neither is persisted. */
+const ui = { group:"tier", q:"", cats:new Set(), tags:new Set(), unv:false,
+             show:new Set(["yes","maybe","no","none"]) };
 
 /* ─────────────────────────────────────────────── Trip dates */
 /* Local date formatting. Never toISOString() — it converts to UTC, which in
@@ -3429,7 +3465,14 @@ function spotsHTML(kids){
 function visible(){
   const q = ui.q.trim().toLowerCase();
   return PLACES.filter(p => {
-    if(ui.scope === "todo" && p.choice) return false;
+    /* Lodging is exempt, exactly as the map's shown() has it: it is not a
+       candidate place, it carries no choice, and updateProgress() already
+       leaves it out of the four counts.
+       Note this is the inverse of the cats/tags idiom below — an empty
+       ui.show means "none of the four", not "no filter". Switching all four
+       off leaves the lodging and the empty state, which is the honest answer
+       to what was asked. */
+    if(p.kind !== "lodging" && !ui.show.has(p.choice || "none")) return false;
     if(ui.unv && !(p.verify && p.verify.state && p.verify.state !== "verified")) return false;
     if(ui.cats.size && !ui.cats.has(p.category)) return false;
     if(ui.tags.size && !(p.tags||[]).some(t => ui.tags.has(t))) return false;
@@ -3539,7 +3582,7 @@ function layoutChips(){
   const narrow = matchMedia("(max-width:640px)").matches;
   /* An active filter is never allowed to be out of sight: folding one away
      would leave the list mysteriously short with no visible cause. */
-  const filtering = ui.cats.size > 0 || ui.tags.size > 0 || ui.unv;
+  const filtering = ui.cats.size > 0 || ui.tags.size > 0 || ui.unv || ui.show.size < 4;
   box.classList.remove("clamped");
   box.style.maxHeight = "";
   if(!narrow || chips.length < 2){ btn.hidden = true; return; }
@@ -3568,6 +3611,25 @@ function layoutChips(){
    row. Now the same numbers hang on the filter buttons themselves — each
    count lives on the control that filters that bucket, no legend to
    cross-reference. */
+/* Order is the list's own, not the map's (which puts "unrated" third, ahead of
+   "no"): these four pills have read yes/maybe/no/none since they were a
+   readout, and turning them into buttons is no reason to shuffle them. */
+const CHOICES = ["yes","maybe","no","none"];
+
+/* Built once, at boot, rather than on every count change. updateProgress()
+   used to rewrite this innerHTML wholesale, which was free while these were
+   spans and is not now: it would wipe the pressed state on every rating, and
+   drop focus off the pill the user had just pressed — the exact failure
+   setChoice() goes out of its way to avoid below. So the markup is laid down
+   here and only the numbers inside it move afterwards. */
+function renderTally(){
+  const t = $("#tally");
+  if(!t) return;
+  t.innerHTML = CHOICES.map(k =>
+    `<button class="t-${k}" data-c="${k}" aria-pressed="${ui.show.has(k)}">${T[k]}<b class="n">0</b></button>`
+  ).join("");
+}
+
 function updateProgress(){
   const n = { yes:0, maybe:0, no:0, none:0 };
   // Lodging is excluded from the four buckets — it's not a candidate place,
@@ -3580,15 +3642,17 @@ function updateProgress(){
     const c = b.querySelector(".c");
     if(c) c.textContent = n[b.dataset.c] ?? 0;
   }
-  const t = $("#tally");
-  // Numbers must come with words. The pill's fill alone puts all the meaning on
-  // color — a screen reader hears four bare numbers, color-blind users see four
-  // capsules; and the map view's matching filter buttons already carry the words.
-  if(t) t.innerHTML =
-    `<span class="t-yes">${T.yes}<b class="n">${n.yes}</b></span>
-     <span class="t-maybe">${T.maybe}<b class="n">${n.maybe}</b></span>
-     <span class="t-no">${T.no}<b class="n">${n.no}</b></span>
-     <span class="t-none">${T.none}<b class="n">${n.none}</b></span>`;
+  // Same shape as the .mfil loop above: write the number, touch nothing else.
+  // The words live in the markup renderTally() laid down — numbers must come
+  // with them. The pill's fill alone puts all the meaning on color: a screen
+  // reader would hear four bare numbers, color-blind users see four capsules.
+  // These stay whole-collection counts, not counts of what the filters let
+  // through — they are what you press to *change* the filter, so a count that
+  // fell to zero the moment you switched a bucket off would be circular.
+  for(const b of $$("#tally button")){
+    const c = b.querySelector(".n");
+    if(c) c.textContent = n[b.dataset.c] ?? 0;
+  }
 }
 
 /* ─────────────────────────────────────────────── Choices & stashing */
@@ -3620,12 +3684,13 @@ function setChoice(id, v, reason){
   p.choice_reason = (p.choice === "no") ? (reason || p.choice_reason || "") : "";
   saveLocal();
   scheduleAuto();
-  // Under the "unrated" scope, a card just rated should vanish from the list
-  // — that's a structural change, full repaint only. Everything else edits in
-  // place: a full innerHTML rebuild removes the just-pressed button from the
-  // DOM and focus drops to <body>. Measured: rating place #40, a keyboard
-  // user would re-Tab ~200 times from the top of the document.
-  if(ui.scope === "todo"){ render(); return; }
+  // With a choice filter on, a card just rated may no longer belong to any
+  // group on screen and has to vanish — that's a structural change, full
+  // repaint only. Everything else edits in place: a full innerHTML rebuild
+  // removes the just-pressed button from the DOM and focus drops to <body>.
+  // Measured: rating place #40, a keyboard user would re-Tab ~200 times from
+  // the top of the document.
+  if(ui.show.size < 4){ render(); return; }
   syncChoice(p);
   updateProgress();
   if(window.MAP) MAP.refresh();
@@ -7421,9 +7486,10 @@ function applyStaticI18n(){
   attr("#seg-group", "aria-label", T.groupAria);
   txt("#by-area", T.byArea);
   txt("#by-tier", T.byTier);
-  attr("#seg-scope", "aria-label", T.scopeAria);
-  txt("#f-all", T.fAll);
-  txt("#f-todo", T.fTodo);
+  // The list's four choice pills are the map's filter group in another place,
+  // so they share its label. Their own text is baked in by renderTally(),
+  // which runs after T is resolved.
+  attr("#tally", "aria-label", T.filterAria);
   attr("#seg-mfil", "aria-label", T.filterAria);
   attr("#seg-mgrp", "aria-label", T.groupAria);
   txt("#mgrp-lbl", T.groupLbl);
@@ -7528,6 +7594,7 @@ function boot(){
   layoutActionbar();
 
   renderChips();
+  renderTally();
   render();
 
   if(STANDALONE){
@@ -7633,6 +7700,20 @@ document.addEventListener("click", e => {
      not a filter), but it sits in the same row and the same click path. */
   if(e.target.closest(".chips-more")){ chipsOpen = !chipsOpen; layoutChips(); return; }
 
+  /* The four choice pills. aria-pressed is flipped on the node itself rather
+     than repainted from state, same as .chip below and .mfil on the map —
+     and since updateProgress() no longer rebuilds this markup, the pill the
+     user pressed is still under the cursor and still focused afterwards. */
+  const tly = e.target.closest("#tally button");
+  if(tly){
+    const on = tly.getAttribute("aria-pressed") === "true";
+    tly.setAttribute("aria-pressed", !on);
+    on ? ui.show.delete(tly.dataset.c) : ui.show.add(tly.dataset.c);
+    render();
+    layoutChips();   // an active filter must never be folded out of sight
+    return;
+  }
+
   const chip = e.target.closest(".chip");
   if(chip){
     const on = chip.getAttribute("aria-pressed") === "true";
@@ -7653,8 +7734,6 @@ document.addEventListener("click", e => {
 $("#q").addEventListener("input", e => { ui.q = e.target.value; render(); });
 $("#by-area").onclick = () => { ui.group="area"; $("#by-area").setAttribute("aria-pressed",true); $("#by-tier").setAttribute("aria-pressed",false); render(); };
 $("#by-tier").onclick = () => { ui.group="tier"; $("#by-tier").setAttribute("aria-pressed",true); $("#by-area").setAttribute("aria-pressed",false); render(); };
-$("#f-all").onclick   = () => { ui.scope="all";  $("#f-all").setAttribute("aria-pressed",true);  $("#f-todo").setAttribute("aria-pressed",false); render(); };
-$("#f-todo").onclick  = () => { ui.scope="todo"; $("#f-todo").setAttribute("aria-pressed",true); $("#f-all").setAttribute("aria-pressed",false); render(); };
 $("#save").onclick     = doSave;
 $("#download").onclick = () => download(false);
 $("#copy").onclick     = showCode;
