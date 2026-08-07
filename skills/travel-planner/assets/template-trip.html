@@ -644,7 +644,18 @@ button{font:inherit;color:inherit;cursor:pointer}
    for code; next to a Han label in a 12px pill it is just noise.
    Full opacity, not dimmed: on these solid fills, fading the number is contrast
    the small type cannot spare. */
-.tally .n{font-weight:700;font-variant-numeric:tabular-nums}
+/* Two digits' worth of slot, so a count crossing 9↔10 does not resize its pill
+   and shove the rest of the row sideways — the same reason .ms-fil .c carries
+   a min-width. tabular-nums above is what makes the slot honest: every digit
+   already has the same advance, so 2ch is exactly two digits rather than an
+   approximation from the "0" glyph.
+   Centred, not aligned to an edge: these four counts sit in four separate
+   pills with a label in front of each, so there is no column for them to line
+   up in, and a single digit pushed to one side just reads as a typo.
+   Past 99 the pill grows again. A trip with 100+ places in one bucket is not
+   what this page is for, and reserving a third digit would put a visible hole
+   next to every label in every trip that isn't. */
+.tally .n{font-weight:700;font-variant-numeric:tabular-nums;min-width:2ch;text-align:center}
 /* The tri-state's own three fills, reused verbatim — same four buckets, so
    there is one place to change a choice colour, not two. Measured pairs are
    documented at --on-ok / --on-warn above.
