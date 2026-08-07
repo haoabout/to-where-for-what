@@ -23,8 +23,12 @@ Works with Claude Code, Codex, Cursor, OpenCode and 70+ other tools (via the
 [Vercel skills CLI](https://github.com/vercel-labs/skills)). Once installed,
 just say "help me plan a trip to Osaka" and it triggers.
 
-Manual install: copy the whole `skills/travel-planner/` directory into
-`~/.claude/skills/` (or your tool's equivalent skills directory).
+Manual install: copy **both** `skills/travel-planner/` and `skills/lite-search/`
+into `~/.claude/skills/` (or your tool's equivalent skills directory). They are
+a pair — `lite-search` answers "what's worth seeing in X" straight in the
+conversation, and `travel-planner` hands off to it whenever you haven't asked
+for an itinerary. Install only the planner and a casual question drags you into
+the full opening questionnaire.
 
 **Requirements**: Python 3.9+, standard library only — no pip install. The map
 and weather need a network connection.
@@ -172,7 +176,7 @@ npx skills add haoabout/to-where-for-what
 
 支持 Claude Code、Codex、Cursor、OpenCode 等 70+ 工具（走 [Vercel skills CLI](https://github.com/vercel-labs/skills)）。装完直接说「帮我规划去大阪的行程」就会触发。
 
-手动安装：把 `skills/travel-planner/` 整个目录拷进 `~/.claude/skills/`（或你的工具对应的 skills 目录）。
+手动安装：把 `skills/travel-planner/` 和 `skills/lite-search/` **两个目录**都拷进 `~/.claude/skills/`（或你的工具对应的 skills 目录）。它们是一对——`lite-search` 负责在对话里直接回答「X 有什么好玩的」，`travel-planner` 在你没提行程页时会主动把问题交给它。只装规划那个的话，一句随口的问题会被拖进完整的开场问卷。
 
 **依赖**：Python 3.9+，标准库即可，不需要 pip install。地图和天气要联网。
 

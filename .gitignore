@@ -11,5 +11,15 @@ node_modules/
 # a new trip can't arrive already staged.
 trips/
 
+# Impeccable's per-project config. Its detector suppressions are decisions
+# about this repo's UI code, which is only useful to someone running the
+# detector here — and the people cloning this are installing a travel-planning
+# skill, not developing its interface. The local copy stays on disk and keeps
+# working; it just isn't anyone else's business.
+# Its cache/pending/config.local siblings were already excluded by impeccable's
+# own hook installer, but that lives in .git/info/exclude, which does not
+# survive a clone — so the whole directory is named here instead.
+.impeccable/
+
 # Development-time scratch files
 .tmp/
