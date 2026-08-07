@@ -605,8 +605,22 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .card:hover{
   border-color:var(--ink);transform:translate(-3px,-3px);box-shadow:var(--shadow-lift);
 }
-.card[data-choice=no]{opacity:.5}
-.card[data-choice=no]:hover{opacity:.82}
+/* Dropped cards recede without their text being composited away.
+   This was opacity:.5 on the whole card. Group opacity dims the text along
+   with everything else, and measured on this palette the 11.5px --ink-3 line
+   (.facts / .loc / .why) needs alpha >= .80 before it clears 4.5:1 — at which
+   point the card is barely dimmed at all. So one value cannot both signal
+   "dropped" and stay readable; at .5 the measured ratios were 2.33:1 for that
+   line and 2.84:1 for .pitch. The .82 hover bought them back, but hover does
+   not exist on touch, and .why is where the "why not" reason lives — the
+   least readable text on the card was the one explaining why it is in this
+   state, on the card you are most likely to be re-reading.
+   Two channels that cost no contrast instead: the photo dims (it is the loud
+   part of the tile, and dimming it is most of the visual effect), and the
+   card drops to the sunken surface tone so it sits back as a surface.
+   --ink-3 on --paper-2 measures 6.33:1, --ink 16.14:1. */
+.card[data-choice=no]{background:var(--paper-2)}
+.card[data-choice=no] .media{opacity:.45}
 /* Choice state is already expressed by the tri-state buttons and the dots —
    no colored left border on top: saying the same thing three times is
    redundant, and a 3px colored side strip is the most recognizable
