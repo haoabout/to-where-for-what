@@ -587,7 +587,16 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .view[hidden]{display:none}
 
 /* Toolbar */
-.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+/* The toolbar and the chips are two rows of one thing — the filter apparatus
+   — so the gap between them has to read as smaller than the gap from that
+   apparatus to the places it filters. It did not: measured 20px between the
+   two rows and 22px from the chips to the first card, a ratio of 1.1, so
+   there was no boundary for the eye to find and the filters read as the top
+   of the list rather than as a control strip above it. .group-h a little
+   further down already does this properly, at 15px inside and 34px between.
+   10 / 26 puts the ratio at 2.6, and pulls 6px out of the block on the way
+   (36 against the old 42) — which the entry point can use. */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
 .search{
   flex:1;min-width:190px;padding:8px 13px;border:1px solid var(--line);
   border-radius:var(--r);background:var(--card);color:var(--ink);font-size:14px;
@@ -610,7 +619,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    deeper, signaling it can be pressed again. */
 .seg button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 .seg button[aria-pressed=true]:hover{background:var(--fill)}
-.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:22px}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:26px}
 .chip{
   border:1px solid var(--line);background:var(--card);color:var(--ink-2);
   padding:5px 12px;border-radius:20px;font-size:12.5px;transition:.15s;
