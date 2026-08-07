@@ -131,12 +131,10 @@
      Filled with white on top: --ok 5.70, --warn 5.41. As standalone text on a
      card: 5.65 / 5.37. */
   --ok:#38733C;
-  --ok-soft:#E3F1E3;
   --warn:#955E00;
   --warn-soft:#FFEF85;   /* the theme's --accent, at the lightness it works at */
   --danger:#BE2229;
   --danger-soft:#FBE9E9;
-  --mute:#8A8A8A;     /* derived — dividers and disabled marks, never text */
 
   /* Foreground on filled controls. Anywhere a semantic color is used as a
      background, the foreground takes the matching --on-*, rather than a
@@ -145,7 +143,6 @@
   --on-accent:#FEFEFE;   /* --primary-foreground */
   --on-ok:#fff;
   --on-warn:#fff;
-  --on-ink:var(--paper);
   --on-day:#fff;
   /* Lodging dot. It has no "which day", so a neutral color keeps it distinct
      from the day palette. The one on the map doesn't use this — it sits on the
@@ -186,7 +183,8 @@
      --accent — near-black, which is also how the source marks the active tab.
      The tokens are kept distinct from --paper / --ink rather than collapsed
      into them, because they are the seam where a different ground would be
-     reintroduced, and because --paper doubles as a *foreground* (--on-ink). */
+     reintroduced, and because --paper doubles as a *foreground* wherever
+     --ink is used as a fill. */
   --canvas:#F4F4F0;       /* --background, same ground as --paper */
   --canvas-ink:#0E0E0E;
   --canvas-ink-2:#333333;
