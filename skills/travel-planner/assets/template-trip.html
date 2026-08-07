@@ -2335,8 +2335,15 @@ en: {
   schedRemove:"Remove from Day {n}", schedAdd:"Add to Day {n}",
   quick:["Too far","Too crowded","Not interested","Not enough time","Too expensive","Been there","Closed that day","Same as elsewhere"],
   whyNotTitle:"Why skip {name}?",
-  reasonHint:"Note a reason so you can judge later whether to bring it back. You can skip this.",
-  reasonPh:"Or write your own…", skip:"Skip", ok:"OK",
+  /* "Skipping still records the choice" is the load-bearing half. The old
+     copy ended "You can skip this", which read as "you can back out" — and
+     the button labelled "Skip" was in fact the one that committed. */
+  reasonHint:"Note a reason so you can judge later whether to bring it back. Skipping still records the choice.",
+  reasonPh:"Or write your own…", skip:"Skip the reason", ok:"Save reason",
+  /* The ✕ cancels the rating outright — it is not a plain "close". Escape
+     does the same thing, natively, which is why this exit is a cancel rather
+     than a third way to commit. */
+  reasonCancel:"Cancel, don't rate",
   scSummary:"# yes {y} · maybe {m} · no {n} · unrated {u}",
   scDays:" · schedule: {d} days, {i} items (each D line is that day's visit order)",
   scNoDays:" · no schedule yet",
@@ -2503,8 +2510,9 @@ zh: {
   schedRemove:"从第 {n} 天移出", schedAdd:"加进第 {n} 天",
   quick:["太远了","人太多","不感兴趣","时间不够","门票太贵","去过了","那天不开门","和别处重复"],
   whyNotTitle:"为什么不去{name}？",
-  reasonHint:"记下理由，之后回看清单时能快速判断要不要把它捡回来。可以跳过。",
-  reasonPh:"或者自己写…", skip:"跳过", ok:"确定",
+  reasonHint:"记下理由，之后回看清单时能快速判断要不要把它捡回来。不写理由也会记下这个选择。",
+  reasonPh:"或者自己写…", skip:"不写理由", ok:"记下理由",
+  reasonCancel:"取消，不做这个选择",
   scSummary:"# 想去 {y} · 待定 {m} · 不想去 {n} · 未表态 {u}",
   scDays:" · 日程 {d} 天共 {i} 项（D 行按顺序，即当天路线）",
   scNoDays:" · 尚未排日程",
@@ -3398,7 +3406,7 @@ function askReason(id){
   let picked = "";
   $("#rdlg-inner").innerHTML = `
     <div class="dlg-h"><h3 tabindex="-1" autofocus>${tf("whyNotTitle", { name: esc(p.name) })}</h3>
-      <button class="x" data-rclose aria-label="${esc(T.close)}">${xmark()}</button></div>
+      <button class="x" data-rclose aria-label="${esc(T.reasonCancel)}" title="${esc(T.reasonCancel)}">${xmark()}</button></div>
     <div class="dlg-b">
       <p style="font-size:13px">${T.reasonHint}</p>
       <div class="reasons">${QUICK.map(r => `<button data-r="${esc(r)}">${esc(r)}</button>`).join("")}</div>
@@ -3418,6 +3426,20 @@ function askReason(id){
       $$("#rdlg-inner .reasons button").forEach(x => x.setAttribute("aria-pressed", x === b));
       $("#rtext").value = picked;
     }
+    /* Three exits, three outcomes — and the labels have to carry the
+       difference, because nothing else can. Note that the caller opens this
+       dialog *before* recording anything (see the pick handler: the "no"
+       branch calls askReason instead of setChoice), so the rating genuinely
+       does not exist until one of the first two lines runs.
+         记下理由 → rated "no", with the reason
+         不写理由 → rated "no", no reason
+         ✕ / Esc  → nothing recorded at all
+       The old labels were 跳过 / 确定, under which the button that read like
+       "back out of this" was the one that committed the rating, and the ✕ —
+       the one that looks like the dismissal — silently threw away the click
+       the user had just made on 不想去. ✕ stays a cancel rather than becoming
+       a third commit path because Escape closes a native <dialog> on its own
+       and cannot be made to commit; the two have to agree. */
     if(b.hasAttribute("data-rok"))   { setChoice(id,"no",$("#rtext").value.trim()); dlg.close(); }
     if(b.hasAttribute("data-rskip")) { setChoice(id,"no",""); dlg.close(); }
     if(b.hasAttribute("data-rclose")) dlg.close();
