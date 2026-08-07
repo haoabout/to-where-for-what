@@ -655,7 +655,9 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 .chip:hover:not([aria-pressed=true]){border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-.chip .c{opacity:.55;font-size:11px;margin-left:3px}
+/* The one count on the page that had neither mono nor tabular figures, and it
+   is rewritten on every filter change. */
+.chip .c{opacity:.55;font-size:11px;margin-left:3px;font-variant-numeric:tabular-nums}
 
 /* Groups */
 .group{margin-bottom:34px}
@@ -665,7 +667,12 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 /* Group headings live in the gaps between cards — canvas, not paper. */
 .group-h h2{font:600 15px/1 var(--sans);margin:0;letter-spacing:.3px;color:var(--canvas-ink)}
-.group-h .meta{font-size:12px;color:var(--canvas-ink-3);margin-left:auto;font-family:var(--mono)}
+/* Same call as .tally's: a count that sits against a Han heading gets tabular
+   figures in the page's own sans, not --mono. --mono resolves to Menlo on
+   macOS and Consolas on Windows and both draw a slashed zero, which beside
+   Han reads as a mark rather than a digit. tabular-nums buys the column
+   alignment that was the only reason to reach for mono here. */
+.group-h .meta{font-size:12px;color:var(--canvas-ink-3);margin-left:auto;font-variant-numeric:tabular-nums}
 
 /* ═══════════════════════════════════════════════ Cards */
 /* Photo-topped tiles in an auto-fitting grid. auto-fill + minmax gives 3
@@ -1266,7 +1273,8 @@ pre.code{
 .caps{display:flex;flex-wrap:wrap;gap:4px;padding:8px 9px;border-bottom:1px solid var(--line-soft)}
 .caps button{
   border:1px solid var(--line);background:var(--paper-2);color:var(--ink-2);
-  padding:3px 8px;border-radius:6px;font:600 11.5px/1.5 var(--mono);
+  padding:3px 8px;border-radius:6px;font:600 11.5px/1.5 var(--sans);
+  font-variant-numeric:tabular-nums;
   display:flex;align-items:center;gap:4px;min-height:24px;
 }
 /* The count needs its own background, or "D1" followed by "7" reads as
@@ -1448,7 +1456,8 @@ pre.code{
    state used to hardcode rgba(255,255,255,.24) — tuned for dark fills — which
    on a light card meant white on white and the pill vanished entirely. */
 .ms-fil .c{
-  font:600 9.5px/13px var(--mono);min-width:13px;padding:0 3px;border-radius:7px;
+  font:600 9.5px/13px var(--sans);font-variant-numeric:tabular-nums;
+  min-width:13px;padding:0 3px;border-radius:7px;
   background:var(--fill);color:var(--ink-3);
 }
 /* Grouping is a low-frequency mode switch; its visual weight is deliberately
@@ -1887,7 +1896,7 @@ pre.code{
   background:var(--paper-2);padding:9px 13px;font:600 12.5px/1 var(--sans);
   border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:8px;
 }
-.sum-h span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
+.sum-h span{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-3);font-weight:400}
 /* Day separator row. One step lighter than .sum-h — it's a group inside the
    same table, not a new table */
 .sum-d{
@@ -1896,7 +1905,7 @@ pre.code{
   border-bottom:1px solid var(--line-soft);
   font:600 11.5px/1.35 var(--sans);color:var(--ink-2);letter-spacing:.3px;
 }
-.sum-d span{margin-left:auto;font-family:var(--mono);color:var(--ink-3);font-weight:400}
+.sum-d span{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink-3);font-weight:400}
 .ck{display:flex;align-items:center;gap:9px;padding:7px 13px;border-bottom:1px solid var(--line-soft);font-size:13.5px}
 /* This column mixes numbers (per-day sequence) with icons, so it needs
    tabular-nums to column-align the digits and centering for the SVGs. */
