@@ -1,7 +1,19 @@
 # dev/ — development-time verification tools
 
-These are probes for **verifying the boundaries of browser capabilities**.
-They are not part of the skill itself; `npx skills add` does not install them.
+Two things kept for whoever works on the skill: a **regression suite** for the
+validator, and a **probe** for the browser-capability boundary the template's
+save path depends on. Neither is part of the skill itself; `npx skills add`
+does not install them.
+
+## test_validate.py
+
+Regression tests for `scripts/validate.py` — corrupt the data deliberately,
+assert the validator catches it. Run before and after any change to the
+validator or to the data contract it enforces.
+
+```bash
+python3 dev/test_validate.py
+```
 
 ## capability-probe.html
 

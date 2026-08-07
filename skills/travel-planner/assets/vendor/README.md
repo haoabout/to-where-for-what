@@ -30,5 +30,8 @@ it only grays out".
 curl -sL -o sortable.min.js https://unpkg.com/sortablejs@<version>/Sortable.min.js
 ```
 
-After updating, run the end-to-end checks under `dev/`, paying particular
-attention to cross-container dragging and within-container reordering.
+After updating, build a trip page and exercise the day planner by hand, paying
+particular attention to cross-container dragging and within-container
+reordering. (This section is for anyone working in the source repository —
+`npx skills add` installs the skill without its development tooling, so an
+installed copy has no checks to run.)
