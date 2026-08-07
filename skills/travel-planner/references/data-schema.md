@@ -31,6 +31,7 @@ back into it.
 | `destination` | string | ✅ | Destination, in the user's language |
 | `destination_local` | string | | Local-language name; omit when same as the user's language |
 | `destination_en` | string | | English name, used for exports |
+| `theme_hue` | int 0–359 | | This trip's colour. See [Picking `theme_hue`](#picking-theme_hue). Omit and the page keeps its default palette |
 | `country` | string | ✅ | ISO 3166-1 alpha-2, e.g. `JP` |
 | `bbox` | `[minLon,minLat,maxLon,maxLat]` | ✅ | Destination bounding box, **used to validate coordinates** |
 | `timezone` | string | ✅ | IANA timezone, e.g. `Asia/Tokyo` |
@@ -43,6 +44,34 @@ back into it.
 | `bases` | array | | Home bases `[{name, coord, nights}]` |
 | `generated_at` | string | ✅ | `YYYY-MM-DD`, when the data was generated |
 | `verified_at` | string | ✅ | `YYYY-MM-DD`, last online verification. **If >30 days before today, the page shows a staleness warning** |
+
+### Picking `theme_hue`
+
+One number colours the four pills in the title band — destination, dates, party,
+pace. `build.py` derives all four from it: lightness and chroma are fixed and
+only the hue rotates, so every trip's header keeps the same contrast and only
+its flavour changes. Omitting the field keeps the template's default palette,
+which is exactly what `theme_hue: 334` produces.
+
+**Take the destination's dominant material or landscape — the colour of what
+you will actually be looking at for those days.** Osaka's neon and takoyaki
+stalls sit around 334; Kyoto's moss and timber around 128; Nara's deer and
+earthen walls around 55.
+
+Do **not** pick from a mood word ("lively", "serene") or from a flag or a
+cuisine. A palette hung on adjectives degrades into stereotype within a few
+trips and keeps producing the same three colours; a material is something you
+can check against a photograph.
+
+**Hue 198–258 is reserved for the navigation** and applies to the destination
+pill only — the other three sit at low enough chroma that no hue reads as the
+nav's cyan. A seaside trip whose instinct is deep blue has to move off it;
+`build.py` prints a warning rather than silently producing a header whose
+destination looks like a tab.
+
+One limitation worth knowing: because lightness is frozen high, the system
+expresses **hue only, never darkness**. "Deep, cold Hokkaido winter" comes out
+as pale ice-blue, not navy.
 
 ---
 

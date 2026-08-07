@@ -300,6 +300,14 @@ Key points:
 - Coordinates use the `{"lon":…, "lat":…}` object form, never an array
 - Image URLs must come from the API, **never hand-assembled** (see the Wikimedia
   lesson in the playbook)
+- Set **`trip.theme_hue`** — one integer that colours the page's title band for
+  this trip. Take the destination's dominant material or landscape, the colour of
+  what the user will actually be looking at (Osaka's neon ≈ 334, Kyoto's moss and
+  timber ≈ 128, Nara's deer and earthen walls ≈ 55). **Never derive it from a
+  mood word, a flag, or a cuisine** — adjectives collapse into stereotype and
+  keep yielding the same three colours. **Hue 198–258 is reserved for the
+  navigation**; `build.py` warns if the destination pill lands inside it. Full
+  rules: [data-schema.md](references/data-schema.md#picking-theme_hue)
 
 ### A3. Fill coordinates & images · validate · build
 

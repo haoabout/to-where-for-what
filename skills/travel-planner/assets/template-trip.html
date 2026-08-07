@@ -60,6 +60,43 @@
      maps to --accent-soft here and --primary maps to --accent. */
   --accent:#0E0E0E;         /* --primary */
   --accent-soft:#FFEF85;    /* --accent, the yellow */
+
+  /* ---- The title band's pills: one palette per trip ----
+     A trip declares a single number, trip.theme_hue in places.json, and build.py
+     derives these four from it — L and C frozen, only the hue rotates. Freezing
+     L is what freezes the contrast, so rotating the hue never requires
+     re-checking that black type stays readable or that a pill still separates
+     from the paper (the second one is load-bearing: these pills carry no
+     outline). The offsets 0 / +152 / +327 / +45 were not designed, they were
+     recovered from the palette that came before: at hue 334 the four resolve
+     back to exactly the values below, so the original Osaka set is simply this
+     system's hue=334 instance.
+
+     Only --pill-name is high-chroma (.116 against .057–.082), and that is what
+     decides the one hue restriction: whether a colour gets mistaken for the
+     navigation depends on chroma, not hue — the nav is a saturated cyan at
+     C .135, and a pale blue-grey at C .07 does not read as it. So only the
+     destination pill has to avoid hue 198–258; the other three are safe
+     anywhere, which leaves 300° of usable anchor instead of 120°.
+
+     Measured across all 360 anchors: name ≥10.30 on ink / ≥1.49 on paper,
+     date ≥7.88 / ≥2.04, who ≥10.03 / ≥1.63, pace ≥8.24 / ≥2.00. The name's
+     1.49 sits below today's 1.65 on a few hues, so build.py steps its L down
+     until it clears 1.60 — a check CSS cannot make, which is the other reason
+     these are computed at build time rather than written as oklch() here.
+     Hex, not oklch(), for the same reason as every other colour in this file:
+     one notation throughout, and no dependency on oklch() support.
+
+     The four below are the hue=334 defaults and they are what a trip without a
+     theme_hue keeps; build.py overwrites them by substituting the marker that
+     follows — after them, so the generated set wins, and the template stays
+     valid CSS on its own. */
+  --pill-name:#F3A8E4; --pill-date:#9CB37A;
+  --pill-who:#C6B4E6;  --pill-pace:#CE9E9E;
+  /*__THEME__*/
+  /* Navigation. Deliberately *not* themed: it is the one constant surface on
+     the page, and "different trip, same tool" is the sentence it gets to say. */
+  --pill-nav:#30BEF1; --pill-nav-on:#C2E6F3;
   /* Gold. Two jobs: the S badge's fill and the pitch lede's margin rule — an
      ornament in both, never a status, which is why it isn't in the block below.
      It cannot be --accent-soft: that lemon is already the caution fill
@@ -290,55 +327,138 @@ button{font:inherit;color:inherit;cursor:pointer}
   color:var(--canvas-ink);
 }
 .top a{color:var(--canvas-accent)}
-.top-in{max-width:1180px;margin:0 auto;padding:12px 20px 0}
-.brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.brand h1{
-  font:400 25px/1.2 var(--serif);margin:0;letter-spacing:var(--tracking);
+.top-in{max-width:1180px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:16px}
+
+/* The title band is one row: destination on the left, the trip's facts beside
+   it in a fixed two-row block, navigation pinned right.
+
+   align-items:stretch is what makes the destination pill tall: it no longer
+   sizes to its own type, it grows to the height of the two rows next to it, so
+   the two share a top and a bottom edge.
+
+   flex-wrap is the safety valve, not decoration: once .metas' 280px basis no
+   longer fits beside the title, the whole block drops to the next line — a
+   breakpoint that is computed rather than written as a media query. Without
+   wrap, .metas neither wraps nor shrinks and pushes the band past the right
+   edge of the viewport (measured). */
+.brand{flex:1;min-width:0;display:flex;align-items:stretch;gap:8px 10px;flex-wrap:wrap}
+/* The title never shrinks: the meta block wraps first, and the title only
+   narrows through its own clamped type size. Reverse that priority and the
+   first thing a narrowing window squeezes is the largest type on the page. */
+.title{
+  margin:0;max-width:100%;flex:none;
+  background:var(--pill-name);border-radius:999px;
+  padding:6px 22px;font:900 clamp(22px,2.6vw,30px)/1.2 var(--sans);
+  letter-spacing:var(--tracking);overflow-wrap:anywhere;
+  display:flex;align-items:center;
+  /* 900 states an intent, not a guarantee. Measured on macOS the CJK stack
+     tops out at Semibold — 600/700/800/900 rasterise to identical pixels,
+     because PingFang SC has no heavier cut and the fonts here are named, never
+     loaded. Environments that do have a heavy face (Microsoft YaHei Bold, an
+     installed variable DM Sans) pick it up; the rest render Semibold. */
 }
-.brand .sub{color:var(--canvas-ink-3);font-size:13px}
-.brand .sub b{color:var(--canvas-ink-2);font-weight:600}
+/* The line cap lives on the inner span: the outer box has to stretch to the
+   band's height, and -webkit-box would take that job away from align-items.
+   Two lines is a ceiling, not a target — without it a long destination on a
+   375px screen wraps to five lines and grows a 300px-tall pill in a sticky
+   region (measured). */
+.tname{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+
+/* Trip facts: a fixed two-row block to the right of the destination, wrapping
+   inside itself rather than starting a new full-width line. The split is by
+   meaning — when above, who and how hard below — so it stays two rows even
+   when there is width to spare.
+   flex:0 1 auto sizes it to content; when it genuinely cannot fit, .brand's
+   wrap drops the whole block below the title. */
+.metas{
+  flex:0 1 auto;min-width:0;
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:6px;
+}
+.mrow{display:flex;gap:7px;flex-wrap:wrap;min-width:0}
+/* The pills scale with the viewport like the title, but far less: the title is
+   the page's headline and these are its footnotes; footnotes that grow in step
+   with the headline stop reading as footnotes. Both ends are pinned — 11px is
+   the floor this CJK weight stays legible at, 12.5px is full size. */
+.mpill{
+  border-radius:999px;white-space:nowrap;
+  padding:clamp(3px,1.5px + .18vw,4px) clamp(9px,4px + .63vw,13px);
+  font-size:clamp(11px,7.5px + .39vw,12.5px);
+  font-weight:600;line-height:1.5;
+}
+.m-date{background:var(--pill-date)} .m-who{background:var(--pill-who)} .m-pace{background:var(--pill-pace)}
+/* Not one of the trip's facts — a warning about the data — so it keeps the
+   caution fill instead of joining the themed set. */
 .stale{
   background:var(--warn-soft);color:var(--ink);
   border:1px solid color-mix(in srgb,var(--warn) 30%,transparent);
-  padding:1px 8px;border-radius:20px;font-size:11.5px;
+  padding:1px 8px;border-radius:20px;font-size:11.5px;white-space:nowrap;
 }
 
-/* Narrow screens: the subtitle wraps to two lines and needs a row of its own,
-   or the header eats a quarter of a 375px viewport. */
-@media (max-width:640px){
-  .brand{gap:8px 12px}
-  .brand .sub{order:2;flex-basis:100%}
+/* Navigation. flex:none — it is pinned, and its position is the thing users
+   learn. .navwrap exists so the group can be given a full-width row of its own
+   on narrow screens without the nav pill itself stretching. */
+.navwrap{flex:none;display:flex}
+.tabs{
+  display:flex;gap:2px;align-items:center;
+  background:var(--pill-nav);border-radius:999px;padding:3px;
 }
-
-.tabs{display:flex;gap:2px;margin-top:12px;align-items:center}
-.tab-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
-/* On narrow screens this group moves from the tab bar into the map view (see
-   layoutMapActions). Left in the tab bar, the two export buttons squeeze the
-   three tabs into wrapped fragments: measured at 375px, the places tab broke
-   onto two lines and the map tab split mid-word, tab bar 68px tall. */
-.map-actions-slot:empty{display:none}
-.map-actions-slot .tab-actions{margin-left:0;margin-bottom:12px}
-/* Not scoped under .top: on narrow screens layoutMapActions moves this group
-   into the map view, where it still sits on the canvas. */
-.tab-actions .hint{font-size:11.5px;color:var(--canvas-ink-3)}
-.btn.sm{padding:5px 11px;font-size:12.5px}
-@media (max-width:760px){ .tab-actions .hint{display:none} }
 .tab{
-  background:none;border:0;border-bottom:2px solid transparent;white-space:nowrap;
-  padding:9px 15px 11px;color:var(--canvas-ink-3);font-size:14px;font-weight:500;
-  display:flex;align-items:center;gap:7px;transition:color .15s;
+  background:none;border:0;border-radius:999px;white-space:nowrap;
+  padding:6px 13px;font-size:13px;font-weight:600;color:var(--ink-2);
+  display:flex;align-items:center;transition:background .14s,color .14s;
 }
-.tab:hover:not(:disabled){color:var(--canvas-ink-2)}
-/* The selected tab's underline uses the lightened accent for the same reason
-   its text does: rust on navy is 2.6:1, and this rule is the one that says
-   which view you are in. */
-.tab[aria-selected=true]{color:var(--canvas-ink);border-bottom-color:var(--canvas-accent);font-weight:600}
-.tab:disabled{color:var(--line-2);cursor:not-allowed}
-.tab .n{
-  font:600 10.5px/1 var(--mono);background:var(--paper-2);color:var(--ink-3);
-  padding:3px 6px;border-radius:20px;border:1px solid var(--line);
+.tab:hover:not(:disabled):not([aria-selected=true]){background:rgba(255,255,255,.45)}
+/* --pill-nav and --pill-nav-on both carry --ink safely (8.97:1 / 14.62:1) but
+   differ from each other by only 1.63:1, and the pills carry no outline. So the
+   selected state cannot speak through colour alone: the 700 weight and the
+   shadow are the same statement said two more ways. Drop either and this needs
+   re-measuring. */
+.tab[aria-selected=true]{background:var(--pill-nav-on);color:var(--ink);font-weight:700;box-shadow:var(--shadow)}
+.tab:disabled{color:color-mix(in srgb,var(--ink) 35%,transparent);cursor:not-allowed}
+
+/* First breakpoint: navigation drops first. When the row can no longer hold
+   title + facts + nav, it is the nav that leaves (full width, three equal
+   segments, better for a thumb) while the facts stay beside the destination —
+   that is the relationship worth protecting as the window narrows. */
+@media (max-width:900px){
+  .top-in{flex-wrap:wrap;gap:8px;padding:9px 14px}
+  .brand{flex-basis:100%}
+  .navwrap{width:100%}
+  .tabs{width:100%}
+  .tab{flex:1;justify-content:center;padding:7px 10px}
 }
-.tab[aria-selected=true] .n{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+/* Second breakpoint: the facts follow. Below this the destination's right side
+   cannot hold even one pill, and .mrow hands over its box (display:contents) so
+   all three pills become direct children of .metas and flow freely — with a
+   short name the date still rides up onto the destination's row.
+
+   flex-basis 160px rather than auto: auto makes .metas ask for the width of all
+   three pills on one line and wrap the whole block when it can't get it, which
+   is exactly how the date loses its place on that row. 160 is smaller than any
+   single pill, so the block stays put and wraps internally instead.
+
+   justify-content has to be flipped along with flex-direction: in a column it
+   centres vertically, in a row it centres horizontally — which clipped both
+   ends of the pill strip and left a gap at the start (measured). */
+@media (max-width:620px){
+  .title{font-size:20px;padding:5px 16px}
+  .tname{-webkit-line-clamp:1;line-clamp:1}
+  .metas{
+    flex:1 1 160px;flex-direction:row;flex-wrap:wrap;
+    justify-content:flex-start;align-items:center;gap:6px 7px;
+  }
+  .mrow{display:contents}
+  /* Backstop for ~320px: the date pill ellipsises rather than pushing the band
+     past the viewport. Does not trigger at normal phone widths. */
+  .mpill{min-width:0;overflow:hidden;text-overflow:ellipsis}
+}
+
+/* Export lives in the view it belongs to (see .map-rt and .pgnav-act), never in
+   the tab bar. It is view-specific, it is a once-per-session closing action,
+   and keeping it out means one position at every width — which is why the old
+   layoutMapActions, which shuttled these buttons between the tab bar and the
+   map depending on viewport, could be deleted outright. */
+.btn.sm{padding:5px 11px;font-size:12.5px}
 
 /* ═══════════════════════════════════════════════ Progress */
 
@@ -1131,9 +1251,8 @@ pre.code{
 .map-main{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--paper-2);--bar-h:34px}
 #map-canvas{position:absolute;inset:0}
 /* right reserves room for the zoom control (29px wide + 10px margin + an 8px
-   gap = 57px) plus the lightness capsule sitting beside it. --tgl-w is that
-   capsule's *measured* width plus the gap, written by measureLightness —
-   hardcoding it
+   gap = 57px) plus the top-right column beside it. --tgl-w is that column's
+   *measured* width plus the gap, written by measureLightness — hardcoding it
    would mean re-guessing per language ("Light|Dark" vs 「浅色|深色」). Without
    the reserve, a phone-width toolbar wraps and its first row runs straight
    under the capsule. */
@@ -1142,8 +1261,11 @@ pre.code{
   display:flex;gap:7px;flex-wrap:wrap;pointer-events:none;
 }
 .map-bar>*{pointer-events:auto}
-#map-lightness{position:absolute;top:10px;right:57px;z-index:20}
+/* right:57px clears the zoom control (29px wide + 10px margin + an 8px gap).
+   The column holds the lightness capsule and, under it, the export button. */
+.map-rt{position:absolute;top:10px;right:57px;z-index:20;display:flex;flex-direction:column;gap:7px;align-items:flex-end}
 #map-lightness:empty{display:none}
+#map-actions button{font-weight:600;color:var(--ink)}
 .mgroup{
   display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;
   background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);box-shadow:var(--shadow);
@@ -1596,21 +1718,32 @@ pre.code{
    every window that can't spare one. */
 /* display:flex would otherwise beat the [hidden] attribute's UA display:none */
 .pgnav[hidden],.pgnav-btn[hidden],.pgnav-scrim[hidden]{display:none}
+/* The scroll moved from the rail onto .pgnav-list: the list is what can grow
+   past the viewport, and the action area below it has to stay put while it
+   does. */
 .pgnav{
   position:fixed;width:170px;z-index:20;
-  display:flex;flex-direction:column;gap:1px;
-  max-height:calc(100vh - 170px);overflow:auto;overscroll-behavior:none;
-  scrollbar-width:thin;
+  display:flex;flex-direction:column;
+  max-height:calc(100vh - 170px);
 }
-.pgnav button{
+.pgnav-list{
+  display:flex;flex-direction:column;gap:1px;
+  overflow:auto;overscroll-behavior:none;scrollbar-width:thin;min-height:0;
+}
+.pgnav-list button{
   appearance:none;border:0;background:none;cursor:pointer;
   display:flex;gap:9px;align-items:baseline;
   padding:5px 9px;border-radius:7px;text-align:left;width:100%;
   font:500 12px/1.45 var(--sans);color:var(--canvas-ink-3);
   transition:background .12s,color .12s;
 }
-.pgnav button:hover{background:rgba(0,0,0,.05);color:var(--canvas-ink-2)}
-.pgnav button[aria-current="true"]{background:rgba(0,0,0,.075);color:var(--canvas-ink)}
+.pgnav-list button:hover{background:rgba(0,0,0,.05);color:var(--canvas-ink-2)}
+.pgnav-list button[aria-current="true"]{background:rgba(0,0,0,.075);color:var(--canvas-ink)}
+/* A rule separates "where to jump" from "take the whole thing away" — one
+   column, two jobs. */
+.pgnav-act{margin-top:9px;padding-top:9px;border-top:1px solid var(--canvas-line);flex:none}
+.pgnav-act .btn{width:100%;justify-content:center}
+.pgnav-act .hint{display:block;margin-top:7px;padding:0 2px;font-size:10.5px;line-height:1.5;color:var(--canvas-ink-3)}
 .pgnav-h{
   padding:2px 9px 7px;font:600 10.5px/1.4 var(--sans);
   color:var(--canvas-ink-3);letter-spacing:.4px;opacity:.75;
@@ -1640,10 +1773,12 @@ pre.code{
   box-shadow:0 10px 34px var(--sh-2,var(--sh-1));
   z-index:23;
 }
-.pgnav.panel button{font-size:12.5px;padding:7px 9px}
-.pgnav.panel button:hover{background:var(--paper-2)}
-.pgnav.panel button[aria-current="true"]{background:var(--paper-2);color:var(--ink)}
+.pgnav.panel .pgnav-list button{font-size:12.5px;padding:7px 9px}
+.pgnav.panel .pgnav-list button:hover{background:var(--paper-2)}
+.pgnav.panel .pgnav-list button[aria-current="true"]{background:var(--paper-2);color:var(--ink)}
 .pgnav.panel .pgnav-h{color:var(--ink-3);opacity:1}
+.pgnav.panel .pgnav-act{border-top-color:var(--line-soft)}
+.pgnav.panel .pgnav-act .hint{color:var(--ink-3)}
 .pgnav-scrim{position:fixed;inset:0;z-index:21;background:transparent}
 @media (prefers-reduced-motion:no-preference){
   .pgnav.panel{animation:pgnav-in .16s ease-out}
@@ -1652,12 +1787,6 @@ pre.code{
 .pgnav .no{font:400 10.5px/1.6 var(--mono);flex:none;opacity:.65}
 /* One line each, or a long day heading pushes the rail wider than its gutter */
 .pgnav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* On the standalone guide page the tab bar is hidden, so the export button is
-   moved into the view it acts on (see the STANDALONE branch in start). The
-   hint's margin-left:auto is for the tab bar, where it pushes the group's text
-   to the far right; here it would strand it half a screen from its button. */
-#view-guide>.tab-actions{max-width:800px;margin:0 auto 14px}
-#view-guide>.tab-actions .hint{margin-left:0;text-align:left}
 
 /* ═══════════════════════════════════════════════ Empty states / toast */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
@@ -1708,7 +1837,7 @@ pre.code{
   .card:hover{transform:none}
 }
 @media print{
-  .top,.actionbar,.toolbar,.chips,.pick,.tab-actions,
+  .top,.actionbar,.toolbar,.chips,.pick,
   .pgnav,.pgnav-btn,.pgnav-scrim{display:none!important}
   .card{break-inside:avoid;box-shadow:none}
   /* On paper there is no scanning to do — one column reads better, and a
@@ -1767,23 +1896,17 @@ pre.code{
 <header class="top">
   <div class="top-in">
     <div class="brand">
-      <h1 id="title">Trip</h1>
-      <div class="sub" id="subtitle"></div>
+      <h1 class="title" id="title"><span class="tname">Trip</span></h1>
+      <!-- Filled by boot(): one .mrow for the dates, one for party and pace -->
+      <div class="metas" id="metas"></div>
     </div>
-    <nav class="tabs" role="tablist">
-      <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span> <span class="n" id="n-list">0</span></button>
-      <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
-      <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
-      <div class="tab-actions" id="guide-actions" hidden>
-        <button class="btn sm" id="pg-print">Export PDF</button>
-        <span class="hint" id="pg-hint">A4 · choose “Save as PDF”, and turn headers and footers off</span>
-      </div>
-      <div class="tab-actions" id="map-actions" hidden>
-        <button class="btn sm" id="exp-csv">Export CSV</button>
-        <button class="btn sm" id="exp-kml">Export KML</button>
-        <span class="hint" id="csv-hint">CSV imports straight into Google My Maps</span>
-      </div>
-    </nav>
+    <div class="navwrap">
+      <nav class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span></button>
+        <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
+        <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
+      </nav>
+    </div>
   </div>
 </header>
 
@@ -1809,8 +1932,6 @@ pre.code{
 
   <!-- ══════════════ View ② Map ══════════════ -->
   <section class="view" id="view-map" role="tabpanel" aria-labelledby="tab-map" hidden>
-    <!-- On narrow screens the export buttons move here from the tab bar; see layoutMapActions -->
-    <div class="map-actions-slot" id="map-actions-slot"></div>
     <div class="map-wrap" id="map-wrap">
       <div class="map-side">
         <div class="ms-head">
@@ -1852,9 +1973,22 @@ pre.code{
              top-right, immediately left of the zoom control: it is a property
              of the *basemap*, not one more filter, and the toolbar's left
              cluster is already three capsules deep. .map-bar reserves room for
-             it via --tgl-w (see measureLightness) so the two never overlap
-             when the toolbar wraps on a phone. -->
-        <div class="mgroup" id="map-lightness" role="group"></div>
+             room for the whole column via --tgl-w (see measureLightness) so
+             the two never overlap when the toolbar wraps on a phone. -->
+        <!-- Top-right column: lightness above, export directly beneath it.
+             One container so the two share a right edge and one gap, and so
+             measureLightness has a single box to measure — it must measure the
+             column, not the capsule, now that the wider button sits below. -->
+        <div class="map-rt" id="map-rt">
+          <div class="mgroup" id="map-lightness" role="group"></div>
+          <!-- Export is styled as a map control (.mgroup), not as the list
+               view's .btn: it floats on the basemap alongside the lightness and
+               basemap switches, and any other shape would make it the one map
+               control that doesn't look like one. -->
+          <div class="mgroup" id="map-actions" hidden>
+            <button id="exp-csv">Export CSV</button>
+          </div>
+        </div>
         <div id="msq-panel" hidden></div>
         <!-- The result panel is transient, plug-in/plug-out DOM; screen
              readers won't announce its appearance on their own. Announcements
@@ -1870,7 +2004,17 @@ pre.code{
 
   <!-- ══════════════ View ③ Guide ══════════════ -->
   <section class="view" id="view-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
-    <nav class="pgnav" id="pgnav" aria-label="Pages" hidden></nav>
+    <!-- The rail holds two things: where to jump (a scrolling list, rebuilt by
+         buildNav) and how to take the whole thing away. The action area is
+         static markup pinned below the list, so a long list of pages can never
+         push export out of view, and buildNav only ever clears .pgnav-list. -->
+    <nav class="pgnav" id="pgnav" aria-label="Pages" hidden>
+      <div class="pgnav-list" id="pgnav-list"></div>
+      <div class="pgnav-act" id="guide-actions">
+        <button class="btn sm" id="pg-print">Export PDF</button>
+        <span class="hint" id="pg-hint">A4 · choose “Save as PDF”, and turn headers and footers off</span>
+      </div>
+    </nav>
     <!-- Below the width where a rail fits in the gutter, the same list folds
          behind this pill. Its label doubles as a position readout, so it earns
          its place on screen even when nobody opens it. -->
@@ -1945,7 +2089,7 @@ en: {
   trip:"Trip", docTitle:"{dest} · Trip plan",
   tabList:"Places", tabMap:"Map", tabGuide:"Guide",
   guideTabDisabled:"Available once the guide is written",
-  exportCsv:"Export CSV", exportKml:"Export KML",
+  exportCsv:"Export CSV",
   csvHint:"CSV imports straight into Google My Maps",
   searchPh:"Search names, highlights, tags…", searchAria:"Search places",
   groupAria:"Group by", byArea:"By area", byTier:"By tier",
@@ -2110,7 +2254,7 @@ zh: {
   trip:"行程", docTitle:"{dest} · 行程规划",
   tabList:"景点清单", tabMap:"地图", tabGuide:"攻略",
   guideTabDisabled:"生成攻略后可用",
-  exportCsv:"导出 CSV", exportKml:"导出 KML",
+  exportCsv:"导出 CSV",
   csvHint:"CSV 可直接导入 Google My Maps",
   searchPh:"搜索名称、亮点、标签…", searchAria:"搜索景点",
   groupAria:"分组方式", byArea:"按区域", byTier:"按推荐度",
@@ -2834,7 +2978,6 @@ function updateProgress(){
      <span><i class="dot d-maybe"></i>${T.maybe} ${n.maybe}</span>
      <span><i class="dot d-no"></i>${T.no} ${n.no}</span>
      <span><i class="dot d-none"></i>${T.none} ${n.none}</span>`;
-  $("#n-list").textContent = PLACES.length;
 }
 
 /* ─────────────────────────────────────────────── Choices & stashing */
@@ -5045,8 +5188,12 @@ const MAP = (() => {
      「浅色|深色」 in Chinese. Measured, not guessed. The +7 matches .map-bar's
      own gap. Runs whenever the capsule is repainted; the capsule's own text
      never changes after that, so no observer is needed. */
+  /* Measures the whole top-right column, not just the lightness capsule: the
+     export button below it is the wider of the two, and reserving only the
+     capsule's width lets the toolbar's first row run under export once it
+     wraps on a phone. */
   function measureLightness(){
-    const g = $("#map-lightness"), main = document.querySelector(".map-main");
+    const g = $("#map-rt"), main = document.querySelector(".map-main");
     if(!g || !main) return;
     const w = Math.round(g.getBoundingClientRect().width);
     main.style.setProperty("--tgl-w", w ? `${w + 7}px` : "0px");
@@ -5424,19 +5571,6 @@ const MAP = (() => {
     }
     return "﻿" + rows.map(r => r.map(csvCell).join(",")).join("\n");
   }
-  function toKML(){
-    const esc2 = s => String(s ?? "").replace(/[<>&]/g, c => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c]));
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
-<name>${esc2(TRIP.destination || T.trip)}</name>
-${selected().map(p => `<Placemark>
-  <name>${esc2(p.name)}${p.name_local && p.name_local !== p.name ? " (" + esc2(p.name_local) + ")" : ""}</name>
-  <description>${esc2([p.pitch, p.hours && T.kvHours + ": " + p.hours, p.ticket && T.kvTicket + ": " + p.ticket,
-                       p.closed && T.kvClosed + ": " + p.closed].filter(Boolean).join("\n"))}</description>
-  <Point><coordinates>${p.coord.lon},${p.coord.lat},0</coordinates></Point>
-</Placemark>`).join("\n")}
-</Document></kml>`;
-  }
   function save(text, name, mime){
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type:mime }));
@@ -5562,7 +5696,6 @@ ${selected().map(p => `<Placemark>
   return { init, refresh, onShow, fitAll, ensureDays:autoItinerary,
            curDay:() => st.curDay, toggleDay:toggleInCurDay,
            exportCSV:() => save(toCSV(), "places.csv", "text/csv;charset=utf-8"),
-           exportKML:() => save(toKML(), "places.kml", "application/vnd.google-earth.kml+xml"),
            _st:st };
 })();
 
@@ -5574,7 +5707,6 @@ window.initMap = MAP.init;
 const pgBtn = $("#pg-print");
 if(pgBtn) pgBtn.onclick = () => print();
 $("#exp-csv").onclick = () => MAP.exportCSV();
-$("#exp-kml").onclick = () => MAP.exportKML();
 
 /* ═══════════════════════════════════════════════════════════════════
    Guide view
@@ -6176,17 +6308,19 @@ const PAGER = (() => {
     });
   }
 
+  /* Only the list is rebuilt. #guide-actions is static markup below it and must
+     survive, or export would disappear every time the page list is redrawn. */
   function buildNav(){
-    const nav = $("#pgnav");
-    if(!nav) return;
+    const nav = $("#pgnav"), list = $("#pgnav-list");
+    if(!nav || !list) return;
     const items = navTargets();
-    nav.textContent = "";
+    list.textContent = "";
     // The paper size belongs here rather than in the sheet footer: the footer
     // prints, and "A4" is not something to tell someone holding the sheet.
     const head = document.createElement("div");
     head.className = "pgnav-h";
     head.textContent = on ? tf("pgNavHead", { n: items.length }) : T.pgNavToc;
-    nav.appendChild(head);
+    list.appendChild(head);
     for(const it of items){
       const b = document.createElement("button");
       b.type = "button";
@@ -6194,7 +6328,7 @@ const PAGER = (() => {
       b.querySelector(".no").textContent = it.no;
       b.querySelector(".t").textContent = it.label;
       b.onclick = () => { goTo(it.el); if(nav.classList.contains("panel")) openNav(false); };
-      nav.appendChild(b);
+      list.appendChild(b);
     }
     layoutNav();
   }
@@ -6220,7 +6354,10 @@ const PAGER = (() => {
   function layoutNav(){
     const nav = $("#pgnav"), pill = $("#pgnav-btn"), scrim = $("#pgnav-scrim"), wrap = $("#pgwrap");
     if(!nav || !wrap) return;
-    const empty = !nav.querySelector("button");
+    // "Empty" now means no page list *and* no actions. Since the action area is
+    // always present, the rail always has something to show in the guide view —
+    // which is the point: export must not depend on route.md having headings.
+    const empty = !nav.querySelector(".pgnav-list button") && !nav.querySelector(".pgnav-act");
     const box = wrap.getBoundingClientRect();
     const gutter = on ? box.left + (box.width - A4_W * scaleFor(wrap)) / 2 : 0;
     const rail = on && gutter >= NAV_W + 24;
@@ -6255,7 +6392,9 @@ const PAGER = (() => {
     const line = (top ? top.offsetHeight : 0) + 20;
     let cur = 0;
     items.forEach((it, i) => { if(it.el.getBoundingClientRect().top <= line) cur = i; });
-    nav.querySelectorAll("button").forEach((b, i) => b.setAttribute("aria-current", String(i === cur)));
+    // Scoped to the list: the export button is a sibling of these, and counting
+    // it in would shift every item's index by one.
+    nav.querySelectorAll(".pgnav-list button").forEach((b, i) => b.setAttribute("aria-current", String(i === cur)));
     if(pill && !pill.hidden){
       pill.querySelector(".lb").textContent = on ? (cur + 1) + " / " + items.length : T.pgNavToc;
     }
@@ -6367,18 +6506,6 @@ function layoutMap(){
   if(main) main.classList.toggle("tight", !!mapView && !mapView.hidden);
 }
 
-/* On narrow screens the export buttons move from the tab bar into the map
-   view. The node is relocated rather than rendered twice — two copies would
-   mean handling id collisions, and since #exp-csv / #exp-kml carry direct
-   onclick handlers, relocation doesn't disturb them. */
-const NARROW = matchMedia("(max-width: 760px)");
-function layoutMapActions(){
-  const act = $("#map-actions"), slot = $("#map-actions-slot"), tabs = $(".tabs");
-  if(!act || !slot || !tabs) return;
-  const to = NARROW.matches ? slot : tabs;
-  if(act.parentElement !== to) to.appendChild(act);
-}
-
 function switchView(v){
   // Roving tabindex: a tab group occupies one stop in the Tab order, with
   // ←→ moving inside it. Leaving all three at tabindex=0 would make keyboard
@@ -6389,9 +6516,14 @@ function switchView(v){
     t.tabIndex = on ? 0 : -1;
   });
   $$(".view").forEach(s => s.hidden = (s.id !== "view-" + v));
-  // The export buttons live in the top tab bar, but what they export is the
-  // set of points filtered in the map view, so they appear only there.
-  $("#map-actions").hidden = v !== "map";
+  // Export sits inside the map, but what it exports is the set of points the
+  // map view has filtered, so it only exists while that view is on screen.
+  // Guarded, unlike when this button lived in the tab bar: it is now a child of
+  // #view-map, and the standalone page removes that view outright — an
+  // unguarded write threw here and aborted switchView before it reached the
+  // guide, leaving the standalone page unpaginated and its export unreachable.
+  const ma = $("#map-actions");
+  if(ma) ma.hidden = v !== "map";
   const ga = $("#guide-actions");
   if(ga) ga.hidden = v !== "guide";
   try{ localStorage.setItem(LS_KEY + ":view", v); }catch(e){}
@@ -6410,7 +6542,6 @@ function switchView(v){
       Promise.resolve(GUIDE.renderWeather()).then(() => window.PAGER && PAGER.auto());
     }
   }
-  layoutMapActions();
   layoutMap();
 }
 
@@ -6429,8 +6560,9 @@ function applyStaticI18n(){
   txt("#pg-hint", T.pgHint);
   attr("#pgnav", "aria-label", T.pgNav);
   txt("#exp-csv", T.exportCsv);
-  txt("#exp-kml", T.exportKml);
-  txt("#csv-hint", T.csvHint);
+  // The hint has no room beside a control floating on the basemap; it rides
+  // on the button instead of being dropped.
+  { const b = $("#exp-csv"); if(b) b.title = T.csvHint; }
   attr("#q", "placeholder", T.searchPh);
   attr("#q", "aria-label", T.searchAria);
   attr("#seg-group", "aria-label", T.groupAria);
@@ -6462,19 +6594,45 @@ function boot(){
   document.title = tf("docTitle", { dest: TRIP.destination || T.trip });
   if(TRIP.output_language) document.documentElement.lang = TRIP.output_language;
   applyStaticI18n();
-  $("#title").innerHTML = esc(TRIP.destination || T.trip)
-    + (TRIP.destination_local && TRIP.destination_local !== TRIP.destination
-        ? `（<span${langAttr}>${esc(TRIP.destination_local)}</span>）` : "");
+  // The local name is dropped from the pill: at this size the parenthetical
+  // doubled the pill's width for a string the detail dialogs already carry, and
+  // a destination is not the thing anyone needs to read off a street sign.
+  $(".tname").textContent = TRIP.destination || T.trip;
 
-  const bits = [];
-  if(TRIP.dates && TRIP.dates.start) bits.push(`<b>${TRIP.dates.start} → ${TRIP.dates.end}</b>`);
-  if(TRIP.days)  bits.push(tf("nDays", { n: TRIP.days }));
-  if(TRIP.party) bits.push(esc(TRIP.party));
-  if(TRIP.pace)  bits.push(esc(TRIP.pace));
-  let sub = bits.join(" · ");
+  /* Two rows, split by meaning rather than by what fits: when on top, who and
+     how hard below. See .metas — the rows are fixed, so the band keeps the same
+     shape whatever the destination's name length. */
+  const dateBits = [];
+  if(TRIP.dates && TRIP.dates.start) dateBits.push(`${TRIP.dates.start} › ${TRIP.dates.end}`);
+  if(TRIP.days) dateBits.push(tf("nDays", { n: TRIP.days }));
+  const rows = [
+    [["m-date", dateBits.join("　")]],
+    [["m-who", TRIP.party], ["m-pace", TRIP.pace]],
+  ];
+  const metas = $("#metas");
+  metas.textContent = "";
+  for(const row of rows){
+    const pills = row.filter(([, v]) => v);
+    if(!pills.length) continue;
+    const r = document.createElement("div");
+    r.className = "mrow";
+    for(const [cls, v] of pills){
+      const s = document.createElement("span");
+      s.className = "mpill " + cls;
+      s.textContent = v;
+      r.appendChild(s);
+    }
+    metas.appendChild(r);
+  }
+  // Not a fact about the trip but a warning about the data, so it sits with the
+  // pills without joining the themed set.
   const vd = TRIP.verified_at ? Math.round((Date.now() - new Date(TRIP.verified_at+"T00:00:00")) / 864e5) : null;
-  if(vd !== null && vd > 30) sub += ` <span class="stale">${tf("staleNote", { n: vd })}</span>`;
-  $("#subtitle").innerHTML = sub;
+  if(vd !== null && vd > 30){
+    const w = document.createElement("span");
+    w.className = "stale";
+    w.textContent = tf("staleNote", { n: vd });
+    (metas.lastElementChild || metas).appendChild(w);
+  }
 
   const restoredAdded = loadAdded();   // before loadItin: the schedule draft may reference stub ids
   const restored = loadLocal();
@@ -6511,15 +6669,15 @@ function boot(){
   if(STANDALONE){
     // Standalone guide page: keep only the guide, drop everything related to
     // filtering, for easy sharing and deployment
-    document.querySelector(".tabs").hidden = true;
+    // .navwrap, not .tabs: hiding the inner pill would leave an empty flex item
+    // behind, and .top-in's gap would still reserve space for it.
+    document.querySelector(".navwrap").hidden = true;
     document.querySelector(".actionbar").hidden = true;
     document.querySelector("#view-list").remove();
     document.querySelector("#view-map").remove();
     document.querySelector("main").style.paddingBottom = "60px";
-    // Export lives in the hidden tab bar; this page is the one people actually
-    // export from, so it moves into the guide rather than vanishing.
-    const ga = $("#guide-actions");
-    if(ga) $("#view-guide").insertBefore(ga, $("#pgwrap"));
+    // Export needs no relocation here any more: it lives in the guide's own
+    // rail, which this page shows exactly as the trip page does.
     switchView("guide");
   }else{
     let v = "list";
@@ -6533,7 +6691,6 @@ function boot(){
                restoredAdded && tf("restoredAdded", { n: restoredAdded })].filter(Boolean);
   if(msg.length) toast(tf("restoredToast", { list: msg.join(T.listSep) }));
 
-  layoutMapActions();
   layoutMap();
 }
 
@@ -6548,7 +6705,6 @@ function scheduleLayout(){
   layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; layoutMap(); });
 }
 addEventListener("resize", scheduleLayout);
-NARROW.addEventListener?.("change", () => { layoutMapActions(); layoutMap(); });
 
 /* ─────────────────────────────────────────────── Events */
 /* Click the backdrop to dismiss. A modal <dialog> does not do this on its own,

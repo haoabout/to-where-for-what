@@ -41,7 +41,139 @@ ROUTE_MARK = "/*__ROUTE_HTML__*/null"
 TRANSIT_MARK = "/*__TRANSIT__*/null"
 SORTABLE_MARK = "/*__SORTABLE__*/"
 BUILT_MARK = "/*__BUILT_AT__*/null"
+THEME_MARK = "/*__THEME__*/"
 PID_FILE = ".server.pid"
+
+
+# --------------------------------------------------------------------- theme
+# The title band's four pills are one palette per trip, derived from the single
+# number trip.theme_hue. Lightness and chroma are frozen and only the hue
+# rotates, because freezing lightness is what freezes the contrast: rotating a
+# hue then never requires re-checking that black type stays readable on the pill
+# or that the pill still separates from the paper behind it. That second one is
+# load-bearing — these pills carry no outline, so their fill is the only thing
+# holding them off the canvas.
+#
+# The offsets were not designed, they were recovered: at hue 334 these four
+# resolve to #F3A8E4 / #9CB37A / #C6B4E6 / #CE9E9E, the palette the template
+# ships as its default, so the original set is simply this system's hue=334
+# instance and nothing changes for a trip that doesn't ask for a theme.
+#
+# (role, css var, L, C, hue offset)
+PILLS = [
+    ("name", "--pill-name", 0.822, 0.116, 0),
+    ("date", "--pill-date", 0.735, 0.082, 152),
+    ("who", "--pill-who", 0.802, 0.072, 327),
+    ("pace", "--pill-pace", 0.744, 0.057, 45),
+]
+
+# The navigation's own hue, kept clear of the destination pill. Only that pill
+# needs the exclusion: whether a colour gets mistaken for the navigation depends
+# on chroma rather than hue — the nav is a saturated cyan at C .135, and the
+# other three pills sit at C .057–.082, where a pale blue-grey reads as nothing
+# of the sort. Restricting one pill instead of all four is what leaves 300° of
+# usable hue rather than 120°.
+NAV_HUE_BLOCK = (198, 258)
+
+PAPER_Y = 0.8780  # relative luminance of --paper #F4F4F0
+INK_Y = 0.0048    # relative luminance of --ink   #0E0E0E
+MIN_ON_PAPER = 1.60   # the pill must stay off the canvas; today's worst is 1.65
+MIN_ON_INK = 4.50     # black type on the pill; every role clears this by far
+
+
+def _oklch_to_srgb(L: float, C: float, H: float) -> tuple[float, float, float]:
+    """OKLCH -> linear sRGB. May land outside [0,1]; callers gamut-map."""
+    import math
+
+    h = math.radians(H)
+    a, b = C * math.cos(h), C * math.sin(h)
+    l_ = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    m_ = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    s_ = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3
+    return (
+        +4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+        -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+        -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_,
+    )
+
+
+def _encode(v: float) -> float:
+    v = min(1.0, max(0.0, v))
+    return 12.92 * v if v <= 0.0031308 else 1.055 * (v ** (1 / 2.4)) - 0.055
+
+
+def _in_gamut(rgb) -> bool:
+    return all(-1e-4 <= v <= 1 + 1e-4 for v in rgb)
+
+
+def _hex_and_luminance(L: float, C: float, H: float) -> tuple[str, float]:
+    """Gamut-map by reducing chroma — the same thing a browser does for oklch(),
+    and the reason an unreachable colour comes out duller rather than with its
+    lightness disturbed."""
+    lo, hi = 0.0, C
+    if not _in_gamut(_oklch_to_srgb(L, C, H)):
+        for _ in range(24):
+            mid = (lo + hi) / 2
+            if _in_gamut(_oklch_to_srgb(L, mid, H)):
+                lo = mid
+            else:
+                hi = mid
+        C = lo
+    srgb = [_encode(v) for v in _oklch_to_srgb(L, C, H)]
+    chan = [round(v * 255) for v in srgb]
+    # Luminance is measured back from the rounded 8-bit channels, not from the
+    # float before them: the hex is what ships, and reading the floats instead
+    # lets a colour pass the floor by a hair and then fail it once quantised
+    # (measured: 1.59 against a 1.60 floor).
+    def _decode(c: float) -> float:
+        c /= 255
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    y = 0.2126 * _decode(chan[0]) + 0.7152 * _decode(chan[1]) + 0.0722 * _decode(chan[2])
+    return "#" + "".join(f"{c:02X}" for c in chan), y
+
+
+def _contrast(y1: float, y2: float) -> float:
+    a, b = y1 + 0.05, y2 + 0.05
+    return max(a, b) / min(a, b)
+
+
+def theme_css(hue) -> tuple[str, list[str]]:
+    """Return the CSS declarations for one trip's palette, plus any warnings.
+
+    Lightness is nudged down per role when a hue's contrast against the paper
+    falls under the floor. Only a script can do this: CSS has no way to branch on
+    a computed contrast ratio, which is the other reason these are resolved here
+    instead of being written as oklch() in the template."""
+    warn: list[str] = []
+    if hue is None:
+        return "", warn
+    try:
+        hue = float(hue) % 360
+    except (TypeError, ValueError):
+        return "", [f"trip.theme_hue is not a number ({hue!r}); using the default palette"]
+
+    decls = []
+    for role, var, L, C, off in PILLS:
+        h = (hue + off) % 360
+        if role == "name" and NAV_HUE_BLOCK[0] <= h <= NAV_HUE_BLOCK[1]:
+            warn.append(
+                f"theme_hue {hue:.0f} puts the destination pill at hue {h:.0f}, inside the "
+                f"navigation's reserved band {NAV_HUE_BLOCK[0]}–{NAV_HUE_BLOCK[1]}; "
+                "it will read as the nav's cyan. Pick another hue."
+            )
+        css_hex, y = _hex_and_luminance(L, C, h)
+        # Step lightness down until the pill clears the canvas behind it.
+        guard = 0
+        while _contrast(y, PAPER_Y) < MIN_ON_PAPER and L > 0.60 and guard < 40:
+            L -= 0.005
+            guard += 1
+            css_hex, y = _hex_and_luminance(L, C, h)
+        on_ink = _contrast(y, INK_Y)
+        if on_ink < MIN_ON_INK:
+            warn.append(f"{role} pill {css_hex} carries black type at only {on_ink:.2f}:1")
+        decls.append(f"{var}:{css_hex};")
+    return "  " + " ".join(decls), warn
 
 
 # ------------------------------------------------------------------ markdown
@@ -253,10 +385,15 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     route_js = json.dumps(md_to_html(route_md), ensure_ascii=False).replace("</", "<\\/")
     transit_js = json.dumps(transit, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
 
+    theme, theme_warn = theme_css((data.get("trip") or {}).get("theme_hue"))
+    for w in theme_warn:
+        print(f"  ⚠ {w}")
+
     html = html.replace(DATA_MARK, data_js)
     html = html.replace(ROUTE_MARK, route_js)
     html = html.replace(TRANSIT_MARK, transit_js)
     html = html.replace(SORTABLE_MARK, sortable)
+    html = html.replace(THEME_MARK, theme)
     html = html.replace(BUILT_MARK, json.dumps(time.strftime("%Y-%m-%d %H:%M")))
     if standalone:
         html = html.replace("__STANDALONE__", "true")
