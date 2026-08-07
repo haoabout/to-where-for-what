@@ -876,6 +876,68 @@ dialog{
   overflow:auto;
 }
 dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
+
+/* Scoped to #dlg rather than dialog. #rdlg asks *why* a place was rejected —
+   it follows a negative judgement, and arriving quietly suits it better than
+   floating in, so it keeps its instant appearance.
+
+   The asymmetric 240ms-in / 180ms-out needs no class toggle: on close the
+   transition that runs is the one on the base #dlg rule (the properties fall
+   back to the closed state), on open it is the one on #dlg[open]. Each rule
+   carries its own duration and that is the whole mechanism.
+
+   allow-discrete on display and overlay is what lets the closing animation
+   finish at all — the first keeps the element displayed through the exit, the
+   second keeps it in the top layer. A browser that does not know overlay still
+   runs the exit off display; it only drops out of the top layer early.
+
+   Nothing here moves or scales, so this half needs no reduced-motion opt-out.
+   The half that does is gated separately below. */
+#dlg{
+  opacity:0;
+  transition:opacity .16s ease-in, overlay .18s allow-discrete, display .18s allow-discrete;
+}
+#dlg[open]{
+  opacity:1;
+  transition:opacity .18s ease-out, overlay .24s allow-discrete, display .24s allow-discrete;
+}
+@starting-style{ #dlg[open]{opacity:0} }
+#dlg::backdrop{opacity:0;transition:opacity .16s, overlay .18s allow-discrete, display .18s allow-discrete}
+#dlg[open]::backdrop{opacity:1;transition:opacity .2s}
+@starting-style{ #dlg[open]::backdrop{opacity:0} }
+
+/* The movement half, gated the way .pgnav's entrance is rather than exempted
+   down in the reduce block — same result, and it keeps the opt-out impossible
+   to forget when someone edits these three rules later.
+
+   --from-x/--from-y are written by dlgFrom() from the card that was clicked,
+   so the dialog scales in from that card's direction. They default to 0px, so
+   any open with no source element (the export dialog, the schedule-button
+   repaint) degrades to a plain centred zoom.
+
+   The resting transform is none, not scale(1): an element with a transform
+   becomes the containing block for fixed descendants, and none avoids the
+   whole class of surprise. Interpolating to none is well defined.
+
+   Only transform and opacity move here. The dialog is its own scroll container
+   with sticky header and footer (see above), so animating height or clip-path
+   instead would fight both. */
+@media (prefers-reduced-motion:no-preference){
+  #dlg{
+    transform:translate(var(--from-x,0px),var(--from-y,0px)) scale(.92);
+    transition:opacity .16s ease-in, transform .18s ease-in,
+               overlay .18s allow-discrete, display .18s allow-discrete;
+  }
+  #dlg[open]{
+    transform:none;
+    transition:opacity .18s ease-out, transform .24s cubic-bezier(.2,.8,.25,1),
+               overlay .24s allow-discrete, display .24s allow-discrete;
+  }
+  @starting-style{
+    #dlg[open]{transform:translate(var(--from-x,0px),var(--from-y,0px)) scale(.92)}
+  }
+}
+
 .dlg-h{
   position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line-soft);
   padding:17px 20px 13px;display:flex;align-items:flex-start;gap:12px;z-index:2;
@@ -3181,7 +3243,27 @@ function loadLocal(){
 }
 
 /* ─────────────────────────────────────────────── Detail dialog */
-function openDetail(id){
+/* The dialog opens centred in the viewport, so the offset from the viewport's
+   centre to the source card's centre is the direction it should grow out of.
+   Written as custom properties the CSS above reads in its @starting-style, so
+   it has to land *before* showModal() — that is the frame the before-change
+   style is sampled on.
+
+   Damped to .38 and clamped to ±64px rather than used raw. A card in the
+   corner is most of a viewport diagonal away, and travelling that in 240ms is
+   a swoop, not a hint; all this needs to convey is which way the dialog came
+   from. Clearing the properties (no source element) falls back to the 0px
+   default and a plain centred zoom. */
+function dlgFrom(el){
+  const d = $("#dlg");
+  if(!el){ d.style.removeProperty("--from-x"); d.style.removeProperty("--from-y"); return; }
+  const r = el.getBoundingClientRect();
+  const cap = v => Math.max(-64, Math.min(64, v * .38));
+  d.style.setProperty("--from-x", cap(r.left + r.width  / 2 - innerWidth  / 2) + "px");
+  d.style.setProperty("--from-y", cap(r.top  + r.height / 2 - innerHeight / 2) + "px");
+}
+
+function openDetail(id, from){
   const p = PLACES.find(x => x.id === id);
   if(!p) return;
   const im = (p.images||[])[0];
@@ -3223,6 +3305,7 @@ function openDetail(id){
         `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || s.url)}</a></li>`).join("") || "<li>—</li>"}</ul>
       <div class="dlg-f">${schedBtn(p)}${pickHTML(p)}</div>
     </div>`;
+  dlgFrom(from);
   $("#dlg").showModal();
 }
 
@@ -3563,6 +3646,7 @@ function showCode(){
         <button class="btn primary" id="cp">${T.copy}</button>
       </div>
     </div>`;
+  dlgFrom(null);   // no source card — open centred, and don't inherit the last card's offset
   $("#dlg").showModal();
   $("#cp").onclick = async () => {
     // Measured: the embedded browser's navigator.clipboard throws
@@ -4597,7 +4681,7 @@ const MAP = (() => {
        the latter is a decision made *after* looking. Scheduling still runs
        through the pool column's dots, drag and drop, and the button at the
        bottom of the detail dialog. */
-    el.onclick = e => { e.stopPropagation(); openDetail(p.id); };
+    el.onclick = e => { e.stopPropagation(); openDetail(p.id, el); };
     return el;
   }
 
@@ -5702,7 +5786,7 @@ const MAP = (() => {
     // hover already handles locating, and what you actually want on opening a
     // card is "what is this place".
     const card = e.target.closest("[data-card]");
-    if(card){ openDetail(card.dataset.card); return; }
+    if(card){ openDetail(card.dataset.card, card); return; }
     // data-goto is now used only by markers on the static fallback map
     const go = e.target.closest("[data-goto]");
     if(go){ focus(go.dataset.goto, false); return; }
@@ -6820,13 +6904,19 @@ document.addEventListener("click", e => {
   /* Selecting a line of the pitch ends in a click. Without this the dialog
      would open every time someone tried to copy an address or a price out of
      a card. */
-  if(detail && String(getSelection()).trim() === ""){ openDetail(detail.dataset.detail); return; }
+  /* The whole card is the source of the entrance, not whatever inside it was
+     clicked — data-detail also sits on the .nm title button and on each .sn
+     spot, and growing out of a 20px sub-control reads as a glitch. */
+  if(detail && String(getSelection()).trim() === ""){ openDetail(detail.dataset.detail, detail.closest(".card") || detail); return; }
   if(detail) return;
 
   const sb = e.target.closest("[data-sched]");
   if(sb){
     MAP.toggleDay(sb.dataset.sched);
-    openDetail(sb.dataset.sched);   // repaint the button: once added it should read "remove"
+    /* Repaint the button: once added it should read "remove". No source
+       element — the dialog is already open, so showModal() is a no-op here and
+       the entrance must not replay. */
+    openDetail(sb.dataset.sched);
     return;
   }
 
