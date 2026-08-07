@@ -1620,7 +1620,14 @@ pre.code{
    ellipses and the 2×2-wrapping filter group absorb, whereas stacking turns
    the "drag into a day" move into a cross-screen scroll. */
 @media (max-width:890px){
-  .map-wrap{grid-template-columns:1fr 1fr;grid-template-rows:minmax(180px,34vh) 1fr;height:auto}
+  /* minmax(0,1fr), not 1fr: the latter is minmax(auto,1fr), so the pool
+     column's 271px min-content floor wins the whole track and the schedule
+     column gets the remainder. Measured before the fix: 375px → 271/50,
+     320px → 271/2 with the day column's clientWidth at 0 — the column this
+     view exists for was simply gone, and the ↑↓× buttons rendered off-screen.
+     A zero floor lets both tracks shrink evenly: 375px → 161/161,
+     320px → 133/133, neither column overflowing internally. */
+  .map-wrap{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(180px,34vh) 1fr;height:auto}
   .map-wrap .map-main{grid-column:1 / -1;height:min(56vh,540px)}
 }
 
