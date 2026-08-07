@@ -16,10 +16,8 @@ A search places →(AI)→ ┌ ① shortlist ⇄ ② map (filter + schedule) ┐
 ## Install
 
 ```bash
-npx skills add <owner>/<repo>
+npx skills add haoabout/to-where-for-what
 ```
-
-<!-- TODO(before release): replace <owner>/<repo> with the real GitHub path -->
 
 Works with Claude Code, Codex, Cursor, OpenCode and 70+ other tools (via the
 [Vercel skills CLI](https://github.com/vercel-labs/skills)). Once installed,
@@ -169,7 +167,7 @@ A 搜索景点 →(AI)→ ┌ ① 景点清单 ⇄ ② 地图（筛选 + 排程�
 ## 安装
 
 ```bash
-npx skills add <owner>/<repo>
+npx skills add haoabout/to-where-for-what
 ```
 
 支持 Claude Code、Codex、Cursor、OpenCode 等 70+ 工具（走 [Vercel skills CLI](https://github.com/vercel-labs/skills)）。装完直接说「帮我规划去大阪的行程」就会触发。
