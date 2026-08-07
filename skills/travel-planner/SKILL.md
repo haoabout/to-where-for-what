@@ -305,9 +305,9 @@ Key points:
   what the user will actually be looking at (Osaka's neon ≈ 334, Kyoto's moss and
   timber ≈ 128, Nara's deer and earthen walls ≈ 55). **Never derive it from a
   mood word, a flag, or a cuisine** — adjectives collapse into stereotype and
-  keep yielding the same three colours. **Hue 198–258 is reserved for the
-  navigation**; `build.py` warns if the destination pill lands inside it. Full
-  rules: [data-schema.md](references/data-schema.md#picking-theme_hue)
+  keep yielding the same three colours. **All 360 hues are available**, blue
+  included — no range is reserved and no hue is refused. Full rules:
+  [data-schema.md](references/data-schema.md#picking-theme_hue)
 
 ### A3. Fill coordinates & images · validate · build
 

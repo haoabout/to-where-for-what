@@ -63,11 +63,12 @@ cuisine. A palette hung on adjectives degrades into stereotype within a few
 trips and keeps producing the same three colours; a material is something you
 can check against a photograph.
 
-**Hue 198–258 is reserved for the navigation** and applies to the destination
-pill only — the other three sit at low enough chroma that no hue reads as the
-nav's cyan. A seaside trip whose instinct is deep blue has to move off it;
-`build.py` prints a warning rather than silently producing a header whose
-destination looks like a tab.
+**No hue is reserved — blue included.** Hue 198–258 used to be blocked to keep
+the destination pill from reading as the navigation, on the premise that the nav
+is a saturated cyan. The rebuilt title band made that false: `--pill-nav` is
+`#E7E2DB` and `--pill-nav-on` is `#F6F6F6`, chroma .011 and .000, a warm grey
+and a neutral grey that nothing can be mistaken for on hue. A seaside trip whose
+material is deep blue keeps it, and `build.py` says nothing about it.
 
 One limitation worth knowing: because lightness is frozen high, the system
 expresses **hue only, never darkness**. "Deep, cold Hokkaido winter" comes out
