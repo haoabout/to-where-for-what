@@ -321,6 +321,30 @@ a{color:var(--accent)}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 
+/* Press feedback, in one place because it is one idea.
+   There was no :active rule anywhere in this file — measured, zero — on a
+   page whose main gesture is tapping a rating pill 47 times. Hover carries
+   the "this is pressable" half, but hover does not exist on touch, so
+   between the tap and the state flip there was nothing at all saying the tap
+   had landed. Every control here already changes colour on commit, so this
+   is the second channel, not the only one.
+   The independent `scale` property rather than transform:scale(), because
+   several of these already carry a transform (.spot .pick is scaled to .88,
+   the cards translate on hover) and a transform here would clobber it.
+   .96 exactly: below about .95 a press reads as the control flinching.
+   Gated on no-preference like the dialog's zoom and the rail's entrance
+   above, per the reduce block's stated policy — states still change, only
+   the movement stops. */
+@media (prefers-reduced-motion:no-preference){
+  .tab:active:not(:disabled),
+  .chip:active,.seg button:active,.pick button:active,.btn:active:not(:disabled),
+  .ms-fil button:active,.ms-grp button:active,.mgroup button:active:not(:disabled),
+  .dop:active:not(:disabled),.addmenu button:active,
+  .pgnav-list button:active,.pgnav-btn:active,.mi .pin:active{
+    scale:.96;
+  }
+}
+
 /* "Buttons that don't look like buttons."
    These spots (place names, list entries, schedule entries, day headers, dots)
    used to be span/div with cursor:pointer — visually fine, completely
@@ -441,7 +465,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tab{
   background:none;border:0;border-radius:999px;white-space:nowrap;
   padding:6px 13px;font-size:13px;font-weight:600;color:var(--ink-2);
-  display:flex;align-items:center;transition:background .14s,color .14s;
+  display:flex;align-items:center;transition:background .14s,color .14s,scale .14s;
 }
 .tab:hover:not(:disabled):not([aria-selected=true]){background:rgba(255,255,255,.45)}
 /* --pill-nav and --pill-nav-on both carry --ink safely (14.98:1 / 17.86:1) but
@@ -561,7 +585,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    The mismatch predates the theme; at the old 10px radius these read as
    small rounded rectangles and 5px did not show. At a 20px radius they are
    full pills, and a pill that overshoots the field next to it looks oversized. */
-.seg button{background:none;border:0;padding:8px 13px;font-size:13px;line-height:16px;color:var(--ink-3);transition:background .12s,color .12s}
+.seg button{background:none;border:0;padding:8px 13px;font-size:13px;line-height:16px;color:var(--ink-3);transition:background .12s,color .12s,scale .12s}
 .seg button[aria-pressed=true]{background:var(--paper-2);color:var(--ink);font-weight:600}
 /* Hover on an unselected item only deepens the ink, never adds a background —
    a background would be the selected state's --paper-2, and hovering would
@@ -1253,6 +1277,7 @@ pre.code{
   border-radius:4px;display:grid;place-items:center;padding:0;position:relative;
 }
 .dop::after{content:"";position:absolute;inset:-4px}
+.dop{transition:background .12s,color .12s,scale .12s}
 .dop:hover{background:var(--accent-soft);color:var(--ink)}
 .dop:disabled{opacity:.25;cursor:default}
 .dop:disabled:hover{background:none;color:var(--ink-3)}
@@ -1288,6 +1313,7 @@ pre.code{
 .addmenu button{
   background:var(--card);border:1px solid var(--line);border-radius:6px;
   padding:5px 8px;font-size:11.5px;color:var(--ink-2);text-align:left;
+  transition:background .12s,color .12s,border-color .12s,scale .12s;
 }
 .addmenu button:hover{border-color:var(--ink);background:var(--accent-soft);color:var(--ink)}
 .dhead .d-del-day{opacity:0;margin-left:4px}
@@ -1328,7 +1354,7 @@ pre.code{
   flex:1 1 auto;background:none;border:0;border-radius:6px;
   padding:5px 4px;font-size:11px;color:var(--ink-3);white-space:nowrap;
   display:flex;align-items:center;justify-content:center;gap:3px;
-  transition:background .12s,color .12s,box-shadow .12s;
+  transition:background .12s,color .12s,box-shadow .12s,scale .12s;
 }
 /* Hover uses a translucent --card: the selected state is opaque --card, so
    the two share a family but differ in depth — hovering can't be misread as
@@ -1375,7 +1401,7 @@ pre.code{
 .ms-grp button{
   background:none;border:0;border-radius:5px;padding:3px 6px;
   font-size:11px;color:var(--ink-3);white-space:nowrap;
-  transition:background .12s,color .12s;
+  transition:background .12s,color .12s,scale .12s;
 }
 .ms-grp button:hover:not([aria-pressed=true]){background:var(--accent-soft);color:var(--ink)}
 .ms-grp button[aria-pressed=true]{color:var(--ink);font-weight:600}
@@ -1401,7 +1427,7 @@ pre.code{
 .mi .pin{
   width:17px;height:17px;border-radius:50%;flex:none;margin-top:2px;
   display:grid;place-items:center;font:700 9.5px/1 var(--mono);color:var(--on-day);
-  cursor:pointer;transition:transform .12s;position:relative;
+  cursor:pointer;transition:transform .12s,scale .12s;position:relative;
 }
 /* As above: the dot must stay small (matching the schedule column's number
    circles), but it's the most-pressed control in this view, so the hit area
@@ -1476,7 +1502,7 @@ pre.code{
 .mgroup button{
   background:none;border:0;border-right:1px solid var(--line-soft);
   padding:6px 11px;font-size:12px;color:var(--ink-3);white-space:nowrap;
-  transition:background .12s,color .12s;
+  transition:background .12s,color .12s,scale .12s;
 }
 .mgroup button:last-child{border-right:0}
 .mgroup button[aria-pressed=true]{background:var(--ink);color:var(--paper);font-weight:600}
@@ -1995,7 +2021,7 @@ pre.code{
   display:flex;gap:9px;align-items:baseline;
   padding:5px 9px;border-radius:7px;text-align:left;width:100%;
   font:500 12px/1.45 var(--sans);color:var(--canvas-ink-3);
-  transition:background .12s,color .12s;
+  transition:background .12s,color .12s,scale .12s;
 }
 .pgnav-list button:hover{background:rgba(0,0,0,.05);color:var(--canvas-ink-2)}
 .pgnav-list button[aria-current="true"]{background:rgba(0,0,0,.075);color:var(--canvas-ink)}
@@ -2022,6 +2048,7 @@ pre.code{
   padding:8px 14px 8px 11px;border-radius:999px;cursor:pointer;
   border:1px solid var(--line);background:var(--card);color:var(--ink);
   font:500 12.5px/1 var(--sans);box-shadow:0 3px 12px var(--sh-1);
+  transition:scale .12s;
 }
 .pgnav-btn .lb{font-family:var(--mono);font-size:11.5px}
 .pgnav.panel{
