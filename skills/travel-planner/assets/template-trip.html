@@ -538,7 +538,17 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* The small counts on the right of view ①'s toolbar. The list view is where
    choices get made, so a live count of the four buckets is most useful here;
    the map view hangs the same numbers on its filter buttons instead. */
-.tally{display:flex;gap:6px;font-size:12px;margin-left:auto;white-space:nowrap}
+/* No auto inline-start margin here, and it turns out there never should have
+   been one. It was there to push the tally to the toolbar's trailing edge,
+   but .search is flex:1 and eats every pixel of free space on that row, so on
+   a shared row the auto margin resolves to zero and the tally sits flush
+   after the segmented controls — measured identical at 1100px and 1400px with
+   and without it. The only time it ever resolved to anything was once the row
+   wrapped, where it did the opposite of what anyone wanted: at 380px it came
+   out as 45.6px, starting the tally at x=66 while the search field, both
+   segmented groups, the chips and every card started at 20. A rule that is
+   inert where it was aimed and harmful where it was not. */
+.tally{display:flex;gap:6px;font-size:12px;white-space:nowrap}
 /* Four solid pills rather than dot-plus-label. The colour now *is* the pill, so
    an 8px swatch alongside it was saying the same thing twice, and four hairline
    dots on the paper read as debris at this size. Labels stay: the fill carries
