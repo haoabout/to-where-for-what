@@ -562,10 +562,20 @@ button{font:inherit;color:inherit;cursor:pointer}
 .t-none{background:var(--fill);color:var(--ink-3)}
 
 /* ═══════════════════════════════════════════════ Main */
-main{max-width:1180px;margin:0 auto;padding:20px 20px 130px}
+/* The bottom padding clears the fixed action bar, so it is derived from the
+   bar's measured height rather than typed. It used to be 130px, with a 150px
+   override below 640px — both guesses at a bar whose height is the status
+   line's, and that line wraps: measured 127px at 375px wide and 147px at
+   320px in the shipping Chinese, and a longer language (the file's own
+   comments plan for German and Russian) pushes it further. At 320px the
+   typed 150px was already down to its last few px of margin over a 147px
+   bar. --ab-h is written by layoutMap() from a real offsetHeight and is
+   already what .tight and .pgnav-btn size against; +32px is the list view's
+   breathing room under the last card, which is what the old 130 was for. */
+main{max-width:1180px;margin:0 auto;padding:20px 20px calc(var(--ab-h,64px) + 32px)}
 /* The map view is a single-screen workbench and shouldn't scroll. The bottom
-   only needs to clear the fixed action bar — not the list view's 130px (that's
-   breathing room for the last card). */
+   only needs to clear the fixed action bar — without the breathing room the
+   list view adds under its last card. */
 main.tight{padding-bottom:var(--ab-h,64px)}
 .view[hidden]{display:none}
 
@@ -2099,7 +2109,9 @@ pre.code{
      288px columns and the photos would be postage stamps. */
   .cards{grid-template-columns:1fr}
   .hint{margin-left:0;text-align:left;max-width:none}
-  main{padding-bottom:150px}
+  /* No padding-bottom override here any more — the base rule derives it from
+     the measured bar height, which is the thing this breakpoint was standing
+     in for. */
 }
 /* iOS Safari zooms the whole page when focusing an input under 16px, and the
    user has to pinch back manually. Not blocked with maximum-scale (that kills
