@@ -2951,9 +2951,23 @@ const LS_KEY = `tp:${TRIP.destination || "trip"}:${TRIP.generated_at || ""}`;
    three glyphs differ in width inside the same 17px box (↑↓ 9.5px, × 7.7px),
    and the arrows sit high in most fonts — inconsistent visual weight that
    also varies with the system font. SVG geometry is fixed. */
+/* One optical stroke weight for the whole icon set, expressed as a function of
+   the size the icon is drawn at rather than as a constant per generator.
+   Stroke-width is in viewBox units, so a fixed number renders lighter the
+   smaller the icon gets: measured, the three generators here carried 1.7, 1.9
+   and 1.6 on the same 16 viewBox and rendered at 11, 13 and 14px, landing at
+   1.17, 1.54 and 1.40 real pixels. The 54 up/down/× buttons in the schedule
+   column were the thinnest of the three and sit directly beside the 1.54
+   rating marks, which is what made them read as hairlines.
+   Not a flat "constant real pixels" either — that leaves a 44px icon looking
+   underdrawn. The gentle exponent keeps ~1.5px at the 13px base size, 1.42 at
+   11px, and lets the 44px media placeholder grow to about 2.3px, which is
+   where an icon that size wants to be. */
+const SW = n => +(1.5 * Math.pow(n / 13, 0.35) * 16 / n).toFixed(2);
+
 const stroke = (d, n = 11, extra = "") =>
   `<svg viewBox="0 0 16 16" width="${n}" height="${n}" fill="none" `
-  + `stroke="currentColor" stroke-width="1.7" stroke-linecap="round" `
+  + `stroke="currentColor" stroke-width="${SW(n)}" stroke-linecap="round" `
   + `stroke-linejoin="round" aria-hidden="true" style="display:block">${extra}<path d="${d}"/></svg>`;
 
 const $  = s => document.querySelector(s);
@@ -3121,13 +3135,17 @@ const priceLabel = t => shortPrice(t) || (t ? T.priceTBD : "—");
    code point — this page gets shared, and we don't choose the fonts. So:
    inline SVG throughout. viewBox is uniformly 16; different uses only change
    width/height. */
-const SVG_ST = 'fill="none" stroke="currentColor" stroke-width="1.9" '
+/* No stroke-width here any more: it lives on the <svg> that icon() builds, so
+   one number covers every path in the icon and can be derived from the render
+   size. stroke-width is an inherited SVG presentation attribute, so paths that
+   do not set it pick up the element's — the sub-paths that deliberately fill
+   (the half-circle in "maybe", the dot in "warn") are unaffected, having no
+   stroke to weight. */
+const SVG_ST = 'fill="none" stroke="currentColor" '
              + 'stroke-linecap="round" stroke-linejoin="round"';
 const icon = (body, n = 13) =>
-  `<svg viewBox="0 0 16 16" width="${n}" height="${n}" aria-hidden="true" `
-  + `style="display:block;margin:auto;flex:none">${body}</svg>`;
-/* Lodging. viewBox is 24 — this path was drawn long ago, and redrawing it
-   for uniformity isn't worth it; the size parameter still works. */
+  `<svg viewBox="0 0 16 16" width="${n}" height="${n}" stroke-width="${SW(n)}" `
+  + `aria-hidden="true" style="display:block;margin:auto;flex:none">${body}</svg>`;
 /* Close. Drawn rather than typed: as the character &times; it is centered by
    its *line box*, and the glyph's ink sits high inside that box (baseline up to
    x-height), so a geometrically centered box left the mark ~2px low — and by
@@ -3135,10 +3153,18 @@ const icon = (body, n = 13) =>
    16×16 viewBox are centered by construction, whatever the font. */
 const xmark = (n = 14) => icon(
   `<path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" `
-  + `stroke-width="1.6" stroke-linecap="round"/>`, n);
-const house = (n = 13) => `<svg viewBox="0 0 24 24" width="${n}" height="${n}" `
-  + `fill="currentColor" aria-hidden="true" style="display:block;margin:auto;flex:none">`
-  + `<path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3z"/></svg>`;
+  + `stroke-linecap="round"/>`, n);
+/* Lodging. Redrawn as an outline on the 16 viewBox the rest of the set uses.
+   It was the one filled glyph among eleven outline category marks and it
+   renders in the same slots as them — at 11–13px a solid silhouette reads
+   markedly heavier than its neighbours, and by the convention every other
+   icon here follows (outline = the thing, fill = the active state) a solid
+   house also claims a state that lodging does not have. The old path was on a
+   24 viewBox, which is why it could not share the set's stroke either. */
+const house = (n = 13) => icon(
+  `<path d="M2.4 8.4 8 3.4l5.6 5" ${SVG_ST}/>`
+  + `<path d="M4.1 7.5v5.9h7.8V7.5" ${SVG_ST}/>`
+  + `<path d="M6.6 13.4v-3.2h2.8v3.2" ${SVG_ST}/>`, n);
 /* "Maybe" is drawn as a half-filled circle: it sits between "hollow circle =
    unrated" and "solid check = yes", and the shape says so by itself — no
    color needed to tell them apart. */
