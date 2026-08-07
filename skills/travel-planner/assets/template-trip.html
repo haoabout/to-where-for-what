@@ -1795,7 +1795,20 @@ pre.code{
 .ck .n{flex:1;min-width:0}
 .ck .n .sub{color:var(--ink-3);font-size:11.5px;margin-left:7px}
 .ck .why{font-size:11.5px;color:var(--ink-3);font-style:italic}
-.ck.out{opacity:.55}
+/* Same fix as the dropped place card, and for a harder reason: this one
+   prints. opacity:.55 composited the row's own text down to 2.59:1 for the
+   10–11.5px .sub / .why and 4.27:1 for the name — and the guide's own intro
+   tells you to re-read exactly these rows ("放弃的也列在这里，方便你回头
+   判断要不要捡回来"), so the passage the copy sends you back to was the least
+   legible thing on the sheet. On paper there is no hover to recover it.
+   A recessed band plus a colour step instead, neither of which costs
+   contrast: --ink-3 on --paper-2 is 6.33:1, --ink 16.14:1. Two channels
+   rather than one because the band depends on print-color-adjust:exact
+   (set on .pg-body, and beforeprint always paginates) while the colour step
+   survives even if a printer drops backgrounds — and the ✕ in the .m column
+   says it a third time, without colour at all. */
+.ck.out{background:var(--paper-2)}
+.ck.out .n{color:var(--ink-3)}
 .cost-total{
   display:flex;align-items:baseline;gap:10px;padding:11px 13px;
   background:var(--paper-2);border-top:1px solid var(--line-soft);font-size:13.5px;
