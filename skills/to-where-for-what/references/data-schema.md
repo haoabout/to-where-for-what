@@ -22,6 +22,19 @@ back into it.
 }
 ```
 
+### When `schema_version` bumps
+
+**Adding optional fields never bumps it** — old data stays valid, an old
+validator merely notes the unknown field, and trips keep opening on both
+sides. (`verdict` and `trip.retro` were added exactly this way.)
+
+It bumps only on a **breaking change**: a field renamed, a field's meaning or
+type changed, an optional field made required. A bump makes every existing
+trip fail P0 on the old number, so the change that bumps it must ship with
+migration notes in the skill's `CHANGELOG.md` — and corresponds to a MAJOR
+skill version. Prefer designing around additive changes; a bump is a last
+resort, not a routine.
+
 ---
 
 ## `trip`
