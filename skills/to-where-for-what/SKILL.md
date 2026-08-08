@@ -137,6 +137,13 @@ On startup:
    (e.g. Chinese); a heading in a different language is the same section, not a
    missing one.
 
+**Capture in-passing declarations.** When the user states something durably
+true mid-conversation — a dietary restriction, queue tolerance, "we always
+travel with a stroller" — that's a preference leaking away unless caught:
+propose the exact line and the section it belongs in, and append once they
+confirm. One-trip-only facts (this hotel, this flight) stay in `brief.md`.
+Never write without showing the wording first.
+
 **Use your own read/write tools for these two steps, not the shell.**
 `mkdir -p`, `[ -f ... ]`, and `cp` are POSIX-only and fail outright under
 Windows PowerShell / cmd — and this is the very first step of the whole flow;
@@ -579,6 +586,12 @@ Run through **[references/checklist.md](references/checklist.md)**, especially:
   but confirm it rendered)
 - [ ] Explicitly told the user which information may go stale and which numbers
   are estimates
+
+One more beat at first-trip delivery: if `preferences.md` is still mostly
+`<placeholders>`, offer — don't push — "two minutes now to fill the interest
+weights, and the next trip starts sharper." This is the moment they best know
+what they'd adjust; there is no other designated point where the initial fill
+happens.
 
 ---
 
