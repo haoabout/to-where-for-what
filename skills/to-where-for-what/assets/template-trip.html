@@ -5390,6 +5390,23 @@ const MAP = (() => {
     if(src && src.setData) src.setData(routeData());
     else addRoute();
     if(fresh) relayoutArrows(st.map);
+
+    // The selected day's line must also win the layer stacking, matching its
+    // markers' Z.focus — dimmed lines drawing over the focused one reads
+    // wrong the same way dimmed dots covering focused dots did. Line layers
+    // are split by dash pattern, and MapLibre's only cross-layer ordering is
+    // moveLayer (line-sort-key sorts within one layer only). First restore
+    // the base 0..11 order so repeated selections don't accumulate shuffles,
+    // then lift the selected day's layer to the top, just under the arrows.
+    const m = st.map;
+    if(m.getLayer("route-dir")){
+      for(let i = 0; i < DAY_DASH.length; i++)
+        if(m.getLayer("route-line-" + i)) m.moveLayer("route-line-" + i, "route-dir");
+      if(st.curDay != null){
+        const i = ((st.curDay % DAY_DASH.length) + DAY_DASH.length) % DAY_DASH.length;
+        if(m.getLayer("route-line-" + i)) m.moveLayer("route-line-" + i, "route-dir");
+      }
+    }
   }
 
   /* ---------- marker ---------- */
