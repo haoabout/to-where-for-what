@@ -3,7 +3,7 @@
 
 Usage:
     python3 enrich.py <places.json> --coords          # fill coordinates (Nominatim)
-    python3 enrich.py <places.json> --images          # fill images (Wikimedia Commons)
+    python3 enrich.py <places.json> --images          # fill images (Wikipedia → Wikidata → Openverse)
     python3 enrich.py <places.json> --coords --images
     python3 enrich.py <places.json> --coords --dry-run
 
@@ -217,18 +217,79 @@ def wiki_lead_image(title: str, lang: str) -> str | None:
         return None
 
 
+def wikidata_image(name: str, lang: str, bbox) -> str | None:
+    """Search Wikidata by name and return the entity's P18 image filename.
+    Catches places notable enough for a Wikidata item but with no Wikipedia
+    article in our languages (small galleries, markets, brand flagships).
+    Same-name entities elsewhere in the world are common, so a candidate is
+    accepted only when its P625 coordinate falls inside the trip bbox — an
+    entity without P625 is rejected rather than trusted."""
+    api = "https://www.wikidata.org/w/api.php?"
+    q = {"action": "wbsearchentities", "search": name, "language": lang,
+         "type": "item", "limit": "5", "format": "json"}
+    try:
+        ids = [h["id"] for h in get_json(api + urllib.parse.urlencode(q)).get("search", [])]
+    except Exception:  # noqa: BLE001
+        return None
+    if not ids:
+        return None
+    time.sleep(0.35)
+    try:
+        q2 = {"action": "wbgetentities", "ids": "|".join(ids),
+              "props": "claims", "format": "json"}
+        ents = get_json(api + urllib.parse.urlencode(q2)).get("entities", {})
+    except Exception:  # noqa: BLE001
+        return None
+    for eid in ids:                      # search order = relevance order
+        claims = (ents.get(eid) or {}).get("claims", {})
+        try:
+            pos = claims["P625"][0]["mainsnak"]["datavalue"]["value"]
+            if bbox and not in_bbox(pos["longitude"], pos["latitude"], bbox):
+                continue
+            return claims["P18"][0]["mainsnak"]["datavalue"]["value"]
+        except (KeyError, IndexError, TypeError):
+            continue
+    return None
+
+
+def openverse_image(query: str) -> dict | None:
+    """Openverse (api.openverse.org) aggregates openly licensed photos from
+    Flickr and friends; anonymous access, no key. Last resort in the chain:
+    keyword search mislabels far more often than a Wikipedia lead image, so
+    anything from here needs the same eyeballing as a category fetch."""
+    q = {"q": query, "page_size": "3"}
+    try:
+        d = get_json("https://api.openverse.org/v1/images/?" + urllib.parse.urlencode(q))
+    except Exception:  # noqa: BLE001
+        return None
+    for r in d.get("results") or []:
+        # thumbnail is Openverse's own proxy (~600px, stable); the original
+        # url can be a 20MB TIFF on someone's homepage
+        url = r.get("thumbnail") or r.get("url")
+        if not url:
+            continue
+        credit = " / ".join(x for x in ((r.get("creator") or "")[:60],
+                                        r.get("source") or "Openverse",
+                                        (r.get("license") or "").upper()) if x)
+        return {"url": url, "credit": credit,
+                "source_url": r.get("foreign_landing_url", "")}
+    return None
+
+
 def fill_images(doc: dict, dry: bool) -> int:
     trip = doc.get("trip", {})
+    bbox = trip.get("bbox")
     langs = [l for l in (trip.get("local_language"), "en") if l]
     todo = [p for p in doc["places"] if not p.get("images")]
     if not todo:
         print("Images: all present")
         return 0
 
-    print(f"Images: {len(todo)} to fill (Wikipedia lead image → Commons API)")
+    print(f"Images: {len(todo)} to fill (Wikipedia lead → Wikidata P18 → Openverse)")
     ok = 0
     for p in todo:
-        found = None
+        found, how = None, ""
+        # 1) Wikipedia lead image — most representative, rarely mislabeled
         for lang in langs:
             name = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
             if not name:
@@ -239,14 +300,39 @@ def fill_images(doc: dict, dry: bool) -> int:
                 found = commons_thumb(fn)
                 time.sleep(0.35)
                 if found:
+                    how = "wikipedia"
                     break
+        # 2) Wikidata P18 — items without an article; bbox-checked via P625
+        if not found:
+            for lang in langs:
+                name = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
+                if not name:
+                    continue
+                fn = wikidata_image(name, lang, bbox)
+                time.sleep(0.35)
+                if fn:
+                    found = commons_thumb(fn)
+                    time.sleep(0.35)
+                    if found:
+                        how = "wikidata"
+                        break
+        # 3) Openverse keyword search — highest mislabel risk, hence last
+        if not found:
+            name = p.get("name_en") or p.get("name_local") or p.get("name")
+            city = trip.get("destination_en") or trip.get("destination_local") or ""
+            if name:
+                found = openverse_image(f"{name} {city}".strip())
+                time.sleep(0.35)
+                if found:
+                    how = "openverse"
         if found:
             if not dry:
                 p["images"] = [found]
             ok += 1
-            print(f"  ✓ {p.get('name'):<22} {found['url'].rsplit('/', 1)[-1][:46]}")
+            print(f"  ✓ {p.get('name'):<22} [{how}] {found['url'].rsplit('/', 1)[-1][:40]}")
         else:
-            print(f"  – {p.get('name'):<22} no Wikipedia lead image; left empty (images are optional)")
+            print(f"  – {p.get('name'):<22} nothing in any source; use a direct image link "
+                  f"from an official page, or leave empty (images are optional)")
     return ok
 
 

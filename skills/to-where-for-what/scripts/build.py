@@ -622,7 +622,7 @@ def _detach() -> dict:
     return {"creationflags": flags} if flags else {}
 
 
-def serve(trip_dir: Path, page: Path, port: int) -> None:
+def serve(trip_dir: Path, page: Path, port: int, open_browser: bool = True) -> None:
     stop(trip_dir, quiet=True)
     proc = subprocess.Popen(
         [sys.executable, "-c", SERVER_SRC, str(port), str(trip_dir),
@@ -641,10 +641,14 @@ def serve(trip_dir: Path, page: Path, port: int) -> None:
     print(f"  Stop it: {Path(sys.executable).name} {Path(__file__).name} {trip_dir} --stop")
     print("  Page edits auto-save back to places.json (this server merges, writes, and rebuilds)")
     print("  (http also keeps the official OSM raster basemap compliant; the vector basemap works under file:// too)")
-    try:
-        webbrowser.open(url)
-    except Exception:  # noqa: BLE001
-        pass
+    # --no-open exists for callers that will show the page themselves — an
+    # AI opening the URL in an embedded preview pane shouldn't also pop the
+    # system browser, or the user gets the same page twice.
+    if open_browser:
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def stop(trip_dir: Path, quiet: bool = False) -> None:
@@ -680,6 +684,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Build the trip page")
     ap.add_argument("trip_dir")
     ap.add_argument("--serve", action="store_true", help="start a background local server and open the browser")
+    ap.add_argument("--no-open", action="store_true", help="with --serve: don't launch the system browser (caller opens the URL itself, e.g. in an embedded preview pane)")
     ap.add_argument("--stop", action="store_true", help="stop this directory's background server")
     ap.add_argument("--port", type=int, default=8787)
     ap.add_argument("--standalone", action="store_true", help="output only the standalone guide.html")
@@ -695,7 +700,7 @@ def main() -> int:
 
     page = build(trip_dir, standalone=args.standalone)
     if args.serve:
-        serve(trip_dir, page, args.port)
+        serve(trip_dir, page, args.port, open_browser=not args.no_open)
     else:
         print(f"  Open directly: open {page}")
     return 0

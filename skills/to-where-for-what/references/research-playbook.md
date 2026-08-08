@@ -227,7 +227,26 @@ another source — or don't include the place.
 Without online confirmation, `open` is forbidden. It's the only mechanism
 preventing "arrived to find it under renovation".
 
-### Image URLs come from the API, never hand-assembled
+### Images: let the script's chain run first, then fill gaps by hand
+
+`enrich.py --images` tries three sources in order and stops at the first hit:
+
+1. **Wikipedia lead image** — most representative, rarely mislabeled
+2. **Wikidata P18** — catches items with no Wikipedia article (small
+   galleries, markets); only accepted when the entity's coordinate falls
+   inside the trip bbox, so same-name entities elsewhere can't sneak in
+3. **Openverse keyword search** — aggregated CC photos (Flickr etc.), no API
+   key; highest mislabel risk, hence last
+
+When the whole chain comes up empty — typical for small venues — **fill
+`images` manually with a direct link from an official page**: the venue's own
+site or official social account (og:image, a press-kit photo). Two conditions:
+the URL actually loads (fetch it, don't assume), and the photo shows *this*
+place. This is a personal-use tool, so the licensing posture is pragmatic —
+but keep `credit` honest about where the image came from. Truly nothing
+anywhere? Leave it empty; images are optional, wrong images are not.
+
+### Wikimedia thumbnail URLs specifically: API only, never hand-assembled
 
 **Tested lesson**: Wikimedia no longer generates thumbnails at arbitrary widths
 on demand. Hand-building an `800px-` prefix gets a 400.
@@ -247,10 +266,10 @@ https://commons.wikimedia.org/w/api.php?action=query&titles=File:<filename>
 Use the returned `thumburl` directly. `extmetadata` carries `Artist` and
 `LicenseShortName` — put them in `credit`.
 
-**Also eyeball every image.** Category-based fetching mislabels easily — the
-first file in `Category:Osaka Castle` may be something entirely unrelated. After
-a batch fetch, tile them into one contact sheet and scan it; far faster than
-opening them one by one.
+**Also eyeball every image.** Category-based fetching and keyword search
+(Openverse) mislabel easily — the first file in `Category:Osaka Castle` may be
+something entirely unrelated. After a batch fetch, tile them into one contact
+sheet and scan it; far faster than opening them one by one.
 
 ### Things the validator catches — but you should catch earlier
 
