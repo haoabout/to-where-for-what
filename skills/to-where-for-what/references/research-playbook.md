@@ -266,10 +266,13 @@ https://commons.wikimedia.org/w/api.php?action=query&titles=File:<filename>
 Use the returned `thumburl` directly. `extmetadata` carries `Artist` and
 `LicenseShortName` — put them in `credit`.
 
-**Also eyeball every image.** Category-based fetching and keyword search
-(Openverse) mislabel easily — the first file in `Category:Osaka Castle` may be
-something entirely unrelated. After a batch fetch, tile them into one contact
-sheet and scan it; far faster than opening them one by one.
+**Also look at every image yourself — you, the AI, not the user.** Fetch each
+image and check it actually shows that place; never delegate this to the user.
+Category-based fetching and keyword search (Openverse) mislabel easily — the
+first file in `Category:Osaka Castle` may be something entirely unrelated, and
+a Wikidata match can return the neighborhood's subway station instead of the
+neighborhood. After a batch fetch, tile them into one contact sheet and scan
+it; far faster than opening them one by one.
 
 ### Things the validator catches — but you should catch earlier
 
