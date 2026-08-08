@@ -1479,6 +1479,12 @@ pre.code{
 /* ↑↓× stay hidden normally (the narrow column can't afford three permanent
    buttons) and surface on hover. Touch has no hover, so there they're always
    visible. */
+/* Hard conflict (scheduled on a closure day / place not operating): always
+   visible, unlike the hover-revealed ops — an error mark that only shows on
+   hover would be an error mark nobody sees. flex:none so it's the name that
+   truncates, never the mark. */
+.ditem .conf{flex:none;width:14px;height:14px;border-radius:50%;display:grid;place-items:center;
+  background:var(--danger);color:#fff;font:700 10px/1 var(--mono);cursor:help}
 .ditem .dops{display:flex;gap:1px;flex:none;opacity:0;transition:opacity .12s}
 .ditem:hover .dops,.ditem:focus-within .dops{opacity:1}
 @media (hover:none){ .ditem .dops{opacity:1} }
@@ -2637,6 +2643,7 @@ en: {
   stRenovating:"Under renovation", stSeasonal:"Seasonally closed", stPermanent:"Permanently closed",
   closedAllTrip:"Closed for your entire trip",
   closedOn:"Closed {d}", closedWeekly:"Closed {days}", listSep:", ",
+  confSched:"Scheduled for {d} — closed that day",
   bookingRequired:"Booking required", bookingRecommended:"Booking recommended",
   fUnverified:"Official info couldn't be verified", fPartial:"Info only partially verified",
   vbBlocked:"Official information for this place couldn't be reached",
@@ -2725,7 +2732,7 @@ en: {
   sideEmpty:"No places to show under the current filters",
   free:"free", fromSuffix:"+", priceTBD:"price unlisted",
   wClosed:"closed", wAbnormal:"not operating normally", wUnverified:"unverified",
-  wBooking:"booking req.", wClosedThatDay:"closed that day",
+  wBooking:"booking req.",
   lodging:"Lodging",
   noCoords:"No locatable places", noCoordsSub:"The places lack coord fields",
   noWebgl:"WebGL is unavailable in this browser", needWebgl:"WebGL required",
@@ -2825,6 +2832,7 @@ zh: {
   stRenovating:"修缮中", stSeasonal:"季节性关闭", stPermanent:"已永久关闭",
   closedAllTrip:"行程期间全程闭馆",
   closedOn:"{d}闭馆", closedWeekly:"{days}闭馆", listSep:"、",
+  confSched:"已排进 {d}，当天闭馆",
   bookingRequired:"必须预约才能进", bookingRecommended:"建议预约",
   fUnverified:"官方信息未能核实", fPartial:"信息仅部分核实",
   vbBlocked:"这个地点的官方信息没能查到",
@@ -2909,7 +2917,7 @@ zh: {
   sideEmpty:"当前筛选下没有可显示的地点",
   free:"免费", fromSuffix:" 起", priceTBD:"价格待查",
   wClosed:"已关闭", wAbnormal:"非正常营业", wUnverified:"待确认",
-  wBooking:"须预约", wClosedThatDay:"当天闭馆",
+  wBooking:"须预约",
   lodging:"住宿",
   noCoords:"没有可定位的地点", noCoordsSub:"景点缺少 coord 字段",
   noWebgl:"浏览器未启用 WebGL", needWebgl:"需要 WebGL",
@@ -3173,6 +3181,29 @@ const DAYS = tripDays();
    This is the list view's core value: the user sees the problems *before*
    pressing "yes", not after a whole filtering round only to find the place
    shut that day. */
+
+/* Hard conflict between a place and one scheduled day — the only mistake
+   here that ends in a wasted trip out. A conflict is a property of the
+   (place, day) pair, not of the place, so it renders on the schedule row
+   (see dayBox) rather than competing with the soft one-slot warnings of the
+   pool list. Lodging is exempt: no notion of a closure day (same rule as
+   validate.py). Returns the reason text, or null. */
+function dayWd(n){
+  const day = ITIN.find(d => d.n === n);
+  return day && day.date ? ((new Date(day.date + "T00:00:00").getDay() + 6) % 7) + 1 : null;
+}
+function dayConflict(p, n){
+  if(!p || isLodging(p)) return null;
+  if(p.status && p.status !== "open")
+    return { renovating:T.stRenovating, seasonal_closed:T.stSeasonal, permanently_closed:T.stPermanent }[p.status] || p.status;
+  const wd = dayWd(n);
+  if(wd && Array.isArray(p.closed_days) && p.closed_days.includes(wd)){
+    const day = ITIN.find(d => d.n === n);
+    return tf("closedOn", { d: `${day.date.slice(5)}(${WD_NAMES[wd]})` });
+  }
+  return null;
+}
+
 function flags(p){
   const out = [];
   if(p.status && p.status !== "open"){
@@ -3190,6 +3221,21 @@ function flags(p){
     }
   }else if(cd.length){
     out.push({ cls:"f-info", txt:tf("closedWeekly", { days: cd.map(d => WD_NAMES[d]).join(T.listSep) }) });
+  }
+  // Already scheduled onto a closure day: a separate red flag naming the day,
+  // not an upgrade of the yellow fact above — the place may sit in two days
+  // with only one in conflict, and the flag has to say which.
+  if(cd.length){
+    const seen = new Set();
+    for(const s of schedOf(p.id)){
+      if(seen.has(s.n)) continue;
+      seen.add(s.n);
+      const wd = dayWd(s.n);
+      if(wd && cd.includes(wd)){
+        const day = ITIN.find(d => d.n === s.n);
+        out.push({ cls:"f-danger", txt:tf("confSched", { d: `${day.date.slice(5)}(${WD_NAMES[wd]})` }) });
+      }
+    }
   }
   if(p.booking === "required") out.push({ cls:"f-warn", txt:T.bookingRequired });
   else if(p.booking === "recommended") out.push({ cls:"f-info", txt:T.bookingRecommended });
@@ -5640,9 +5686,15 @@ const MAP = (() => {
       const lod = isLodging(p);
       if(!lod) seq++;
       const note = (e.note || "").trim();
+      /* The conflict mark is a span with a title, not a button: the row
+         itself already opens the detail dialog, which carries the same
+         reason in full — hover is the shortcut, the dialog is the path that
+         also works on touch. It sits outside .dops so it never hides. */
+      const conf = dayConflict(p, d.n);
       return `<div class="ditem${lod ? " lod" : ""}" data-card="${esc(p.id)}" data-day="${d.n}" data-i="${i}">
           <span class="n" style="background:${lod ? "var(--lodging)" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
           <button class="bare dnm" type="button" title="${esc(p.name)}${note ? " — " + esc(note) : ""}">${esc(p.name)}</button>
+          ${conf ? `<span class="conf" title="${esc(conf)}" role="img" aria-label="${esc(conf)}">!</span>` : ""}
           <span class="dops">
             <button class="dop" data-op="up"   title="${esc(T.moveUp)}" aria-label="${esc(T.moveUp)}">${ICON.up}</button>
             <button class="dop" data-op="down" title="${esc(T.moveDown)}" aria-label="${esc(T.moveDown)}">${ICON.down}</button>
@@ -5914,17 +5966,15 @@ const MAP = (() => {
      lives in the detail dialog; this line only has to make the place
      recognizable and flag whether there's a catch. */
   function warnOf(p){
+    // Soft notices only. The hard conflict — scheduled on a day it's closed —
+    // belongs to a (place, day) pair, not to the place, so it lives on the
+    // schedule row (dayConflict via dayBox) and in the detail flags. Keeping
+    // it here too once meant it lost the one-warning slot to "unverified"
+    // exactly when both applied.
     if(p.status === "permanently_closed") return T.wClosed;
     if(p.status && p.status !== "open") return T.wAbnormal;
     if(p.verify && p.verify.state && p.verify.state !== "verified") return T.wUnverified;
     if(p.booking === "required") return T.wBooking;
-    // Scheduled on a day it's closed — a hard conflict, outranking the soft
-    // notices above
-    for(const s of schedOf(p.id)){
-      const day = ITIN.find(d => d.n === s.n);
-      const wd = day && day.date ? new Date(day.date + "T12:00:00").getDay() || 7 : null;
-      if(wd && Array.isArray(p.closed_days) && p.closed_days.includes(wd)) return T.wClosedThatDay;
-    }
     return "";
   }
 
