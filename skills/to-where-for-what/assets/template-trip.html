@@ -5524,11 +5524,15 @@ const MAP = (() => {
     }
 
     // Day focus: with a day selected, dots scheduled only on *other* days
-    // fade to match their route lines' 30%. The selected day's stops stay
-    // full — and so does the unscheduled pool, deliberately: the selected
-    // day is also the add-target, and the pool is what it's composed from.
-    // Opacity goes on the inner dot so fill, rings and number fade as one.
-    dot.style.opacity = (st.curDay != null && s.placed && !s.days.includes(st.curDay)) ? ".3" : "";
+    // fade to 15% — deliberately deeper than their route lines' 30%: markers
+    // are DOM elements and always paint over the map canvas, so a dimmed dot
+    // sitting on the focused day's line cannot be layered under it, it can
+    // only be made transparent enough for the line to read through. The
+    // selected day's stops stay full — and so does the unscheduled pool,
+    // deliberately: the selected day is also the add-target, and the pool is
+    // what it's composed from. Opacity goes on the inner dot so fill, rings
+    // and number fade as one.
+    dot.style.opacity = (st.curDay != null && s.placed && !s.days.includes(st.curDay)) ? ".15" : "";
 
     // The number appears only once scheduled into a day; lodging is never numbered
     if(s.lod){
