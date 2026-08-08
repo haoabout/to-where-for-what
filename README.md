@@ -101,7 +101,7 @@ jump between them. "Export PDF" goes through the browser's print dialog. A
 - **Export**: CSV (imports straight into Google My Maps), KML, and the guide
   as a PDF via the browser's print dialog
 - **Fallback chain**: vector → raster → Leaflet without WebGL → a static
-  scatter plot when everything is down. Every step verified by testing
+  scatter plot when everything is down
 
 ## Interface language
 
@@ -139,9 +139,6 @@ choice; it's asked once on first use and recorded in the preferences file.
 
 ## Known limitations
 
-- **Xiaohongshu and Bilibili can't be scraped** (anti-bot + login walls).
-  Film/anime pilgrimage spots rely on second-hand write-ups found via search
-  engines, so coverage is thinner than a dedicated community's
 - **Metro colors depend on OSM's `colour` tag**. Minor cities may lack it, in
   which case a fallback palette is used (avoiding colors already taken)
 - **Transit durations and fares are as of the query date**. Trips are often
@@ -151,8 +148,6 @@ choice; it's asked once on first use and recorded in the preferences file.
   `--serve` is recommended
 - The guide body is written by the AI after verifying online, **but you should
   still spot-check a few source links** before you go
-- **RTL languages (Arabic, Hebrew, …) still render left-to-right.** The `ui`
-  override table translates the copy but does not mirror the layout
 
 ## Development
 
