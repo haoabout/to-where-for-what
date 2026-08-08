@@ -142,8 +142,9 @@ Without these, the user forms wrong expectations:
   before departure
 - [ ] **Ticket amounts are estimates** — special exhibitions, add-on
   experiences, and night surcharges usually cost extra
-- [ ] **Xiaohongshu / Bilibili couldn't be scraped** — film/anime spots may be
-  incomplete
+- [ ] **Which film/anime spots may be incomplete** — Xiaohongshu / Bilibili
+  were attempted; wherever they were walled off, coverage relies on
+  second-hand write-ups
 - [ ] **Weather beyond 16 days is a historical average, not a forecast**
 - [ ] **After the server stops**, double-click opening still reads fine, but no
   direct file writes and no OSM raster basemap

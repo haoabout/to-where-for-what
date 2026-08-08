@@ -11,12 +11,15 @@ spots. Written into the `media` field of `places.json`.
 announced, promoted by local governments as pilgrimage routes, or long
 maintained and cross-verified by fan communities.
 
-**Not achievable**: content on Xiaohongshu, Bilibili, or Douyin. These platforms
-have anti-bot measures and login walls; they can't be scraped. So **spots that
-spread via short video but never settled into written sources will likely be
-missed**.
+**Try, but expect walls**: Xiaohongshu, Bilibili, and Douyin often sit behind
+anti-bot measures and login walls. **Attempt them first** — when a page does
+open, it's the richest source for exactly the spots nothing else covers. When
+blocked, fall back to second-hand write-ups via search engines instead of
+retrying the wall, and accept that **spots that spread via short video but
+never settled into written sources may be missed**.
 
-Tell the user this proactively — don't let them assume the list is exhaustive.
+Tell the user which spots that caveat touches — don't let them assume the list
+is exhaustive.
 
 ---
 

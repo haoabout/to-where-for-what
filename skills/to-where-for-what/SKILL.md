@@ -19,7 +19,7 @@ on the page. You only work at A (search) and D (writing the guide).
 
 ---
 
-## Three hard rules
+## Four hard rules
 
 Break any one of them and the output is bad.
 
@@ -39,6 +39,16 @@ need a new field, change the schema and the validator first.
 Every place must have `sources` (real URLs). Never set `status` to `open` without
 confirmation. The validator catches format problems, but it cannot catch
 fabrication — that discipline is on you.
+
+**4. Go / don't-go decisions belong to the user — always.**
+Two halves. *Selection*: everything found within the quotas gets listed;
+recommendation strength is expressed through `tier` and nothing else — never
+drop a place because you judge it skippable. (Exception: a place that fails
+verification — permanently closed, can't confirm it exists — is flagged, not
+silently deleted.) *Scheduling*: never add, remove, reorder, or move places
+between days on your own, at any stage. Propose first — which places, what
+change, what the result looks like, why — and touch `itinerary` only after the
+user agrees. "I noticed a problem" earns a proposal, not an edit.
 
 ---
 
@@ -284,6 +294,28 @@ per-day containers from `dates` when it opens. Building the same data in two
 places will eventually disagree. Contract:
 [data-schema.md](references/data-schema.md).
 
+### A1½. Confirm, announce, then search — in subagents when you can
+
+Between the questionnaire and the first search there is one mandatory beat.
+Play back what you have — destination, dates (including any half-day shape),
+party, home base — plus **which categories you're about to search and roughly
+how many places each** (the quota table in the playbook). Get a yes. This is
+the last cheap moment for corrections; after the search round it's expensive.
+
+In the same message, set two expectations:
+
+- **The search takes roughly 10–20 minutes.** Say so, and that they can walk
+  away — the alternative is a user staring at a silent screen wondering if
+  anything is happening.
+- **If you can spawn subagents, search in them, not in the main
+  conversation.** Dozens of searches' worth of intermediate results otherwise
+  bloat the context that stages B–D still need. Split by category group if
+  you parallelize — but **parallel agents must never write the same file**:
+  each writes its own `partial-<group>.json` in the trip directory, and you
+  merge them into `places.json` afterwards (dedupe by name and coordinates),
+  then run A3 yourself. No subagent capability (plain chat, Codex)? Search in
+  the main conversation as before — the time warning matters even more then.
+
 ### A2. Search and produce `places.json`
 
 Read **[references/research-playbook.md](references/research-playbook.md)** for
@@ -298,8 +330,15 @@ Key points:
   obtained in the first pass** — otherwise the user filters for an hour and then
   discovers the place is shut that day
 - Coordinates use the `{"lon":…, "lat":…}` object form, never an array
-- Image URLs must come from the API, **never hand-assembled** (see the Wikimedia
-  lesson in the playbook)
+- Image URLs: let `enrich.py`'s chain run first; fill leftovers by hand from
+  official pages. Wikimedia thumbnail URLs specifically are **never
+  hand-assembled** (see the playbook's image section)
+- **Create the lodging entry now** — the moment the questionnaire yields a
+  hotel name or address, it goes into `places.json` as `kind: "lodging"`
+  (contract: data-schema.md, "Lodging"), so the hotel is on the map from the
+  very first build. Only a rough area so far? Note it in `brief.md` and add
+  the entry when the booking lands. This is the step that keeps getting
+  forgotten — the user reads the map around their hotel
 - Set **`trip.theme_hue`** — one integer that colours the page's title band for
   this trip. Take the destination's dominant material or landscape, the colour of
   what the user will actually be looking at (Osaka's neon ≈ 334, Kyoto's moss and
@@ -338,6 +377,12 @@ leaving a blank over writing a plausible-looking wrong coordinate.**
 `--serve` starts a local server and opens the browser. **Prefer it**: under
 `file://` the official OSM basemap returns an image reading "Access blocked"
 (HTTP status still 200 — only eyes catch it).
+
+**If your environment has an embedded browser / preview pane, use it**: run
+`--serve --no-open` (so the system browser doesn't also pop up) and open the
+printed URL in the pane. The user keeps everything in one window, and you can
+screenshot the page yourself for the pre-delivery check instead of asking them
+to look.
 
 ---
 
@@ -393,7 +438,9 @@ rules.
 the user's own day assignment and ordering; overriding it throws away the
 trade-offs they just made. If you disagree, say so in the guide body and let them
 change it. Only when `itinerary` is missing or entirely empty do you propose one
-using the rules below.
+using the rules below. And hard rule 4 applies at every stage, not just here:
+any itinerary edit — add, remove, reorder, re-day — is proposed with the
+concrete before/after and applied only once the user agrees.
 
 Key points:
 
@@ -499,7 +546,7 @@ Run through **[references/checklist.md](references/checklist.md)**, especially:
 
 | Limitation | Notes |
 |---|---|
-| Xiaohongshu / Bilibili can't be scraped | Anti-bot + login walls. Film/anime spots rely on second-hand write-ups found via search engines; may be incomplete |
+| Xiaohongshu / Bilibili: try first, expect walls | Anti-bot + login walls often block scraping — but not always. Attempt them for film/anime spots; when blocked, fall back to second-hand write-ups via search engines without burning minutes on retries, and say which spots may be incomplete |
 | Ticket prices are estimates | `ticket` is free text; special exhibitions, add-on experiences, and night surcharges usually cost extra |
 | Transit lines come from OSM; quality varies by city | Official line colors come from OSM's `colour` tag. Osaka measured 20/20 present; minor cities may lack them — the map falls back to auto-assigned colors and says so in the legend |
 | Weather beyond 16 days is not a forecast | Falls back to historical same-period averages; the UI labels this, but say it yourself too |
