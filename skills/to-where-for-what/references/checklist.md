@@ -145,6 +145,9 @@ Without these, the user forms wrong expectations:
 - [ ] **Which film/anime spots may be incomplete** — Xiaohongshu / Bilibili
   were attempted; wherever they were walled off, coverage relies on
   second-hand write-ups
+- [ ] **If the model has no vision capability**: say that images passed text
+  checks only, not visual review — a wrong-looking photo spotted while
+  filtering is worth reporting; swapping is cheap
 - [ ] **Weather beyond 16 days is a historical average, not a forecast**
 - [ ] **After the server stops**, double-click opening still reads fine, but no
   direct file writes and no OSM raster basemap

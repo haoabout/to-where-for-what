@@ -274,6 +274,26 @@ a Wikidata match can return the neighborhood's subway station instead of the
 neighborhood. After a batch fetch, tile them into one contact sheet and scan
 it; far faster than opening them one by one.
 
+#### No vision capability? Verify textually, and say so
+
+A text-only model can't look at images — don't skip verification, downgrade
+it. Most mislabels leak into text: that subway-station mismatch above carried
+the filename `Osaka-subway-T19-Nakazakicho-station.jpg`, catchable with no
+eyes at all. Per source:
+
+| Source | Text-only rule |
+|---|---|
+| Wikipedia lead image | Trust as-is — lead images are rarely mislabeled |
+| Wikidata P18 | Keep only if the entity label / filename relates to the place name; otherwise drop |
+| Openverse | Strictest: keep only when title / tags / filename contain the place name; otherwise leave empty |
+| Official-site direct link | Confirm the URL loads; a venue's own site doesn't misphotograph itself |
+
+Then **tell the user at delivery, explicitly**: the model in use has no vision,
+so images passed text checks only, not visual review — and any photo that looks
+wrong while they filter is worth reporting, since swapping an image is cheap.
+Stage B already walks their eyes across every card, so this costs them nothing
+extra. Don't present text-checked images as verified.
+
 ### Things the validator catches — but you should catch earlier
 
 Before running `validate.py --check-links`, think through:
