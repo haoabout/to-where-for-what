@@ -33,6 +33,32 @@ the full opening questionnaire.
 **Requirements**: Python 3.9+, standard library only — no pip install. The map
 and weather need a network connection.
 
+## Updating
+
+Your personal state is never touched by an update, whichever path you take:
+`~/.to-where-for-what/preferences.md` and everything under your trips
+directory live outside the skill and survive reinstalls.
+
+The installed version is the `version:` field in
+`skills/to-where-for-what/SKILL.md` frontmatter; `CHANGELOG.md` next to it
+says what changed between versions — read it before updating, it flags
+behavior changes you'd otherwise meet by surprise.
+
+**If you've modified skill files yourself** (SKILL.md rules, `build.py`, the
+template — legitimate power-user territory), install via git and commit your
+changes locally; `git pull --rebase` then gives you a real three-way merge
+with conflict markers. That is the only reliable way your modifications
+survive updates — a zip overwrite loses them silently. Lightweight personal
+rules are better off in `preferences.md`, which no update can touch.
+
+**When you ask the AI whether to update**, it follows the decision ladder in
+SKILL.md ("Updating this skill"): with git metadata it checks `git status`;
+without, it compares your files against the release your `version:` points
+at — unmodified installs update by plain overwrite, modified ones get a
+per-file three-way merge, always merging the skill directory as one unit
+(`build.py` and the template are coupled). After any update it re-runs
+`validate.py` over existing trips to catch contract drift.
+
 ## What it does
 
 **A · Exhaustive search**　35–50 candidates by category quota, with opening
@@ -179,6 +205,16 @@ npx skills add haoabout/to-where-for-what
 手动安装：把 `skills/to-where-for-what/` 和 `skills/to-where-for-what-lite/` **两个目录**都拷进 `~/.claude/skills/`（或你的工具对应的 skills 目录）。它们是一对——`to-where-for-what-lite` 负责在对话里直接回答「X 有什么好玩的」，`to-where-for-what` 在你没提行程页时会主动把问题交给它。只装规划那个的话，一句随口的问题会被拖进完整的开场问卷。
 
 **依赖**：Python 3.9+，标准库即可，不需要 pip install。地图和天气要联网。
+
+## 更新
+
+无论走哪条路径，更新都不会碰你的个人状态：`~/.to-where-for-what/preferences.md` 和行程目录都在 skill 之外，重装也不受影响。
+
+已装版本看 `skills/to-where-for-what/SKILL.md` frontmatter 里的 `version:` 字段；旁边的 `CHANGELOG.md` 记录版本间的变化——更新前读一眼，行为变化会提前标出，免得撞个措手不及。
+
+**如果你自己改过 skill 文件**（SKILL.md 规则、`build.py`、模板——高级用户的正当操作），请用 git 安装并把修改做成本地 commit；之后 `git pull --rebase` 就是带冲突标记的真三方合并。这是你的修改在更新后还能活着的唯一可靠方式——zip 覆盖会无声丢掉它们。轻量的个人规则更适合放 `preferences.md`，任何更新都碰不到那里。
+
+**当你问 AI 要不要更新时**，它会走 SKILL.md（"Updating this skill"）里的决策梯：有 git 元数据就看 `git status`；没有就把本地文件和 `version:` 指向的发布版本比对——没改过的安装直接覆盖更新，改过的逐文件三方合并，且始终以整个 skill 目录为合并单位（`build.py` 和模板是耦合的）。更新完会对现有行程重跑一遍 `validate.py`，接住数据契约的漂移。
 
 ## 它做什么
 

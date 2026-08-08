@@ -612,6 +612,29 @@ happens.
 
 ---
 
+## Updating this skill
+
+When the user asks whether or how to update this skill, in this order:
+
+1. **Reassure first**: `preferences.md` and the trips directory live outside
+   the skill and are untouched by any update path.
+2. **Detect local modifications** of the installed skill files. With git
+   metadata: `git status`. Without: read `version:` from this file's
+   frontmatter, fetch that release from the source repo, and diff — comparing
+   against *latest* instead would conflate the user's edits with upstream
+   evolution.
+3. **Unmodified** → overwrite with the new version.
+   **Modified** → three-way merge per file (installed version's original ×
+   the user's copy × the new version), and merge the skill directory **as one
+   unit** — `build.py` and the template are coupled; mixing versions breaks.
+4. Read `CHANGELOG.md` and tell the user the behavior changes before
+   applying, then re-run `validate.py` over existing trips afterwards.
+
+Rationale and the power-user recommendation (git install, local commits):
+repo README, "Updating".
+
+---
+
 ## Resource guide
 
 | File | When to read |
