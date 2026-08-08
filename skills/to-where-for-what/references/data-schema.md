@@ -44,6 +44,7 @@ back into it.
 | `bases` | array | | Home bases `[{name, coord, nights}]` |
 | `generated_at` | string | ✅ | `YYYY-MM-DD`, when the data was generated |
 | `verified_at` | string | ✅ | `YYYY-MM-DD`, last online verification. **If >30 days before today, the page shows a staleness warning** |
+| `retro` | `done`\|`skipped` | | Post-trip retro state (SKILL.md, "Retro on past trips"). Absent = not yet asked; either value = never ask again |
 
 ### Picking `theme_hue`
 
@@ -269,6 +270,20 @@ Without these three fields, stage D can only improvise.
 | `choice` | `null`\|`yes`\|`maybe`\|`no` | Always `null` when the AI generates |
 | `choice_reason` | string | The user's reason when picking "skip" |
 
+### Post-trip feedback (written only by the retro flow)
+
+Recorded when the user, asked after a trip has ended, reports how places
+actually turned out (SKILL.md, "Retro on past trips"). Both optional; only
+places the user volunteers get them — never fill by inference.
+
+| Field | Type | Notes |
+|---|---|---|
+| `verdict` | `loved`\|`ok`\|`disappointed` | How the visit actually landed. `choice` records what attracted before the trip; `verdict` records what delivered — the gap between them is the signal |
+| `verdict_note` | string | The user's reason, one line, their wording |
+
+Not rendered by the page (yet). The distilled conclusions go — with the user's
+confirmation — into the "Proven preferences" section of `preferences.md`.
+
 ---
 
 ## `itinerary[]` (scheduling result, written back by the page)
@@ -423,7 +438,8 @@ Rules:
 
 - Missing required field, or required string empty
 - Duplicate `id`
-- Illegal enum value (`tier` / `scale` / `status` / `booking` / `choice`)
+- Illegal enum value (`tier` / `scale` / `status` / `booking` / `choice` /
+  `verdict` / `trip.retro`)
 - `category` not defined in `categories`
 - `coord` missing, non-numeric, out of lat/lon range, or **outside `trip.bbox`**
 - `sources` empty, or containing a non-`http(s)` URL

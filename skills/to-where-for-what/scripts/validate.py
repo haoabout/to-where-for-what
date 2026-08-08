@@ -32,6 +32,8 @@ STATUSES = {"open", "renovating", "seasonal_closed", "permanently_closed"}
 BOOKINGS = {"required", "recommended", "none"}
 CHOICES = {None, "yes", "maybe", "no"}
 VERIFY_STATES = {"verified", "partial", "blocked"}
+VERDICTS = {"loved", "ok", "disappointed"}
+RETRO_STATES = {"done", "skipped"}
 
 # Every field the contract allows. Extra fields mean the AI invented its own
 # schema, and the template won't render them — silent loss is worse than an
@@ -43,6 +45,7 @@ KNOWN_PLACE_FIELDS = {
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
     "photo_note", "tags", "media", "museum", "images", "sources",
     "verify", "choice", "choice_reason", "origin",
+    "verdict", "verdict_note",
 }
 KINDS = {"attraction", "lodging"}
 ORIGINS = {"user"}
@@ -62,7 +65,7 @@ STUB_REQUIRED_ANY = {"coord", "sources"}
 KNOWN_TRIP_FIELDS = {
     "destination", "destination_local", "destination_en", "country", "bbox",
     "timezone", "output_language", "local_language", "dates", "days", "party",
-    "pace", "bases", "generated_at", "verified_at", "note",
+    "pace", "bases", "generated_at", "verified_at", "note", "retro",
 }
 
 # Required, and must not be an empty string
@@ -204,6 +207,10 @@ def check_top_level(doc, rep: Report) -> None:
                         "output_language is en/zh, which the template ships built-in — "
                         "the ui override is unnecessary and will shadow the built-in strings")
 
+    retro = trip.get("retro")
+    if retro is not None and retro not in RETRO_STATES:
+        rep.add("P0", "trip", f"retro={retro!r} is invalid; must be one of {sorted(RETRO_STATES)}")
+
     verified = _parse_date(trip.get("verified_at"))
     if verified:
         age = (date.today() - verified).days
@@ -269,6 +276,9 @@ def check_place(p, idx, doc, rep: Report) -> None:
             rep.add("P0", where, f"{field}={v!r} is invalid; must be one of {sorted(allowed)}")
     if "choice" in p and p["choice"] not in CHOICES:
         rep.add("P0", where, f"choice={p['choice']!r} is invalid")
+    v = p.get("verdict")
+    if v is not None and v not in VERDICTS:
+        rep.add("P0", where, f"verdict={v!r} is invalid; must be one of {sorted(VERDICTS)}")
 
     # Lodging belongs to no attraction category and takes part in no quota, so
     # it needn't appear in categories
