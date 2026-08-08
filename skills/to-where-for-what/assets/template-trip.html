@@ -1484,7 +1484,24 @@ pre.code{
    hover would be an error mark nobody sees. flex:none so it's the name that
    truncates, never the mark. */
 .ditem .conf{flex:none;width:14px;height:14px;border-radius:50%;display:grid;place-items:center;
-  background:var(--danger);color:#fff;font:700 10px/1 var(--mono);cursor:help}
+  background:var(--danger);color:#fff;font:700 10px/1 var(--mono);cursor:help;position:relative}
+/* Own tooltip instead of title="": the native one needs a ~1.5s motionless
+   hover, which reads as "nothing there". Content comes from aria-label so
+   sighted hover and screen reader speak the same words. A larger invisible
+   hit area (::before) because 14px is a needle to park a cursor on.
+   Centered over the icon. .day-col is an overflow-y:auto scroll container
+   (overflow-x computes to auto too), so anything past the column's right
+   edge would be clipped — but the ↑↓× ops after the icon reserve ~57px of
+   layout even while opacity:0, which keeps half a tooltip's width of room. */
+.ditem .conf::before{content:"";position:absolute;inset:-5px}
+.ditem .conf::after{
+  content:attr(aria-label);position:absolute;bottom:calc(100% + 5px);left:50%;
+  transform:translateX(-50%);z-index:6;
+  background:var(--ink);color:var(--paper);padding:3px 8px;border-radius:5px;
+  font:500 11px/1.5 var(--sans);white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .12s;
+}
+.ditem .conf:hover::after{opacity:1}
 .ditem .dops{display:flex;gap:1px;flex:none;opacity:0;transition:opacity .12s}
 .ditem:hover .dops,.ditem:focus-within .dops{opacity:1}
 @media (hover:none){ .ditem .dops{opacity:1} }
@@ -5697,7 +5714,7 @@ const MAP = (() => {
       return `<div class="ditem${lod ? " lod" : ""}" data-card="${esc(p.id)}" data-day="${d.n}" data-i="${i}">
           <span class="n" style="background:${lod ? "var(--lodging)" : dayColor(d.n)}">${lod ? house(11) : seq}</span>
           <button class="bare dnm" type="button" title="${esc(p.name)}${note ? " — " + esc(note) : ""}">${esc(p.name)}</button>
-          ${conf ? `<span class="conf" title="${esc(conf)}" role="img" aria-label="${esc(conf)}">!</span>` : ""}
+          ${conf ? `<span class="conf" role="img" aria-label="${esc(conf)}">!</span>` : ""}
           <span class="dops">
             <button class="dop" data-op="up"   title="${esc(T.moveUp)}" aria-label="${esc(T.moveUp)}">${ICON.up}</button>
             <button class="dop" data-op="down" title="${esc(T.moveDown)}" aria-label="${esc(T.moveDown)}">${ICON.down}</button>
