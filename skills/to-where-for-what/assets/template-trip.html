@@ -1918,10 +1918,19 @@ pre.code{
   background:var(--accent);border:2px dashed #fff;
   box-shadow:0 0 0 2.5px var(--accent),0 1px 6px rgba(0,0,0,.4);
 }
+/* Name label: centered above the dot (same anchoring as the schedule
+   column's conflict tooltip — one tooltip grammar page-wide). */
 .mk.on::after,.mk.hi::after{
-  content:attr(data-nm);position:absolute;left:15px;top:-7px;white-space:nowrap;
+  content:attr(data-nm);position:absolute;bottom:calc(100% + 6px);left:50%;
+  transform:translateX(-50%);white-space:nowrap;
   background:var(--ink);color:var(--paper);font-size:11px;padding:3px 8px;border-radius:5px;
 }
+/* The active marker must also rise above its siblings: markers stack in DOM
+   order, so a label from an early marker used to slide *under* later
+   markers' circles in dense clusters. Setting z-index is safe — the "never
+   set position or transform" warning above is about MapLibre's inline
+   transform, which z-index doesn't touch. */
+.mk:hover,.mk.on,.mk.hi{z-index:3}
 
 /* Static fallback: when every tile source is down, at least the relative
    positions stay readable */
