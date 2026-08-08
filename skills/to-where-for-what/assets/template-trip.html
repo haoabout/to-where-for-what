@@ -1287,7 +1287,13 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
    margin says "different kind of text" without touching the type at all. */
 .dlg-b .lede{border-inline-start:2px solid var(--gold);padding-inline-start:12px;margin-bottom:15px}
 .dlg-b .lede p:last-child{margin-bottom:0}
-.dlg-img{width:100%;border-radius:9px;margin-bottom:14px;display:block}
+/* Height cap, not a fixed aspect: landscape photos keep their shape, only
+   tall portraits get center-cropped (cover, never contain — same reasoning
+   as .media). Without it a 3:4 photo at 100% width runs ~880px tall and the
+   whole first screen of the dialog is image. 48vh keeps the cap meaningful
+   on short viewports where 420px would already be most of the dialog. */
+.dlg-img{width:100%;max-height:min(48vh,420px);object-fit:cover;
+  border-radius:9px;margin-bottom:14px;display:block}
 .credit{font-size:11px;color:var(--ink-3);margin:-9px 0 15px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:7px 15px;font-size:13.5px}
 .kv dt{color:var(--ink-3)}
@@ -3948,7 +3954,13 @@ function openDetail(id, from){
       <div class="dlg-f">${schedBtn(p)}${pickHTML(p)}</div>
     </div>`;
   dlgFrom(from);
-  $("#dlg").showModal();
+  const dlg = $("#dlg");
+  dlg.showModal();
+  // The dialog element itself is the scroll container (sticky header/footer
+  // position against it), and it survives across opens — without this, card
+  // B opens at wherever card A was scrolled to. After showModal(), not
+  // before: writes to a display:none element's scrollTop don't stick.
+  dlg.scrollTop = 0;
 }
 
 /* Since clicking a map marker now opens this dialog, the map side lost its
@@ -3983,6 +3995,7 @@ function askReason(id){
     </div>`;
   const dlg = $("#rdlg");
   dlg.showModal();
+  dlg.scrollTop = 0;   // same carryover as openDetail: the dialog is the scroll container
   $("#rdlg-inner").onclick = e => {
     const b = e.target.closest("button");
     if(!b) return;
@@ -4433,6 +4446,7 @@ function showCode(){
     </div>`;
   dlgFrom(null);   // no source card — open centred, and don't inherit the last card's offset
   $("#dlg").showModal();
+  $("#dlg").scrollTop = 0;   // same carryover as openDetail: the dialog is the scroll container
   $("#cp").onclick = async () => {
     // Measured: the embedded browser's navigator.clipboard throws
     // NotAllowedError — a text-selection fallback is mandatory
