@@ -136,7 +136,10 @@ On startup:
    accumulated. Match sections **by meaning, not by literal heading text** — an
    existing file may have been created from an older template in another language
    (e.g. Chinese); a heading in a different language is the same section, not a
-   missing one.
+   missing one. One exception to "ask first": a section that is **populated by a
+   flow, not by the user's answer** (currently "Proven preferences", written
+   only by the post-trip retro) has nothing to ask about — append it empty with
+   its explanatory text and mention in one line that it exists and fills itself.
 
 **Capture in-passing declarations.** When the user states something durably
 true mid-conversation — a dietary restriction, queue tolerance, "we always
