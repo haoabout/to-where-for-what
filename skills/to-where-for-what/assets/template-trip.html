@@ -1287,13 +1287,17 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
    margin says "different kind of text" without touching the type at all. */
 .dlg-b .lede{border-inline-start:2px solid var(--gold);padding-inline-start:12px;margin-bottom:15px}
 .dlg-b .lede p:last-child{margin-bottom:0}
-/* Height cap, not a fixed aspect: landscape photos keep their shape, only
-   tall portraits get center-cropped (cover, never contain — same reasoning
-   as .media). Without it a 3:4 photo at 100% width runs ~880px tall and the
-   whole first screen of the dialog is image. 48vh keeps the cap meaningful
-   on short viewports where 420px would already be most of the dialog. */
-.dlg-img{width:100%;max-height:min(48vh,420px);object-fit:cover;
-  border-radius:9px;margin-bottom:14px;display:block}
+/* Height cap without cropping: the photo always shows whole; whatever the
+   cap bites, the image shrinks preserving ratio and centers, side gaps
+   accepted (explicitly chosen over .media's cover-crop — a dialog hero is
+   for *looking at* the photo, unlike a grid tile). Without the cap a 3:4
+   photo at full width runs ~880px tall and the whole first screen of the
+   dialog is image. 48vh keeps the cap meaningful on short viewports where
+   420px would already be most of the dialog. width:auto + max-width makes
+   the element box hug the image, so the border-radius rounds the photo
+   itself, not a letterbox around it. */
+.dlg-img{max-width:100%;width:auto;max-height:min(48vh,420px);
+  border-radius:9px;margin:0 auto 14px;display:block}
 .credit{font-size:11px;color:var(--ink-3);margin:-9px 0 15px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:7px 15px;font-size:13.5px}
 .kv dt{color:var(--ink-3)}
