@@ -1943,14 +1943,15 @@ pre.code{
 }
 /* The active marker must also rise above its siblings, or its name label
    slides *under* neighboring circles in dense clusters. Every marker carries
-   an inline z-index 1–6 from styleDot's importance ladder (Z map), which is
-   why this needs !important — a bare class rule always loses to an inline
-   style. 7 sits just above that ladder and still below every map overlay
-   (search bar, legend, zoom: z-index 18+), per the constraint noted at the
-   Z map: markers share a stacking context with those overlays. Setting
-   z-index is safe — the "never set position or transform" warning above is
-   about MapLibre's inline transform, which z-index doesn't touch. */
-.mk:hover,.mk.on,.mk.hi{z-index:7 !important}
+   an inline z-index from styleDot's importance ladder (Z map: 1–6, and 9 for
+   dots on the selected day), which is why this needs !important — a bare
+   class rule always loses to an inline style. 12 sits above the whole ladder
+   including the day-focus boost, and still below every map overlay (search
+   bar, legend, zoom: z-index 18+), per the constraint noted at the Z map:
+   markers share a stacking context with those overlays. Setting z-index is
+   safe — the "never set position or transform" warning above is about
+   MapLibre's inline transform, which z-index doesn't touch. */
+.mk:hover,.mk.on,.mk.hi{z-index:12 !important}
 
 /* Static fallback: when every tile source is down, at least the relative
    positions stay readable */
@@ -2768,7 +2769,7 @@ en: {
   removeDayBlocked:"This day still has places — empty it first.",
   schedule:"Schedule", nDays:"{n} days",
   modeOne:"One day", modeAll:"All days", addDayTitle:"Add a day",
-  noCurHint:"No day selected — everything shows at full strength. Click a tab to focus one day (others dim on the map); double-click a tab to zoom to that day.",
+  noCurHint:"No day selected — everything shows at full strength. Click a tab to focus one day; other days dim on the map. Click it again to unfocus.",
   selectDayToast:"Select a day first, then click a dot to add places to it",
   pinSelectDay:"{name}: select a day first to add it",
   addFirst:"＋ Add the first day", addZero:"＋ Day 0 (arrival evening)", addTail:"＋ Add a day at the end",
@@ -2956,7 +2957,7 @@ zh: {
   removeDayBlocked:"这一天还有地点，先清空再删。",
   schedule:"日程", nDays:"{n} 天",
   modeOne:"单日", modeAll:"全部", addDayTitle:"加一天",
-  noCurHint:"未选中任何一天，全部行程正常显示。点标签可聚焦某一天（其他天在地图上变淡）；双击标签可缩放到那天的区域。",
+  noCurHint:"未选中任何一天，全部行程正常显示。点标签可聚焦某一天，其他天在地图上变淡；再点一次取消聚焦。",
   selectDayToast:"先选中一天，再点圆点把地点加进去",
   pinSelectDay:"{name}：先选中一天才能加入",
   addFirst:"＋ 加第一天", addZero:"＋ 第 0 天（抵达当晚）", addTail:"＋ 在末尾加一天",
@@ -5422,7 +5423,11 @@ const MAP = (() => {
      **below** the map overlays (basemap buttons, legend, zoom control,
      attribution). The first version used 60–500 and numbered dots covered the
      POI button — markers share a stacking context with those overlays. */
-  const Z = { placed: 6, lodging: 5, yes: 4, maybe: 3, none: 2, no: 1 };
+  // focus: dots on the *selected* day. With others dimmed to 30%, a covered
+  // full-strength dot under a translucent pile reads worse than either alone
+  // — the focused day must also win the stacking, not just the opacity.
+  // Still below the hover/label boost (12) and the map overlays (18+).
+  const Z = { focus: 9, placed: 6, lodging: 5, yes: 4, maybe: 3, none: 2, no: 1 };
 
   function dotSpec(p){
     const lod = isLodging(p);
@@ -5453,8 +5458,9 @@ const MAP = (() => {
     dot.style.borderRadius = s.lod ? "7px" : "50%";
     // z-index goes on the outer marker element — MapLibre's DOM markers stack
     // by document order, so without it whoever was created first sits at the
-    // bottom, with no relation to importance.
-    el.style.zIndex = s.z;
+    // bottom, with no relation to importance. Dots on the selected day take
+    // Z.focus, above the whole ladder (see the dim note below the ring code).
+    el.style.zIndex = (st.curDay != null && s.placed && s.days.includes(st.curDay)) ? Z.focus : s.z;
 
     // Fill.
     // Unscheduled uses MI().hollow, not var(--paper): markers are drawn on the
@@ -6662,38 +6668,6 @@ const MAP = (() => {
   function save(text, name, mime){
     saveFile(text, name, mime);
     toast(tf("exported", { name, n: selected().length }));
-  }
-
-  /* Double-click a day tab or day header: focus that day and fit the map to
-     its stops. A dblclick always arrives after its two clicks have already
-     run — with click-to-toggle those two clicks may have flipped the
-     selection twice — so the end state is pinned here: selected + zoomed,
-     whatever the intermediate flips did. */
-  document.addEventListener("dblclick", e => {
-    const t = e.target.closest(".caps button, .dhead .dh-btn");
-    if(!t) return;
-    const box = t.closest(".dbox");
-    const n = t.dataset.day != null ? +t.dataset.day : box ? +box.dataset.day : NaN;
-    if(Number.isNaN(n)) return;
-    if(st.curDay !== n) setCurDay(n);
-    focusDay(n);
-  });
-
-  /* Fit the map to one day's stops. Single point → plain fly-to; the
-     padding keeps edge stops from hiding under the toolbar and legend. */
-  function focusDay(n){
-    const day = ITIN.find(d => d.n === n);
-    if(!day || !st.map) return;
-    const ps = (day.places || []).map(e => BY_ID[e && e.id]).filter(p => geo(p));
-    if(!ps.length) return;
-    const lons = ps.map(p => p.coord.lon), lats = ps.map(p => p.coord.lat);
-    if(st.engine === "maplibre"){
-      st.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
-        { padding:64, maxZoom:15.5, duration:REDUCED.matches ? 0 : 620 });
-    }else if(st.engine === "leaflet"){
-      st.map.fitBounds([[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]],
-        { padding:[48, 48], maxZoom:15.5 });
-    }
   }
 
   /* ---------- Two-way hover linking ----------
