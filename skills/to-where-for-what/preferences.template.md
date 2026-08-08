@@ -46,6 +46,16 @@ interested" is left off the list entirely.
 - **Low**: <e.g. theme parks, shopping malls, influencer restaurants>
 - **Not interested — don't recommend**: <e.g. nightclubs, casinos>
 
+## Proven preferences
+
+Written only through the post-trip retro: after a trip ends, the AI asks which
+places were actually worth it and which disappointed, proposes a wording, and
+appends here **once you confirm it**. Each entry cites its evidence. When
+these conflict with the declared weights above, **these win** — a preference
+verified on the ground outranks one stated in advance.
+
+- <e.g. Long-queue viral food spots disappoint in practice (2026-04 Osaka: two marked "regretted") — rank them Low even where declared otherwise>
+
 ## Photography
 
 - **Importance**: <e.g. very — willing to reorder the day for a camera position>

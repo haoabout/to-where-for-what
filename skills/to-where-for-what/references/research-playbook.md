@@ -401,6 +401,14 @@ Set the base tier for "a traveler who likes this category", then adjust from
 The one-step ceiling is the point of the rule: matching the user's taste can
 lift a strong place to `S`, but it can never make a mediocre one `S`.
 
+**Proven preferences outrank declared ones.** When an entry in the "Proven
+preferences" section of `preferences.md` contradicts a declared weight (Low on
+nature, but three gardens loved on a past trip), adjust from the proven entry
+— it was paid for in shoe leather — and point the conflict out to the user,
+suggesting they update the declared weight. The one-step ceiling still
+applies. Likewise feed proven entries into the quota flexing above: a
+direction the user loved is treated as High even if they never declared it.
+
 **No preferences file, or one still full of `<placeholders>`** (first-time
 user): use the base tier and stop. Don't invent a taste profile.
 
