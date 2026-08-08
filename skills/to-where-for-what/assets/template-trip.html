@@ -1682,6 +1682,9 @@ pre.code{
   flex:none;padding:0 5px;border-radius:4px;font-size:10.5px;line-height:15px;
   background:var(--warn-soft);color:var(--ink);
 }
+/* Status closures (permanently closed / not operating) in the same colors as
+   .f-danger in the list view — one severity, one color, whichever column. */
+.mi .t .sub .w.hard{background:var(--danger-soft);color:var(--danger)}
 .mi.on{background:var(--paper-2)}
 .map-side .grp{
   position:sticky;top:0;background:var(--paper-2);padding:6px 12px;
@@ -5966,16 +5969,18 @@ const MAP = (() => {
      lives in the detail dialog; this line only has to make the place
      recognizable and flag whether there's a catch. */
   function warnOf(p){
-    // Soft notices only. The hard conflict — scheduled on a day it's closed —
-    // belongs to a (place, day) pair, not to the place, so it lives on the
-    // schedule row (dayConflict via dayBox) and in the detail flags. Keeping
-    // it here too once meant it lost the one-warning slot to "unverified"
-    // exactly when both applied.
-    if(p.status === "permanently_closed") return T.wClosed;
-    if(p.status && p.status !== "open") return T.wAbnormal;
-    if(p.verify && p.verify.state && p.verify.state !== "verified") return T.wUnverified;
-    if(p.booking === "required") return T.wBooking;
-    return "";
+    // The hard conflict — scheduled on a day it's closed — belongs to a
+    // (place, day) pair, not to the place, so it lives on the schedule row
+    // (dayConflict via dayBox) and in the detail flags. Keeping it here too
+    // once meant it lost the one-warning slot to "unverified" exactly when
+    // both applied. What remains splits in two: status closures are facts
+    // that kill the visit (hard → red, matching .f-danger in the list view),
+    // the rest are cautions (default chip).
+    if(p.status === "permanently_closed") return { txt:T.wClosed, hard:true };
+    if(p.status && p.status !== "open") return { txt:T.wAbnormal, hard:true };
+    if(p.verify && p.verify.state && p.verify.state !== "verified") return { txt:T.wUnverified };
+    if(p.booking === "required") return { txt:T.wBooking };
+    return null;
   }
 
   function metaLine(p){
@@ -5984,7 +5989,7 @@ const MAP = (() => {
     const bits = [SCALE_TXT[p.scale] || p.scale, shortPrice(p.ticket)].filter(Boolean);
     const w = warnOf(p);
     return bits.map(x => `<em>${esc(x)}</em>`).join(" · ")
-         + (w ? `<span class="w">${esc(w)}</span>` : "");
+         + (w ? `<span class="w${w.hard ? " hard" : ""}">${esc(w.txt)}</span>` : "");
   }
 
   function focus(id, fromMap){
