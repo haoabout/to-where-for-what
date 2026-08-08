@@ -3068,22 +3068,27 @@ const isLodging = p => !!p && p.kind === "lodging";
    "completed or not" test (validate.py uses the same rule). */
 const isStubP = p => !!p && p.origin === "user" && !p.tier;
 
-/* Must avoid green (yes) / amber (maybe) / gray (no), or fill and ring share
-   a family. Lightness also has to satisfy three constraints at once, and the
-   window is narrow (relative luminance L in 0.150–0.178):
+/* Eight hues across the full wheel. The old rule "avoid green (yes) / amber
+   (maybe) / gray (no), or fill and ring share a family" is retired: it had
+   already failed quietly (teal sat 30° from the yes-green, brown next door
+   to the maybe-amber) while costing half the wheel — and the white bands
+   around the choice ring (see styleDot) now do the layer separation
+   geometrically, so a green fill inside a green ring reads as two layers,
+   not one blob. What DOES survive is the lightness pin — it locks legibility,
+   not taste, and the window is narrow (relative luminance L ≈ 0.150–0.178):
      · white sequence digits stay legible  → L ≤ 0.179 (white text 4.5:1)
      · recognizable on a dark ground       → L ≥ 0.144 (3:1, WCAG 1.4.11)
      · recognizable on a light ground      → L ≤ 0.30
    The dark constraint outlived the dark page palette that produced it: these
    are also the marker colors on the basemap, which still switches light/dark
-   (see setMapDark), and the dark basemap is darker than that page ever was.
-   The old six colors were picked on the first constraint only; against a dark
-   ground #5D4037 hit just 1.81:1 and #C2185B 2.88 — and "which day is this"
-   rides entirely on this color code, so invisible = information lost. The six
-   hues stay; lightness is normalized to L≈0.162, and all four checks pass
-   measured (lowest 3.38). One value set for every ground, to preserve "map
-   and sidebar show the same data under the same rules". */
-const DAY_COLORS = ["#597481", "#2A6DD8", "#8E55C4", "#0E7C7D", "#D81B65", "#936657"];
+   (see setMapDark). All eight sit at L≈0.162; measured (WCAG formula): white
+   digits 4.91–5.00, dark ground ≥3.33, light ground ≥4.16. Array order is
+   "consecutive days get far-apart hues" — day 1 blue never sits next to a
+   neighbor hue; red(7) and orange(2) are never adjacent days. Index 0 stays
+   the quiet slate: it colors Day 0 (the arrival evening), which should read
+   as a prologue, not a headline. */
+const DAY_COLORS = ["#597481", "#2A6DD8", "#B0580B", "#8E55C4",
+                    "#1E8137", "#D81B65", "#0E7C7D", "#CE3922"];
 const dayColor = n => DAY_COLORS[((n % DAY_COLORS.length) + DAY_COLORS.length) % DAY_COLORS.length];
 /* A second, non-color channel for the same information, in the same place so
    the pairing stays 1:1 by construction.
@@ -3098,18 +3103,27 @@ const dayColor = n => DAY_COLORS[((n % DAY_COLORS.length) + DAY_COLORS.length) %
    basemap's glyph set, and this file has been burned by that before (see the
    arrow icon's note on "▶" simply not existing in the set we use). A dash
    pattern depends on nothing.
-   Six patterns because the colors already repeat every six days, so the pair
-   repeats together and the layer count stays bounded. Index 0 keeps the dash
-   the single route layer always used, so the common one-to-five-day trip
-   looks unchanged apart from the days that previously collided. Written in
+   Twelve patterns against eight colors: the cycles are coprime-ish
+   (LCM 24), so the color+dash pair stays unique for 24 days — a 14-day trip
+   never shows two identical route lines, even though the colors alone repeat
+   from day 9. This is also the second channel for color-vision deficiency:
+   green/teal and orange/red collapse under deutan/protan simulation, and the
+   dash is what still tells them apart. Index 0 keeps the dash the single
+   route layer always used, so short trips look unchanged. Written in
    line-width units, which is how MapLibre reads line-dasharray. */
 const DAY_DASH = [
-  [2.4, 1.4],             // medium dash — the original
-  [0.6, 1.3],             // dotted
-  [5.5, 1.6],             // long dash
-  [3.4, 1.3, 0.6, 1.3],   // dash-dot
-  [1.5, 1.5],             // even short dash
-  [8, 2.4],               // very long dash
+  [2.4, 1.4],                          // medium dash — the original
+  [0.6, 1.3],                          // dotted
+  [5.5, 1.6],                          // long dash
+  [3.4, 1.3, 0.6, 1.3],                // dash-dot
+  [1.5, 1.5],                          // even short dash
+  [8, 2.4],                            // very long dash
+  [3.4, 1.2, 0.6, 1.2, 0.6, 1.2],      // dash-dot-dot
+  [5.5, 1.4, 1.5, 1.4],                // long-short alternation
+  [0.6, 2.6],                          // sparse dots
+  [8, 1.6, 0.6, 1.6],                  // long-dot
+  [0.6, 1.2, 0.6, 1.2, 0.6, 3],        // dot triplets with a breath
+  [12, 2.2],                           // extra-long dash
 ];
 const dayDash = n => DAY_DASH[((n % DAY_DASH.length) + DAY_DASH.length) % DAY_DASH.length];
 
@@ -5450,21 +5464,26 @@ const MAP = (() => {
         + s.days.map((n, i) => `${dayColor(n)} ${i * step}% ${(i + 1) * step}%`).join(",") + ")";
     }
 
-    // Ring. When scheduled, a white band sits between the fill and the choice
-    // color — without it, a dark-blue fill against a green ring smears
-    // together on a busy basemap.
+    // Ring. Two white bands, one on each side of the choice color, doing the
+    // same job from opposite directions: the inner band (2px, scheduled dots
+    // only) keeps the day fill from smearing into the ring — it is also what
+    // freed DAY_COLORS to use the full hue wheel, green fill inside a green
+    // ring included (see that comment) — and the outer halo (1.25px, every
+    // ringed dot) keeps the ring's hue readable where it crosses parks and
+    // water instead of blending into the basemap.
     //
     // Lodging gets no choice color: it has no yes/maybe/no semantics, and
     // since its choice is always null, applying them would scatter "unrated"
     // amber rings everywhere — purely misleading.
     const shadow = "0 1px 5px rgba(0,0,0,.34)";
+    const halo = 1.25;
     if(s.lod){
       dot.style.boxShadow = `0 0 0 2px ${MI().ring}, ${shadow}`;
     }else{
       const c = COLOR[s.k];
       dot.style.boxShadow = s.placed
-        ? `0 0 0 1.5px ${MI().ring}, 0 0 0 ${1.5 + s.ring}px ${c}, ${shadow}`
-        : `0 0 0 ${s.ring}px ${c}, ${shadow}`;
+        ? `0 0 0 2px ${MI().ring}, 0 0 0 ${2 + s.ring}px ${c}, 0 0 0 ${2 + s.ring + halo}px ${MI().ring}, ${shadow}`
+        : `0 0 0 ${s.ring}px ${c}, 0 0 0 ${s.ring + halo}px ${MI().ring}, ${shadow}`;
     }
 
     // The number appears only once scheduled into a day; lodging is never numbered
