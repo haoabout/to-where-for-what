@@ -1439,6 +1439,12 @@ pre.code{
 }
 .caps button[aria-pressed=true]{color:var(--on-day)}
 .caps button[aria-pressed=true] .c{background:color-mix(in srgb,var(--on-day) 26%,transparent);color:var(--on-day)}
+/* State-shaped mode switch (One day | All days), replacing the old action
+   button whose label named the mode you'd land in — readable only after a
+   mental flip. A segmented control shows where you are; nothing to decode. */
+.dc-head .dmode{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:none}
+.dc-head .dmode button{border:0;background:none;padding:2px 8px;font:600 10.5px/1.6 var(--sans);color:var(--ink-3);cursor:pointer}
+.dc-head .dmode button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
 
 /* Each day: header + entries. Clicking the header makes it the current day */
 .dbox{border-bottom:1px solid var(--line-soft)}
@@ -2761,7 +2767,10 @@ en: {
   day0Label:"Day 0 (arrival evening)", dayN:"Day {n}",
   removeDayBlocked:"This day still has places — empty it first.",
   schedule:"Schedule", nDays:"{n} days",
-  collapseDays:"Collapse", flatDays:"Expand all", addDayTitle:"Add a day",
+  modeOne:"One day", modeAll:"All days", addDayTitle:"Add a day",
+  noCurHint:"No day selected — everything shows at full strength. Click a tab to focus one day (others dim on the map); double-click a tab to zoom to that day.",
+  selectDayToast:"Select a day first, then click a dot to add places to it",
+  pinSelectDay:"{name}: select a day first to add it",
   addFirst:"＋ Add the first day", addZero:"＋ Day 0 (arrival evening)", addTail:"＋ Add a day at the end",
   noDatesMsg:"The trip has no dates, so days can't be created automatically.<br>Use <b>+</b> above to add one.",
   emptyHintCur:"<b>Drag</b> places in from the left<br>or click a place's <b>dot</b>",
@@ -2946,7 +2955,10 @@ zh: {
   day0Label:"第 0 天（抵达当晚）", dayN:"第 {n} 天",
   removeDayBlocked:"这一天还有地点，先清空再删。",
   schedule:"日程", nDays:"{n} 天",
-  collapseDays:"收起", flatDays:"平铺", addDayTitle:"加一天",
+  modeOne:"单日", modeAll:"全部", addDayTitle:"加一天",
+  noCurHint:"未选中任何一天，全部行程正常显示。点标签可聚焦某一天（其他天在地图上变淡）；双击标签可缩放到那天的区域。",
+  selectDayToast:"先选中一天，再点圆点把地点加进去",
+  pinSelectDay:"{name}：先选中一天才能加入",
   addFirst:"＋ 加第一天", addZero:"＋ 第 0 天（抵达当晚）", addTail:"＋ 在末尾加一天",
   noDatesMsg:"行程没有日期信息，无法自动分天。<br>点右上角 <b>+</b> 手动加。",
   emptyHintCur:"把左边的景点<b>拖进来</b><br>或点它左边的<b>圆点</b>",
@@ -5253,7 +5265,9 @@ const MAP = (() => {
       if(pts.length < 2) continue;      // one point can't form a line
       const colour = dayColor(d.n);
       feats.push({ type:"Feature",
-        properties:{ n:d.n, colour, arrow:arrowId(colour), cur:d.n === st.curDay ? 1 : 0 },
+        // No selection (curDay null) = no focus: every line is "current",
+        // i.e. full strength. Selecting a day is what dims the rest.
+        properties:{ n:d.n, colour, arrow:arrowId(colour), cur:(st.curDay == null || d.n === st.curDay) ? 1 : 0 },
         geometry:{ type:"LineString", coordinates:pts } });
     }
     return { type:"FeatureCollection", features:feats };
@@ -5485,6 +5499,13 @@ const MAP = (() => {
         ? `0 0 0 2px ${MI().ring}, 0 0 0 ${2 + s.ring}px ${c}, 0 0 0 ${2 + s.ring + halo}px ${MI().ring}, ${shadow}`
         : `0 0 0 ${s.ring}px ${c}, 0 0 0 ${s.ring + halo}px ${MI().ring}, ${shadow}`;
     }
+
+    // Day focus: with a day selected, dots scheduled only on *other* days
+    // fade to match their route lines' 30%. The selected day's stops stay
+    // full — and so does the unscheduled pool, deliberately: the selected
+    // day is also the add-target, and the pool is what it's composed from.
+    // Opacity goes on the inner dot so fill, rings and number fade as one.
+    dot.style.opacity = (st.curDay != null && s.placed && !s.days.includes(st.curDay)) ? ".3" : "";
 
     // The number appears only once scheduled into a day; lodging is never numbered
     if(s.lod){
@@ -5725,7 +5746,7 @@ const MAP = (() => {
     if(i < 0) return;
     if((ITIN[i].places || []).length){ toast(T.removeDayBlocked); return; }
     ITIN.splice(i, 1);
-    if(st.curDay === n) st.curDay = ITIN.length ? ITIN[0].n : null;
+    if(st.curDay === n) st.curDay = null;   // deleting the focused day drops focus, it doesn't move it
     commit();
   }
 
@@ -5874,32 +5895,46 @@ const MAP = (() => {
         + `<div class="dempty">${T.noDatesMsg}</div>`;
       return;
     }
-    if(st.curDay == null || !ITIN.some(d => d.n === st.curDay)) st.curDay = ITIN[0].n;
+    // No day is forced anymore: null is a legal state meaning "no focus" —
+    // everything renders at full strength. Only an orphaned selection (its
+    // day was deleted) falls back, and it falls back to null, not to day 1.
+    if(st.curDay != null && !ITIN.some(d => d.n === st.curDay)) st.curDay = null;
     if(st.flat == null) st.flat = ITIN.length <= FLAT_MAX;
 
     const caps = st.flat ? "" : `<div class="caps">` + ITIN.map(d => {
       const cur = d.n === st.curDay;
+      // The count badge always wears the day's route color (inverted on the
+      // selected tab, whose body already is that color) — with the tabs
+      // collapsed this is the only place that says which color day 7 is.
+      const cBadge = cur ? `background:var(--on-day);color:${dayColor(d.n)}`
+                         : `background:${dayColor(d.n)};color:var(--on-day)`;
       return `<button data-day="${d.n}" aria-pressed="${cur}"
         style="${cur ? `background:${dayColor(d.n)};border-color:${dayColor(d.n)}` : ""}"
-        >D${d.n}<span class="c">${dayCount(d)}</span></button>`;
+        >D${d.n}<span class="c" style="${cBadge}">${dayCount(d)}</span></button>`;
     }).join("") + `</div>`;
 
     col.innerHTML =
       `<div class="dc-head">${T.schedule}<span class="sp">${tf("nDays", { n: ITIN.length })}</span>
-         <button id="day-mode" class="lnk">${st.flat ? T.collapseDays : T.flatDays}</button>
+         <span class="dmode" role="group">
+           <button data-dmode="one" aria-pressed="${!st.flat}">${T.modeOne}</button><button data-dmode="all" aria-pressed="${st.flat}">${T.modeAll}</button>
+         </span>
          <button id="day-add" class="lnk" title="${esc(T.addDayTitle)}" aria-label="${esc(T.addDayTitle)}">+</button></div>`
       + (st.addOpen ? `<div class="addmenu">`
           + (ITIN.some(d => d.n === 0) ? "" :
              `<button data-add="zero">${T.addZero}</button>`)
           + `<button data-add="tail">${T.addTail}</button></div>` : "")
       + caps
-      + ITIN.filter(d => st.flat || d.n === st.curDay).map(dayBox).join("");
+      + (st.flat ? ITIN.map(dayBox).join("")
+         : st.curDay != null ? ITIN.filter(d => d.n === st.curDay).map(dayBox).join("")
+         : `<div class="dempty">${T.noCurHint}</div>`);
     wireSortable();
   }
 
   function setCurDay(n){
     st.curDay = n;
-    renderDays();
+    // refresh(), not renderDays(): the selection now also dims markers (see
+    // styleDot), so the dots must repaint along with the column.
+    refresh();
     refreshRoute();   // the current day decides which line is solid and which drop to 30%
   }
 
@@ -5931,13 +5966,15 @@ const MAP = (() => {
   };
   function pinLabel(p){
     const d = curDayObj();
-    if(!d) return tf("pinNoSchedule", { name: p.name });
+    if(!d) return tf(ITIN.length ? "pinSelectDay" : "pinNoSchedule", { name: p.name });
     return tf(inCurDay(p.id) ? "pinRemove" : "pinAdd", { day: dayLabel(d), name: p.name });
   }
 
   function toggleInCurDay(id){
     const d = curDayObj();
-    if(!d){ toast(T.noScheduleToast); return; }
+    // Two different absences: no days exist at all vs. days exist but none
+    // is selected (the new null state) — each gets its own instruction.
+    if(!d){ toast(ITIN.length ? T.selectDayToast : T.noScheduleToast); return; }
     d.places = d.places || [];
     const at = d.places.map(e => e.id).lastIndexOf(id);
     if(at >= 0){
@@ -6627,6 +6664,38 @@ const MAP = (() => {
     toast(tf("exported", { name, n: selected().length }));
   }
 
+  /* Double-click a day tab or day header: focus that day and fit the map to
+     its stops. A dblclick always arrives after its two clicks have already
+     run — with click-to-toggle those two clicks may have flipped the
+     selection twice — so the end state is pinned here: selected + zoomed,
+     whatever the intermediate flips did. */
+  document.addEventListener("dblclick", e => {
+    const t = e.target.closest(".caps button, .dhead .dh-btn");
+    if(!t) return;
+    const box = t.closest(".dbox");
+    const n = t.dataset.day != null ? +t.dataset.day : box ? +box.dataset.day : NaN;
+    if(Number.isNaN(n)) return;
+    if(st.curDay !== n) setCurDay(n);
+    focusDay(n);
+  });
+
+  /* Fit the map to one day's stops. Single point → plain fly-to; the
+     padding keeps edge stops from hiding under the toolbar and legend. */
+  function focusDay(n){
+    const day = ITIN.find(d => d.n === n);
+    if(!day || !st.map) return;
+    const ps = (day.places || []).map(e => BY_ID[e && e.id]).filter(p => geo(p));
+    if(!ps.length) return;
+    const lons = ps.map(p => p.coord.lon), lats = ps.map(p => p.coord.lat);
+    if(st.engine === "maplibre"){
+      st.map.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+        { padding:64, maxZoom:15.5, duration:REDUCED.matches ? 0 : 620 });
+    }else if(st.engine === "leaflet"){
+      st.map.fitBounds([[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]],
+        { padding:[48, 48], maxZoom:15.5 });
+    }
+  }
+
   /* ---------- Two-way hover linking ----------
      Mouse over a list entry → the matching map marker enlarges and shows its
      name; mouse over a map marker → the matching entry highlights.
@@ -6700,17 +6769,23 @@ const MAP = (() => {
       if(hint) hint.textContent = open ? T.legendCollapse : T.legendExpand;
       return;
     }
-    const dm = e.target.closest("#day-mode");
-    if(dm){ st.flat = !st.flat; renderDays(); return; }
+    const dm = e.target.closest("[data-dmode]");
+    if(dm){ st.flat = dm.dataset.dmode === "all"; renderDays(); return; }
     const da = e.target.closest("#day-add");
     if(da){ st.addOpen = !st.addOpen; renderDays(); return; }
     const am = e.target.closest(".addmenu button");
     if(am){ st.addOpen = false; addDay(am.dataset.add); return; }
     if(st.addOpen && !e.target.closest(".addmenu")){ st.addOpen = false; renderDays(); }
+    // Clicking the already-selected day deselects it — null (no focus) is a
+    // first-class state, not an error.
     const cap = e.target.closest(".caps button");
-    if(cap){ setCurDay(+cap.dataset.day); return; }
+    if(cap){ const n = +cap.dataset.day; setCurDay(n === st.curDay ? null : n); return; }
     const dh = e.target.closest(".dhead");
-    if(dh && !e.target.closest("[data-delday]")){ setCurDay(+dh.parentElement.dataset.day); return; }
+    if(dh && !e.target.closest("[data-delday]")){
+      const n = +dh.parentElement.dataset.day;
+      setCurDay(n === st.curDay ? null : n);
+      return;
+    }
     const mf = e.target.closest(".mfil");
     if(mf){
       const on = mf.getAttribute("aria-pressed") === "true";
