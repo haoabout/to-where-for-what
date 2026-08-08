@@ -32,6 +32,42 @@ Write the `label` values in the user's language. Quotas may be tuned to the
 destination's character, but **never silently** — if you adjust, say so at
 delivery.
 
+### Flex quotas toward interest — but floors are hard
+
+The interest weights in `preferences.md` bend the quotas: a **High** category
+aims at its Max, a **Low** category at its Min. Two hard edges:
+
+- **No category drops below its Min because of a weight.** Only an entry under
+  "Not interested — don't recommend" removes a category outright. Low means
+  "rank it lower", not "stop offering it" — the Min floors are what keeps one
+  sentence ("we're into architecture") from collapsing the whole list into
+  architecture.
+- The flexed table is announced in the A1½ confirmation like any other quota
+  adjustment — never silently.
+
+### Non-preferred categories must stand on their own merit
+
+Quotas police the labels; this rule polices the selection reason. When filling
+a category the user is lukewarm about, pick the best of *that category* — not
+a flavored variant of what they already like. A Tadao Ando-designed park
+filling the `nature` quota is architecture wearing a nature label, and the
+diversity the floors were supposed to guarantee quietly disappears. Test every
+cross-category pick: **would it still make this list if the user had never
+stated that interest?**
+
+### Wildcard slots — 2–3 deliberate off-profile picks
+
+Reserve 2–3 places per search that sit **outside the user's stated profile**
+but carry exceptional local reputation — the exploration slice a feed
+algorithm would keep. Rules:
+
+- They ride on top of the category quotas — never crowd a category below Min
+- The `pitch` says honestly what each one is: "not your usual profile, but
+  locals rate it exceptionally — judge for yourself"
+- Wildcards are how the profile grows: one the user later reports loving (the
+  retro loop, SKILL.md) promotes that direction in the next trip's quotas and
+  tiers
+
 ### What about small cities
 
 When a quota can't be met, in order:
