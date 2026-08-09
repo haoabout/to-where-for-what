@@ -274,7 +274,6 @@
      Scoped to .card: --shadow stays soft for the eight other things that use it
      (dialogs, map capsules, the A4 sheets), where a hard edge would read as a
      misprint rather than as depth. */
-  --shadow-card:3px 3px 0 var(--line-2);
   --shadow-lift:7px 7px 0 var(--line);
   /* The theme ships eight shadow steps, 2xs through 2xl. Measured on the source
      page, only one of them is ever applied: --shadow-xs, at alpha .08, on 30 of
@@ -804,22 +803,22 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    of black boxes and buried the cards it was supposed to emphasise. */
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
-  box-shadow:var(--shadow-card);overflow:hidden;
+  overflow:hidden;
   transition:border-color .15s,opacity .2s,transform .15s ease-out,box-shadow .15s ease-out;
   display:flex;flex-direction:column;padding:var(--card-pad);
   /* The whole card opens the detail dialog (see the click handler), so the
      whole card has to say so. */
   cursor:pointer;
 }
-/* Lifts on hover. The resting shadow is deliberately almost nothing — depth
-   on this page is the outline's job — so the lift is what carries "this is a
-   thing you can pick up", and it needs a real shadow under it or the card
-   just appears to have jumped.
+/* Lifts on hover. Cards rest flat — no shadow at all; depth on this page is
+   the outline's job — so the lift is what carries "this is a thing you can
+   pick up", and it needs a real shadow under it or the card just appears to
+   have jumped.
 
-   The travel is diagonal now, up *and* left, against a shadow that grows down
+   The travel is diagonal, up *and* left, against a shadow that grows down
    and right: with a hard shadow the gap between the card and its silhouette is
    the entire depth cue, so moving along the same axis the shadow grows on is
-   what opens that gap. 3px of travel against 4px of extra offset reads as 7px
+   what opens that gap. 3px of travel against 7px of offset reads as 10px
    of lift while the card itself barely moves. */
 .card:hover{
   border-color:var(--ink);transform:translate(-3px,-3px);box-shadow:var(--shadow-lift);
