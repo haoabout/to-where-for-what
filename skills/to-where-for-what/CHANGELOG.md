@@ -14,6 +14,58 @@ Bump rules:
 
 ---
 
+## 2.0.0 — 2026-08-10
+
+### Removed
+
+- **Museum deep-dive and film/anime pilgrimage modules**:
+  `references/museum-module.md` and `references/media-pilgrimage.md` deleted
+  (unreviewed; recoverable from git history). The `media` / `museum` place
+  fields left the data contract and `validate.py`'s field allowlist with
+  them. The museum and media **categories stay** — such places are still
+  searched, quota'd, and listed; only the specialized deep-dive treatment is
+  gone.
+- **`to-where-for-what-lite`**: the companion skill is removed. Its guard
+  against over-triggering moved into the main skill's description — a casual
+  "what's worth seeing in X" is answered directly in conversation (verified,
+  with sources), and the pipeline starts only when the user asks to plan.
+- Two delivery-statement items in `checklist.md`: the RTL-layout caveat and
+  the Xiaohongshu/Bilibili coverage caveat.
+
+### Added
+
+- **Stage-A subagent briefing** (`references/subagent-briefing.md`): a
+  fill-in prompt template for search subagents — they read the playbook and
+  schema themselves; the template pins subagent-specific rules (own partial
+  file only, no scripts, honest shortfall reporting, only search-relevant
+  preference lines passed in).
+- **`references/updating.md`**: the skill-update flow, extracted from
+  SKILL.md; loaded only when the user asks about updating.
+- Tables of contents with read-when annotations atop `data-schema.md` and
+  `research-playbook.md`.
+
+### Changed / fixed
+
+- Command examples in references now use the `<PY>` placeholder instead of a
+  hardcoded `python3`; `enrich.py`'s completion hint prints the actual
+  interpreter it ran under.
+- Known limitations deduplicated: `checklist.md` "Must be stated at
+  delivery" is the single authoritative list; SKILL.md keeps a pointer.
+- SKILL.md slimmed; trip-page cards drop their resting shadow (hover only).
+
+### Notes for updaters
+
+- **`schema_version` stays 1 — nothing hard-breaks.** Trips created under
+  1.x that carry `media` / `museum` fields still open, build, and pass P0;
+  `validate.py` now emits a P2 "outside the contract" note for them. Leaving
+  the fields in place is safe; deleting them silences the note. (The trip
+  page never rendered these objects — they only fed guide writing.)
+- If you had installed the skill pair, delete the `to-where-for-what-lite`
+  directory; nothing references it anymore.
+- MAJOR because capabilities were removed and the `places[]` contract
+  narrowed — update deliberately, and reread "Stage A" if you relied on the
+  museum/media deep dives.
+
 ## 1.1.0 — 2026-08-08
 
 ### Added
