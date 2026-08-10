@@ -596,7 +596,10 @@ def main() -> int:
         with open(args.path, "w", encoding="utf-8") as f:
             json.dump(doc, f, ensure_ascii=False, indent=2)
         print(f"\n✓ Filled {n} item(s) and wrote back to {args.path}")
-        print("  Next: python3 validate.py <places.json> --check-links")
+        # Print the current interpreter rather than a hardcoded python3 — on
+        # Windows the python.org installer doesn't install python3.exe, and
+        # the system's alias of that name opens the Microsoft Store.
+        print(f"  Next: {Path(sys.executable).name} validate.py <places.json> --check-links")
     elif not args.transit:
         print("\nNothing to fill")
     return 0
