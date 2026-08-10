@@ -67,14 +67,10 @@ Drop one, or reorder them, and the question gets worse.
 
 Worked example, asking for `trips_root` on first use:
 
-> **Where to store** ← 1
-> First run, so I need somewhere to keep trip files. I won't ask again. ← 2
-> I'd suggest `~/travel-plans/` — it stays findable when you're working from a
-> different project directory. ← 3
-> A) `~/travel-plans/` (recommended)
-> B) Here, in the current directory — "continue my Kyoto trip" asked from
->    somewhere else won't find it
-> C) Let me pick a path ← 4
+> **Where to store** ←1 · First run, so I need somewhere to keep trip files;
+> I won't ask again ←2 · I'd suggest `~/travel-plans/` — it stays findable
+> later from any directory ←3 · A) `~/travel-plans/` (recommended)
+> B) the current directory C) let me pick a path ←4
 
 Beats 1 and 2 apply even when there is nothing to choose. The handoff into
 stages B + C is the highest-stakes case: the user leaves the conversation to
@@ -386,13 +382,10 @@ Key points:
   very first build. Only a rough area so far? Note it in `brief.md` and add
   the entry when the booking lands. This is the step that keeps getting
   forgotten — the user reads the map around their hotel
-- Set **`trip.theme_hue`** — one integer that colours the page's title band for
-  this trip. Take the destination's dominant material or landscape, the colour of
-  what the user will actually be looking at (Osaka's neon ≈ 334, Kyoto's moss and
-  timber ≈ 128, Nara's deer and earthen walls ≈ 55). **Never derive it from a
-  mood word, a flag, or a cuisine** — adjectives collapse into stereotype and
-  keep yielding the same three colours. **All 360 hues are available**, blue
-  included — no range is reserved and no hue is refused. Full rules:
+- Set **`trip.theme_hue`** — one integer that colours the page's title band.
+  Derive it from the destination's dominant material or landscape — never
+  from a mood word, a flag, or a cuisine. All 360 hues are available. Full
+  rules and examples:
   [data-schema.md](references/data-schema.md#picking-theme_hue)
 
 ### A3. Fill coordinates & images · validate · build
@@ -614,24 +607,10 @@ what's achievable"), `file://` degradation in "Stages B + C" above.
 
 ## Updating this skill
 
-When the user asks whether or how to update this skill, in this order:
-
-1. **Reassure first**: `preferences.md` and the trips directory live outside
-   the skill and are untouched by any update path.
-2. **Detect local modifications** of the installed skill files. With git
-   metadata: `git status`. Without: read `version:` from this file's
-   frontmatter, fetch that release from the source repo, and diff — comparing
-   against *latest* instead would conflate the user's edits with upstream
-   evolution.
-3. **Unmodified** → overwrite with the new version.
-   **Modified** → three-way merge per file (installed version's original ×
-   the user's copy × the new version), and merge the skill directory **as one
-   unit** — `build.py` and the template are coupled; mixing versions breaks.
-4. Read `CHANGELOG.md` and tell the user the behavior changes before
-   applying, then re-run `validate.py` over existing trips afterwards.
-
-Rationale and the power-user recommendation (git install, local commits):
-repo README, "Updating".
+When the user asks whether or how to update this skill, read
+[references/updating.md](references/updating.md) **before answering** — the
+order of operations there matters (reassure about user data first, detect
+local edits, then merge the directory as one unit).
 
 ---
 
@@ -645,6 +624,7 @@ repo README, "Updating".
 | [references/museum-module.md](references/museum-module.md) | When the route includes museums |
 | [references/media-pilgrimage.md](references/media-pilgrimage.md) | When covering film/anime spots |
 | [references/checklist.md](references/checklist.md) | Before delivery |
+| [references/updating.md](references/updating.md) | When the user asks to update this skill |
 | `scripts/enrich.py` | Fill coordinates & images, after the `places.json` body is written |
 | `scripts/validate.py` | After every `places.json` change |
 | `scripts/build.py` | Generate/update the page |
