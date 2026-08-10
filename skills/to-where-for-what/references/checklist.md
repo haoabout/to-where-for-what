@@ -11,8 +11,11 @@ Every item comes from a mistake actually made.
 ### 0-1. `validate.py` reports zero P0
 
 ```bash
-python3 <SKILL_ROOT>/scripts/validate.py trips/<trip>/places.json --check-links
+<PY> <SKILL_ROOT>/scripts/validate.py trips/<trip>/places.json --check-links
 ```
+
+(`<PY>` is the Python command probed once per conversation — see SKILL.md,
+"Which interpreter runs the scripts". Never hardcode `python3`.)
 
 Exit code must be 0. P0s are the problems that break the page or mislead the
 user.

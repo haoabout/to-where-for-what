@@ -249,8 +249,11 @@ A good guide leaves room:
 ## After writing
 
 ```bash
-python3 <SKILL_ROOT>/scripts/build.py trips/<trip> --serve
+<PY> <SKILL_ROOT>/scripts/build.py trips/<trip> --serve
 ```
+
+(`<PY>` is the Python command probed once per conversation — see SKILL.md,
+"Which interpreter runs the scripts". Never hardcode `python3`.)
 
 Then **actually open the page and look**:
 
@@ -267,5 +270,5 @@ Then **actually open the page and look**:
 To share the guide alone (without the filtering UI):
 
 ```bash
-python3 <SKILL_ROOT>/scripts/build.py trips/<trip> --standalone
+<PY> <SKILL_ROOT>/scripts/build.py trips/<trip> --standalone
 ```
