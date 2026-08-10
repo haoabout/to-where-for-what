@@ -130,11 +130,6 @@ needs information to trade off with, not a brochure.
 
 Rain swaps, what to cut when short on time, where the `maybe`s slot in.
 
-### 2-4. Museum highlights confirmed currently on display
-
-Rotation, loans, and restoration are routine. If unverifiable, note in `tips`:
-check the official site before departure.
-
 ---
 
 ## Must be stated at delivery

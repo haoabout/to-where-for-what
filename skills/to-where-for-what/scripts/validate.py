@@ -43,7 +43,7 @@ KNOWN_PLACE_FIELDS = {
     "parent_id", "area", "coord", "hours", "last_entry", "closed_days",
     "closed", "ticket", "booking", "booking_url", "status", "status_note",
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
-    "photo_note", "tags", "media", "museum", "images", "sources",
+    "photo_note", "tags", "images", "sources",
     "verify", "choice", "choice_reason", "origin",
     "verdict", "verdict_note",
 }

@@ -257,8 +257,6 @@ Without these three fields, stage D can only improvise.
 | `photo_index` | int 1–5 | ✅ | Photogenic score. Anchors: [research-playbook.md](research-playbook.md), "Grading". Shown in the detail dialog only — not on the card |
 | `photo_note` | string | | What the shot looks like and how to take it, e.g. "bamboo path in the garden; best front-lit in the morning" (missing = P2) |
 | `tags` | string[] | | e.g. `["hidden gem","film location","rainy-day indoor"]` |
-| `media` | object | | Film/anime pilgrimage only: `{title, title_local, scene}` |
-| `museum` | object | | Museum deep-dive module, structure in `museum-module.md` |
 
 ### Images and sources
 

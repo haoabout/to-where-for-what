@@ -501,11 +501,6 @@ Key points:
   sheet, and aim each section at one sheet — roughly 1,300–1,500 CJK
   characters. Page count is not fixed; type size is the same on every sheet
 
-When the route includes museums or galleries, apply
-**[references/museum-module.md](references/museum-module.md)** for the deep
-dive. For film/anime pilgrimage spots, see
-**[references/media-pilgrimage.md](references/media-pilgrimage.md)**.
-
 Rebuild when done:
 
 ```bash
@@ -597,11 +592,9 @@ happens.
 The single authoritative list — every limitation worth stating at delivery,
 with how to phrase it — is [checklist.md](references/checklist.md), section
 "Must be stated at delivery"; it is read before every delivery anyway, and
-keeping one copy stops the lists from drifting apart. The two limitations
-that also shape earlier work are documented where that work happens:
-Xiaohongshu / Bilibili walls in
-[media-pilgrimage.md](references/media-pilgrimage.md) ("Be upfront about
-what's achievable"), `file://` degradation in "Stages B + C" above.
+keeping one copy stops the lists from drifting apart. The one limitation
+that also shapes earlier work is documented where that work happens:
+`file://` degradation, in "Stages B + C" above.
 
 ---
 
@@ -621,8 +614,6 @@ local edits, then merge the directory as one unit).
 | [references/data-schema.md](references/data-schema.md) | Before writing `places.json` — required |
 | [references/research-playbook.md](references/research-playbook.md) | Before stage-A searching — required |
 | [references/route-design.md](references/route-design.md) | Before stage-D routing — required |
-| [references/museum-module.md](references/museum-module.md) | When the route includes museums |
-| [references/media-pilgrimage.md](references/media-pilgrimage.md) | When covering film/anime spots |
 | [references/checklist.md](references/checklist.md) | Before delivery |
 | [references/updating.md](references/updating.md) | When the user asks to update this skill |
 | `scripts/enrich.py` | Fill coordinates & images, after the `places.json` body is written |
