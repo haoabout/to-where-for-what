@@ -23,12 +23,8 @@ Works with Claude Code, Codex, Cursor, OpenCode and 70+ other tools (via the
 [Vercel skills CLI](https://github.com/vercel-labs/skills)). Once installed,
 just say "help me plan a trip to Osaka" and it triggers.
 
-Manual install: copy **both** `skills/to-where-for-what/` and `skills/to-where-for-what-lite/`
-into `~/.claude/skills/` (or your tool's equivalent skills directory). They are
-a pair — `to-where-for-what-lite` answers "what's worth seeing in X" straight in the
-conversation, and `to-where-for-what` hands off to it whenever you haven't asked
-for an itinerary. Install only the planner and a casual question drags you into
-the full opening questionnaire.
+Manual install: copy `skills/to-where-for-what/` into `~/.claude/skills/` (or
+your tool's equivalent skills directory).
 
 **Requirements**: Python 3.9+, standard library only — no pip install. The map
 and weather need a network connection.

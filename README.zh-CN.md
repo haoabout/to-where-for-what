@@ -19,7 +19,7 @@ npx skills add haoabout/to-where-for-what
 
 支持 Claude Code、Codex、Cursor、OpenCode 等 70+ 工具（基于 [Vercel skills CLI](https://github.com/vercel-labs/skills)）。安装后，提出行程规划请求——如「帮我规划去大阪的行程」——即可触发。
 
-手动安装：将 `skills/to-where-for-what/` 与 `skills/to-where-for-what-lite/` **两个目录**一并拷入 `~/.claude/skills/`（或所用工具对应的 skills 目录）。二者配套使用——`to-where-for-what-lite` 在对话中直接回答「X 有什么值得去」，`to-where-for-what` 在问题未涉及行程规划时会将其转交。若只安装规划部分，一句随口的询问也会进入完整的开场问卷流程。
+手动安装：将 `skills/to-where-for-what/` 拷入 `~/.claude/skills/`（或所用工具对应的 skills 目录）。
 
 **依赖**：Python 3.9+，仅标准库，无需 pip install。地图与天气需要网络连接。
 
