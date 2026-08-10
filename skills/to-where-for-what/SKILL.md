@@ -352,10 +352,12 @@ In the same message, set two expectations:
   anything is happening.
 - **If you can spawn subagents, search in them, not in the main
   conversation.** Dozens of searches' worth of intermediate results otherwise
-  bloat the context that stages B–D still need. Split by category group if
-  you parallelize — but **parallel agents must never write the same file**:
-  each writes its own `partial-<group>.json` in the trip directory, and you
-  merge them into `places.json` afterwards (dedupe by name and coordinates),
+  bloat the context that stages B–D still need. Build each subagent's prompt
+  from **[references/subagent-briefing.md](references/subagent-briefing.md)**
+  — copy the template, fill the placeholders; don't improvise the prompt (a
+  subagent inherits nothing from this conversation, including every rule
+  you've read). Parallel agents never write the same file: each writes its
+  own `partial-<group>.json`, and you merge into `places.json` afterwards,
   then run A3 yourself. No subagent capability (plain chat, Codex)? Search in
   the main conversation as before — the time warning matters even more then.
 
@@ -613,6 +615,7 @@ local edits, then merge the directory as one unit).
 |---|---|
 | [references/data-schema.md](references/data-schema.md) | Before writing `places.json` — required |
 | [references/research-playbook.md](references/research-playbook.md) | Before stage-A searching — required |
+| [references/subagent-briefing.md](references/subagent-briefing.md) | When spawning stage-A search subagents |
 | [references/route-design.md](references/route-design.md) | Before stage-D routing — required |
 | [references/checklist.md](references/checklist.md) | Before delivery |
 | [references/updating.md](references/updating.md) | When the user asks to update this skill |
