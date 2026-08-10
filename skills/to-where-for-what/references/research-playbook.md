@@ -8,6 +8,25 @@ valid one.** If they pick "want to go" and it turns out the place is closed that
 day, under renovation, or requires booking a month ahead, the whole filtering
 round was wasted.
 
+## Contents
+
+First time here, read the whole file. Returning for one thing, jump straight
+to it:
+
+- [Category quotas](#category-quotas) — incl. flexing toward interests (floors
+  are hard), wildcard slots, small cities, `event`
+- [Information that must be in the first pass](#information-that-must-be-in-the-first-pass)
+- [Search strategy](#search-strategy) — sources hierarchy, two pages per
+  place, snippets are not a source, unverifiable ≠ delete, fake official
+  domains, exhibition runs, hidden gems, micro-spots
+- [Anti-hallucination](#anti-hallucination) — `sources` hard gate, never
+  guess `status`, image sourcing (Wikimedia: API only), no-vision fallback
+- [Getting coordinates](#getting-coordinates) — scripts do this, not you
+- [Grading: `tier` and `photo_index`](#grading-tier-and-photo_index) — read
+  when assigning either; incl. the distribution check
+- [Writing the copy](#writing-the-copy) — `pitch` / `detail` division of labor
+- [Pre-output self-check](#pre-output-self-check)
+
 ---
 
 ## Category quotas

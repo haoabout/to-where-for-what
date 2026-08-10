@@ -7,6 +7,29 @@ back into it.
 **Hard rule: never invent fields.** If you need a new field, change this file and
 `scripts/validate.py` first, then use it.
 
+## Contents
+
+First time here, read the whole file — it is the contract. Returning for one
+thing, jump straight to it:
+
+- [Top-level structure](#top-level-structure) — incl. when `schema_version` bumps
+- [`trip`](#trip) — trip metadata · [Picking `theme_hue`](#picking-theme_hue)
+- [`categories`](#categories)
+- [`places[]`](#places) — the bulk of the contract:
+  - [Identity and classification](#identity-and-classification) — incl.
+    [Lodging](#lodging-kind-lodging) and [User stubs](#user-stubs-origin-user)
+    (read the latter when completing map-added places)
+  - [Location](#location) · [Opening information](#opening-information-must-be-fetched-online-in-the-first-pass-of-stage-a) ·
+    [Verification state](#verification-state-verify)
+  - [Route-planning fuel](#route-planning-fuel) · [Content](#content) ·
+    [Images and sources](#images-and-sources)
+  - [User choices](#user-choices-written-back-by-the-page-the-ai-must-not-pre-fill) — page-written, never pre-fill
+  - [Post-trip feedback](#post-trip-feedback-written-only-by-the-retro-flow) — only in the retro flow
+- [`itinerary[]`](#itinerary-scheduling-result-written-back-by-the-page) — page-written; read before any stage-D edit
+- [`ui`](#ui-ui-string-overrides--only-for-languages-other-than-enzh) — only when output language is neither en nor zh
+- [Complete example](#complete-example)
+- [Validation levels](#validation-levels) — when triaging `validate.py` output
+
 ---
 
 ## Top-level structure
