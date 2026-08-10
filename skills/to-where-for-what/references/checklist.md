@@ -145,9 +145,6 @@ Without these, the user forms wrong expectations:
   before departure
 - [ ] **Ticket amounts are estimates** — special exhibitions, add-on
   experiences, and night surcharges usually cost extra
-- [ ] **Which film/anime spots may be incomplete** — Xiaohongshu / Bilibili
-  were attempted; wherever they were walled off, coverage relies on
-  second-hand write-ups
 - [ ] **If the model has no vision capability**: say that images passed text
   checks only, not visual review — a wrong-looking photo spotted while
   filtering is worth reporting; swapping is cheap
