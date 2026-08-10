@@ -157,10 +157,6 @@ Without these, the user forms wrong expectations:
 - [ ] **Transit-line quality varies by city** — lines and official colors come
   from OSM's `colour` tag; where a city lacks them the map falls back to
   auto-assigned colors and says so in the legend
-- [ ] **RTL languages (ar / he / fa …) render left-to-right** — the `ui`
-  override table translates every string, but columns, icons, and the map
-  toolbar are not mirrored. State this only when delivering a trip in one of
-  these languages
 - [ ] How many places remain **undecided** — want another look?
 
 ---
