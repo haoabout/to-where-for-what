@@ -44,8 +44,8 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
   display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
   align-items:center;
 }
-#center{display:flex; flex-direction:column; align-items:center; gap:12px; padding:14px 0 6px}
-#deck{position:relative; width:min(380px,88vw); height:clamp(340px, calc(100vh - 330px), 500px)}
+#center{display:flex; flex-direction:column; align-items:center; gap:28px; padding:14px 0 6px}
+#deck{position:relative; width:min(380px,88vw); height:clamp(320px, calc(100vh - 380px), 500px)}
 
 .card{
   position:absolute; inset:0;
@@ -114,12 +114,13 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .pstack{position:relative; width:128px; height:92px}
 .pstack .mini{
   position:absolute; inset:6px; border-radius:9px; overflow:hidden;
-  background:var(--paper-2); border:1px solid var(--line);
+  background:var(--card); border:1px solid var(--line); padding:4px;
 }
-.pstack .mini img{width:100%; height:100%; object-fit:cover; display:block}
+.pstack .mini img{width:100%; height:100%; object-fit:cover; display:block; border-radius:5px; background:var(--paper-2)}
 .pstack .mini .mname{
-  position:absolute; left:0; right:0; bottom:0; font-size:9.5px; font-weight:700;
+  position:absolute; left:4px; right:4px; bottom:4px; font-size:9.5px; font-weight:700;
   color:#fff; background:rgba(14,14,14,.62); padding:2px 5px;
+  border-radius:0 0 5px 5px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .pstack .mini.pop{animation:pop .3s ease}
@@ -152,21 +153,17 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
   .side .ptitle{border-color:var(--line); background:var(--card)}
   .side.no{left:10px; padding-right:0} .side.yes{right:10px; padding-left:0}
 }
-@media (max-height:760px){
-  #maybeDock .pstack{display:none}
-  #maybeDock .ptitle{border-color:var(--line); background:var(--card)}
-}
 
 /* ---- action buttons with their keys printed right underneath ---- */
-#actions{display:flex; gap:20px; padding:10px 0 14px; align-items:flex-start}
+#actions{display:flex; gap:14px; padding:8px 0 12px; align-items:flex-start}
 .act{display:flex; flex-direction:column; align-items:center; gap:5px}
 .act button{
-  width:54px; height:54px; border-radius:50%;
+  width:42px; height:42px; border-radius:50%;
   border:1.5px solid var(--line); background:var(--card); color:var(--ink);
-  font-size:22px; cursor:pointer;
+  font-size:17px; cursor:pointer;
   transition:box-shadow .15s ease, transform .15s ease;
 }
-.act button.small{width:44px; height:44px; font-size:16px; color:var(--ink-3)}
+.act button.small{width:34px; height:34px; font-size:13px; color:var(--ink-3); margin-top:4px}
 @media (hover:hover){ .act button:hover{box-shadow:var(--hard-sm); transform:translate(-1px,-2px)} }
 .act button:active{transform:translate(1px,2px); box-shadow:none}
 .act button:disabled{opacity:.35; cursor:default; box-shadow:none}
@@ -345,7 +342,7 @@ function cardEl(p, depth){
       <div class="tags">${(p.tags||[]).slice(0,4).map(t=>`<span>${t}</span>`).join('')}</div>
     </div>`;
   if(depth > 0){ // the loose pile look; the top card always lies straight
-    const s = scatter(p, 2.5);
+    const s = scatter(p, 4.5);
     el.style.transform = `translate(${s.ox}px,${s.oy + depth*7}px) rotate(${s.rot}deg)`;
   }
   return el;
