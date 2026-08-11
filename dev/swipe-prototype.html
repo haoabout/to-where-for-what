@@ -188,13 +188,48 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 }
 @media (hover:none), (pointer:coarse){ .act kbd{display:none} }
 
-/* ---- detail overlay ---- */
-#detail{
-  position:fixed; inset:0; z-index:20; display:none;
-  background:rgba(14,14,14,.35); padding:4vh 16px;
+/* ---- overlays: detail (z 20) can stack on top of the pile view (z 18) ---- */
+#detail,#pileView{
+  position:fixed; inset:0; display:none;
+  background:rgba(14,14,14,.35); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px);
+  padding:4vh 16px;
   align-items:center; justify-content:center;
 }
-#detail.show{display:flex}
+#detail{z-index:20}
+#pileView{z-index:18}
+#detail.show,#pileView.show{display:flex}
+
+/* pile view: every card of one pile, laid out flat */
+.pcard{
+  width:min(720px,94vw); max-height:88vh; overflow:auto; touch-action:pan-y;
+  background:var(--paper); border:1.5px solid var(--line); border-radius:22px;
+  box-shadow:6px 7px 0 0 var(--line); padding:18px; position:relative;
+  display:flex; flex-direction:column; gap:14px;
+}
+.pcard h2{font-size:16px; font-weight:800}
+.pcard h2 b{font-weight:400; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.pcard.no h2{color:var(--danger)} .pcard.maybe h2{color:var(--warn)} .pcard.yes h2{color:var(--ok)}
+.pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px}
+.pgrid .gcard{
+  background:var(--card); border:1px solid var(--line); border-radius:12px;
+  padding:6px; cursor:pointer; display:flex; flex-direction:column; gap:6px;
+  transition:box-shadow .15s ease;
+}
+@media (hover:hover){ .pgrid .gcard:hover{box-shadow:var(--hard-sm)} }
+.gcard .gphoto{height:86px; border-radius:8px; overflow:hidden; background:var(--paper-2); border:1px solid var(--line-soft)}
+.gcard .gphoto img{width:100%; height:100%; object-fit:cover; display:block}
+.gcard .gname{font-size:12px; font-weight:700; line-height:1.3; padding:0 2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.gcard .garea{font-size:10.5px; color:var(--ink-3); padding:0 2px}
+.gcard .gchoice{display:flex; gap:6px; padding:2px}
+.gchoice button{
+  flex:1; height:26px; border-radius:8px; font-size:12px; cursor:pointer;
+  border:1px solid var(--line-soft); background:var(--paper); color:var(--ink-3);
+}
+.gchoice button.on.no{background:var(--danger); border-color:var(--danger); color:#fff}
+.gchoice button.on.maybe{background:var(--warn); border-color:var(--warn); color:#fff}
+.gchoice button.on.yes{background:var(--ok); border-color:var(--ok); color:#fff}
+.pempty{font-size:13px; color:var(--ink-3); padding:20px 0; text-align:center}
 .dcard{
   width:min(520px,94vw); max-height:92vh; overflow:auto; touch-action:pan-y;
   background:var(--card); border:1.5px solid var(--line); border-radius:22px;
@@ -259,17 +294,17 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 
 <div id="main">
   <div id="row">
-    <div class="dock side no" data-pile="no" title="不想去 (←)">
+    <div class="dock side no" data-pile="no" title="查看不去的景点">
       <div class="ptitle">✕ 不去 · <b>0</b></div>
       <div class="pstack empty"></div>
     </div>
     <div id="deck"></div>
-    <div class="dock side yes" data-pile="yes" title="想去 (→)">
+    <div class="dock side yes" data-pile="yes" title="查看想去的景点">
       <div class="ptitle">♥ 想去 · <b>0</b></div>
       <div class="pstack empty"></div>
     </div>
   </div>
-  <div class="dock" id="maybeDock" data-pile="maybe" title="待定 (↓)">
+  <div class="dock" id="maybeDock" data-pile="maybe" title="查看待定的景点">
     <div class="ptitle">〜 待定 · <b>0</b></div>
     <div class="pstack empty"></div>
   </div>
@@ -284,6 +319,7 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 </div>
 
 <div id="detail"><div class="dcard"></div></div>
+<div id="pileView"><div class="pcard"></div></div>
 <div id="summary"></div>
 <div id="toast"></div>
 
@@ -525,17 +561,73 @@ function undo(){
   }
 }
 
-/* ---- buttons; the piles stay clickable too ---- */
+/* ---- buttons; clicking a pile opens it for browsing ---- */
 document.querySelectorAll('.dock').forEach(d=>
-  d.addEventListener('click', ()=>commit(d.dataset.pile, false)));
+  d.addEventListener('click', ()=>openPileView(d.dataset.pile)));
 document.querySelector('#actions .undo').onclick  = undo;
 document.querySelector('#actions .no').onclick    = ()=>commit('no', false);
 document.querySelector('#actions .maybe').onclick = ()=>commit('maybe', false);
 document.querySelector('#actions .yes').onclick   = ()=>commit('yes', false);
 document.querySelector('#actions .info').onclick  = ()=>openDetail(places[idx]);
 
-/* ---- detail overlay ---- */
-function openDetail(p){
+/* ---- pile view: browse one pile flat; adjust or open details from there ---- */
+const pileViewEl = document.getElementById('pileView');
+let openPile = null;
+const PILE_LABEL = {yes:'♥ 想去', maybe:'〜 待定', no:'✕ 不去'};
+
+function openPileView(pile){
+  openPile = pile;
+  renderPileView();
+  pileViewEl.classList.add('show');
+}
+function closePileView(){
+  openPile = null;
+  pileViewEl.classList.remove('show');
+}
+function renderPileView(){
+  if(!openPile) return;
+  const members = places.filter(p=>p.choice===openPile);
+  const card = pileViewEl.querySelector('.pcard');
+  card.className = 'pcard ' + openPile;
+  card.innerHTML = `
+    <button class="dclose" title="关闭 (Esc)">✕</button>
+    <h2>${PILE_LABEL[openPile]} · <b>${members.length}</b></h2>
+    ${members.length ? `<div class="pgrid">${members.map(p=>{
+      const img = (p.images && p.images[0]) ? `<img src="${p.images[0].url}" alt="">` : '';
+      return `<div class="gcard" data-id="${p.id}">
+        <div class="gphoto">${img}</div>
+        <div class="gname">${p.name}</div>
+        <div class="garea">${p.area||''} · 约${p.duration_min}分钟</div>
+        <div class="gchoice">
+          ${['no','maybe','yes'].map(k=>`<button class="${k}${p.choice===k?' on':''}" data-id="${p.id}" data-k="${k}">${{no:'✕',maybe:'〜',yes:'♥'}[k]}</button>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}</div>` : `<div class="pempty">这个牌堆还是空的</div>`}`;
+  card.querySelector('.dclose').onclick = closePileView;
+  // quick re-assign: the card leaves this pile's grid at once
+  card.querySelectorAll('.gchoice button').forEach(b=>{
+    b.onclick = e=>{
+      e.stopPropagation();
+      const p = places.find(x=>String(x.id)===b.dataset.id);
+      if(p && p.choice !== b.dataset.k){
+        p.choice = b.dataset.k;
+        renderDocks(b.dataset.k); renderPileView();
+      }
+    };
+  });
+  // clicking the card itself opens the detail on top
+  card.querySelectorAll('.gcard').forEach(g=>{
+    g.onclick = ()=>{
+      const p = places.find(x=>String(x.id)===g.dataset.id);
+      if(p) openDetail(p, true);
+    };
+  });
+}
+pileViewEl.addEventListener('click', e=>{ if(e.target===pileViewEl) closePileView(); });
+
+/* ---- detail overlay. From the deck it decides (card flies to a pile);
+   from the pile view it re-assigns the already-decided card. ---- */
+function openDetail(p, fromPile){
   if(!p) return;
   const img = (p.images && p.images[0]) ? `<img src="${p.images[0].url}" alt="">` : '';
   const meta = [
@@ -554,15 +646,19 @@ function openDetail(p){
     ${p.photo_note ? `<div class="dnote">📷 ${p.photo_note}</div>` : ''}
     <div class="tags">${(p.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
     <div class="dactions">
-      <button class="no">✕ 不去</button>
-      <button class="maybe">〜 待定</button>
-      <button class="yes">♥ 想去</button>
+      <button class="no">✕ 不去${fromPile && p.choice==='no' ? ' ·当前' : ''}</button>
+      <button class="maybe">〜 待定${fromPile && p.choice==='maybe' ? ' ·当前' : ''}</button>
+      <button class="yes">♥ 想去${fromPile && p.choice==='yes' ? ' ·当前' : ''}</button>
     </div>`;
   detailEl.classList.add('show');
   detailEl.querySelector('.dclose').onclick = closeDetail;
-  detailEl.querySelector('.dactions .no').onclick    = ()=>{ closeDetail(); commit('no', false); };
-  detailEl.querySelector('.dactions .maybe').onclick = ()=>{ closeDetail(); commit('maybe', false); };
-  detailEl.querySelector('.dactions .yes').onclick   = ()=>{ closeDetail(); commit('yes', false); };
+  ['no','maybe','yes'].forEach(k=>{
+    detailEl.querySelector('.dactions .'+k).onclick = ()=>{
+      closeDetail();
+      if(fromPile){ p.choice = k; renderDocks(k); renderPileView(); }
+      else commit(k, false);
+    };
+  });
 }
 function closeDetail(){ detailEl.classList.remove('show'); }
 detailEl.addEventListener('click', e=>{ if(e.target===detailEl) closeDetail(); });
@@ -571,6 +667,15 @@ detailEl.addEventListener('click', e=>{ if(e.target===detailEl) closeDetail(); }
    open close it first, then the deck card animates to its pile. ---- */
 addEventListener('keydown', e=>{
   if(e.repeat) return;
+  // browsing a pile: only Escape acts (detail first, then the pile view),
+  // so the arrows can't silently decide the deck card underneath
+  if(openPile){
+    if(e.key==='Escape'){
+      if(detailEl.classList.contains('show')) closeDetail();
+      else closePileView();
+    }
+    return;
+  }
   const map = {ArrowRight:'yes', ArrowLeft:'no', ArrowDown:'maybe'};
   if(map[e.key]){ e.preventDefault(); closeDetail(); commit(map[e.key], false); }
   else if(e.key==='z' || e.key==='Z' || e.key==='Backspace'){ e.preventDefault(); undo(); }
