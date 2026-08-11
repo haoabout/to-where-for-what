@@ -2375,13 +2375,16 @@ pre.code{
    in one of the modes. */
 .dk-toolbar{align-self:stretch; display:flex; align-items:center; min-height:34px; margin-bottom:4px}
 @media (hover:none){ .dk-toolbar{min-height:36.5px} }
-.dk-head{
-  width:min(440px,92vw); display:flex; align-items:baseline;
-  justify-content:space-between; gap:12px; font-size:13px; font-weight:700;
+/* Progress lives on the right edge as a vertical rail — the deck column
+   keeps its vertical budget for the cards. Fill grows downward. */
+#dk-progress{
+  position:absolute; right:18px; top:50%; translate:0 -50%; z-index:4;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
 }
-#dk-counter{font-weight:400; font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums}
-.dk-bar{width:min(440px,92vw); height:4px; background:var(--fill,var(--line-soft)); border-radius:2px; overflow:hidden; flex:none}
-.dk-bar i{display:block; height:100%; width:100%; transform:scaleX(0); transform-origin:0 0; background:var(--ink); transition:transform .25s ease}
+#dk-left{font-size:12px; font-weight:700; white-space:nowrap}
+#dk-counter{font-weight:400; font-size:11px; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.dk-vtrack{display:block; width:4px; height:min(220px,30vh); background:var(--fill,var(--line-soft)); border-radius:2px; overflow:hidden}
+.dk-vtrack i{display:block; width:100%; height:100%; transform:scaleY(0); transform-origin:0 0; background:var(--ink); transition:transform .25s ease}
 #dk-main{flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px}
 #dk-row{width:100%; flex:1; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center}
 /* A definite height, derived from the measured viewport slot rather than a
@@ -2390,7 +2393,7 @@ pre.code{
    as a 0-high jumble. ~250px is the section's own chrome: HUD + maybe pile
    + action row + gaps. The section grows (min-height) when this exceeds the
    slot, so a short window scrolls instead of overlapping. */
-#dk-deck{position:relative; width:min(380px,88vw); height:clamp(300px, calc(var(--map-h,560px) - 250px), 520px)}
+#dk-deck{position:relative; width:min(380px,88vw); height:clamp(300px, calc(var(--map-h,560px) - 280px), 560px)}
 
 .dk-card{
   position:absolute; inset:0;
@@ -2596,8 +2599,10 @@ pre.code{
      toggling modes never moves the control. */
   #dk-row{display:flex; justify-content:center}
   .dk-side{position:absolute; top:46px; z-index:5; translate:none}
-  /* the HUD row steps aside for the chip row wedged in above it */
-  .dk-head{margin-top:46px}
+  /* the rail's labels need sideways room the phone doesn't have — keep just
+     the thin track hugging the edge */
+  #dk-progress{right:8px}
+  #dk-left,#dk-counter{display:none}
   .dk-side .dk-pstack{display:none}
   .dk-side .dk-ptitle{border-color:var(--line); background:var(--card)}
   .dk-side.dk-no{left:10px; padding-right:0} .dk-side.dk-yes{right:10px; padding-left:0}
@@ -2667,7 +2672,7 @@ pre.code{
      its timers under REDUCED.matches, so cards snap straight onto their
      piles); pile counts and stamps still change state. */
   .dk-card.dk-settle,.dk-card.dk-windup,.dk-card.dk-fly,.dk-card.dk-flyback,
-  .dk-dock,.dk-bar i,.dk-act button{transition:none}
+  .dk-dock,.dk-vtrack i,.dk-act button{transition:none}
   .dk-mini.dk-pop,.dk-gcard.dk-deal,#dk-pileview.show{animation:none}
 }
 @media print{
@@ -2900,8 +2905,7 @@ pre.code{
         <button type="button" data-mode="list" aria-pressed="false">Grid</button>
       </div>
     </div>
-    <div class="dk-head"><span id="dk-left"></span><span id="dk-counter"></span></div>
-    <div class="dk-bar"><i id="dk-bar-i"></i></div>
+    <div id="dk-progress"><span id="dk-left"></span><span class="dk-vtrack"><i id="dk-bar-i"></i></span><span id="dk-counter"></span></div>
     <div id="dk-main">
       <div id="dk-row">
         <button type="button" class="dk-dock dk-side dk-no" data-pile="no">
@@ -8110,7 +8114,7 @@ const DECK = (() => {
     const done = base.filter(p => p.choice).length;
     $("#dk-left").textContent = tf("deckLeft", { n: base.length - done });
     $("#dk-counter").textContent = `${done} / ${base.length}`;
-    $("#dk-bar-i").style.transform = `scaleX(${base.length ? done / base.length : 0})`;
+    $("#dk-bar-i").style.transform = `scaleY(${base.length ? done / base.length : 0})`;
     const u = $("#dk-actions .dk-b-undo");
     if(u) u.disabled = !hist.length;
   }
