@@ -399,29 +399,42 @@ button{font:inherit;color:inherit;cursor:pointer}
   overflow-x:clip;
 }
 .top a{color:var(--canvas-accent)}
-/* stretch, not center: the nav pill and the destination pill are the band's two
-   end-caps and were visibly different heights — measured 43.4 against 58.7 at
-   1280, the nav sitting 15px short and floating in the middle. Stretch hands
-   .navwrap the row's height and .tabs fills it, so both caps share a top and a
-   bottom edge the way .title and .metas already do inside .brand.
+/* stretch, not center: the nav pill on the left and the destination pill on the
+   right are the band's two end-caps and were visibly different heights —
+   measured 43.4 against 58.7 at 1280, the nav sitting 15px short and floating
+   in the middle. Stretch hands .navwrap the row's height and .tabs fills it, so
+   both caps share a top and a bottom edge the way .title and .metas already do
+   inside .brand.
    It also works in the other direction: on a trip with no dates, party or pace
    .metas is empty and the nav is the taller of the two, and .brand — already
    stretch — grows .title to meet it. Neither side is pinned to the other. */
 .top-in{max-width:1180px;margin:0 auto;padding:11px 20px;display:flex;align-items:stretch;gap:16px}
 
-/* The title band is one row: destination on the left, the trip's facts beside
-   it in a fixed two-row block, navigation pinned right.
+/* The title band is mirrored on desktop: navigation is pinned left; the trip's
+   facts are a fixed two-row block beside the destination, which is pinned at
+   the far right. The DOM still starts with the heading — the semantic reading
+   order stays title then navigation — and flex direction/order supply only the
+   visual mirror.
 
    align-items:stretch is what makes the destination pill tall: it no longer
    sizes to its own type, it grows to the height of the two rows next to it, so
    the two share a top and a bottom edge.
 
-   flex-wrap is the safety valve, not decoration: once .metas' 280px basis no
-   longer fits beside the title, the whole block drops to the next line — a
-   breakpoint that is computed rather than written as a media query. Without
-   wrap, .metas neither wraps nor shrinks and pushes the band past the right
-   edge of the viewport (measured). */
-.brand{flex:1;min-width:0;display:flex;align-items:stretch;gap:8px 10px;flex-wrap:wrap}
+   flex-wrap is the safety valve, not decoration: once .metas no longer fits
+   beside the title, the whole block drops to the next line, still aligned to
+   the right — a breakpoint that is computed rather than written as a media
+   query. Without wrap, .metas neither wraps nor shrinks and pushes the band
+   past the viewport (measured).
+
+   row-reverse does three jobs as one mirror: it puts the source-first title at
+   the far right, lays the facts to its left, and makes flex-start the right
+   edge. --band-in-x follows that geometry: desktop facts enter towards the
+   right; the narrow breakpoint restores both layout and motion. */
+.brand{
+  --band-in-x:-25px;
+  flex:1;min-width:0;display:flex;flex-direction:row-reverse;
+  align-items:stretch;gap:8px 10px;flex-wrap:wrap;
+}
 /* The title never shrinks: the meta block wraps first, and the title only
    narrows through its own clamped type size. Reverse that priority and the
    first thing a narrowing window squeezes is the largest type on the page. */
@@ -444,17 +457,18 @@ button{font:inherit;color:inherit;cursor:pointer}
    region (measured). */
 .tname{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
 
-/* Trip facts: a fixed two-row block to the right of the destination, wrapping
+/* Trip facts: a fixed two-row block to the left of the destination, wrapping
    inside itself rather than starting a new full-width line. The split is by
    meaning — when above, who and how hard below — so it stays two rows even
-   when there is width to spare.
+   when there is width to spare. Its rows and their contents align from the
+   destination outwards, mirroring the old left-edge alignment.
    flex:0 1 auto sizes it to content; when it genuinely cannot fit, .brand's
    wrap drops the whole block below the title. */
 .metas{
   flex:0 1 auto;min-width:0;
-  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:6px;
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-end;gap:6px;
 }
-.mrow{display:flex;gap:7px;flex-wrap:wrap;min-width:0}
+.mrow{display:flex;flex-direction:row-reverse;gap:7px;flex-wrap:wrap;min-width:0}
 /* The pills scale with the viewport like the title, but far less: the title is
    the page's headline and these are its footnotes; footnotes that grow in step
    with the headline stop reading as footnotes. Both ends are pinned — 11px is
@@ -474,9 +488,12 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:1px 8px;border-radius:20px;font-size:11.5px;white-space:nowrap;
 }
 
-/* The band's entrance: destination first, then each fact, each sliding a short
-   way leftward as it fades up. Runs once per load and never again — see boot(),
-   which builds this band exactly once and is the only writer of #metas.
+/* The band's entrance mirrors its layout. On desktop the rightmost destination
+   arrives first, followed by the facts from right to left; every piece slides
+   a short way rightward as it fades up. At <=900px both the visual order and
+   movement return to their original left-to-right / leftward arrangement.
+   Runs once per load and never again — see boot(), which builds this band
+   exactly once and is the only writer of #metas.
 
    The transparent start exists ONLY as a keyframe, never as a resting style on
    the element. Write opacity:0 on .title and a reduced-motion visitor — for
@@ -492,10 +509,12 @@ button{font:inherit;color:inherit;cursor:pointer}
    scramble the order. The class lands once, after the band is complete, so
    every element starts on the same style recalc.
 
-   --i is written by boot() in DOM order instead of being hardcoded per class,
-   because the sequence is not fixed: boot() drops any pill whose value is
-   empty, and .stale appears only on data older than 30 days. Per-class delays
-   would leave a hole in the middle of the stagger for a trip with no party.
+   --i is written by boot() in DOM order instead of being hardcoded per class.
+   The reversed flex rows turn that same title/date/who/pace sequence into a
+   right-to-left spatial sequence on desktop, without duplicating animation
+   logic. The sequence is not fixed: boot() drops any pill whose value is empty,
+   and .stale appears only on data older than 30 days. Per-class delays would
+   leave a hole in the middle of the stagger for a trip with no party.
 
    backwards, not both: the delay needs the start state held, but nothing needs
    holding afterwards — and a lingering transform would make .title a
@@ -507,13 +526,14 @@ button{font:inherit;color:inherit;cursor:pointer}
     animation:band-in .5s cubic-bezier(.2,.8,.25,1) backwards;
     animation-delay:calc(var(--i,0) * 70ms);
   }
-  @keyframes band-in{from{opacity:0;transform:translateX(25px)}}
+  @keyframes band-in{from{opacity:0;transform:translateX(var(--band-in-x,25px))}}
 }
 
-/* Navigation. flex:none — it is pinned, and its position is the thing users
-   learn. .navwrap exists so the group can be given a full-width row of its own
-   on narrow screens without the nav pill itself stretching. */
-.navwrap{flex:none;display:flex}
+/* Navigation. flex:none and order:-1 pin it visually left on desktop while the
+   heading remains first in the DOM. .navwrap exists so the group can return
+   after the title band and take a full-width row of its own on narrow screens
+   without the nav pill itself stretching. */
+.navwrap{order:-1;flex:none;display:flex}
 /* padding is the ring of group colour left visible around the selected tab, so
    it is the only thing that still draws the outer pill as a shape once the
    selected tab is inside it. At 3px that ring was thinner than the gap between
@@ -548,10 +568,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tab[aria-selected=true]{background:var(--pill-nav-on);color:var(--ink);font-weight:700}
 .tab:disabled{color:color-mix(in srgb,var(--ink) 35%,transparent);cursor:not-allowed}
 
-/* First breakpoint: navigation drops first. When the row can no longer hold
-   title + facts + nav, it is the nav that leaves (full width, three equal
-   segments, better for a thumb) while the facts stay beside the destination —
-   that is the relationship worth protecting as the window narrows. */
+/* First breakpoint: undo the desktop mirror, then let navigation drop below.
+   The destination and facts return to their semantic/source order on the first
+   row; the nav returns after them (full width, three equal segments, better for
+   a thumb). The entrance direction returns with the layout too. */
 @media (max-width:900px){
   /* Block padding tightens, inline padding does not. main keeps its 20px
      inline padding at every width, so dropping this to 14 put the header on
@@ -561,8 +581,10 @@ button{font:inherit;color:inherit;cursor:pointer}
      visibly 12px wider than the cards under it, on the page's most-scanned
      vertical edge. */
   .top-in{flex-wrap:wrap;gap:8px;padding:9px 20px}
-  .brand{flex-basis:100%}
-  .navwrap{width:100%}
+  .brand{--band-in-x:25px;flex-basis:100%;flex-direction:row}
+  .metas{align-items:flex-start}
+  .mrow{flex-direction:row}
+  .navwrap{order:0;width:100%}
   .tabs{width:100%}
   .tab{flex:1;justify-content:center;padding:7px 10px}
 }
