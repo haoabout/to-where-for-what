@@ -2383,8 +2383,18 @@ pre.code{
 }
 #dk-left{font-size:12px; font-weight:700; white-space:nowrap}
 #dk-counter{font-weight:400; font-size:11px; color:var(--ink-3); font-variant-numeric:tabular-nums}
-.dk-vtrack{display:block; width:4px; height:min(220px,30vh); background:var(--fill,var(--line-soft)); border-radius:2px; overflow:hidden}
-.dk-vtrack i{display:block; width:100%; height:100%; transform:scaleY(0); transform-origin:0 0; background:var(--ink); transition:transform .25s ease}
+/* A stacked ratio rail, filling bottom-up like chips piling on the table:
+   yes (green) on the bottom, maybe, then no; the pale remainder above is
+   what's still undealt. Progress and composition in one glance. */
+.dk-vtrack{
+  display:flex; flex-direction:column-reverse;
+  width:5px; height:min(220px,30vh); background:var(--fill,var(--line-soft));
+  border-radius:3px; overflow:hidden;
+}
+.dk-vseg{width:100%; height:0%; flex:none; transition:height .25s ease}
+.dk-vs-yes{background:var(--ok)}
+.dk-vs-maybe{background:var(--warn)}
+.dk-vs-no{background:var(--danger)}
 #dk-main{flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px}
 #dk-row{width:100%; flex:1; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center}
 /* A definite height, derived from the measured viewport slot rather than a
@@ -2905,7 +2915,7 @@ pre.code{
         <button type="button" data-mode="list" aria-pressed="false">Grid</button>
       </div>
     </div>
-    <div id="dk-progress"><span id="dk-left"></span><span class="dk-vtrack"><i id="dk-bar-i"></i></span><span id="dk-counter"></span></div>
+    <div id="dk-progress"><span id="dk-left"></span><span class="dk-vtrack"><i class="dk-vseg dk-vs-yes"></i><i class="dk-vseg dk-vs-maybe"></i><i class="dk-vseg dk-vs-no"></i></span><span id="dk-counter"></span></div>
     <div id="dk-main">
       <div id="dk-row">
         <button type="button" class="dk-dock dk-side dk-no" data-pile="no">
@@ -8114,7 +8124,11 @@ const DECK = (() => {
     const done = base.filter(p => p.choice).length;
     $("#dk-left").textContent = tf("deckLeft", { n: base.length - done });
     $("#dk-counter").textContent = `${done} / ${base.length}`;
-    $("#dk-bar-i").style.transform = `scaleY(${base.length ? done / base.length : 0})`;
+    const pct = n => (base.length ? n / base.length * 100 : 0).toFixed(2) + "%";
+    for(const k of PILES){
+      const seg = $(".dk-vs-" + k);
+      if(seg) seg.style.height = pct(base.filter(p => p.choice === k).length);
+    }
     const u = $("#dk-actions .dk-b-undo");
     if(u) u.disabled = !hist.length;
   }
