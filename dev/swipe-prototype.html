@@ -238,6 +238,19 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .gchoice button.on.no{background:var(--danger); border-color:var(--danger); color:#fff}
 .gchoice button.on.maybe{background:var(--warn); border-color:var(--warn); color:#fff}
 .gchoice button.on.yes{background:var(--ok); border-color:var(--ok); color:#fff}
+/* optional reason capture, only here in the browse view */
+.greason{display:flex; flex-wrap:wrap; gap:4px; padding:0 2px}
+.greason button{
+  font-size:10.5px; padding:2px 8px; border-radius:99px; cursor:pointer;
+  border:1px solid var(--line-soft); background:var(--paper); color:var(--ink-3);
+}
+.greason button.on{background:var(--accent); border-color:var(--accent); color:var(--on-accent)}
+.ginput{
+  width:100%; font-size:11px; padding:4px 8px; border-radius:8px;
+  border:1px dashed #C2BDB7; background:var(--paper); color:var(--ink);
+  font-family:inherit;
+}
+.ginput:focus{outline:none; border-style:solid; border-color:var(--line)}
 .pempty{
   font-size:13px; color:var(--ink-3); padding:14px 18px; align-self:flex-start;
   background:var(--card); border:1px solid var(--line-soft); border-radius:12px;
@@ -363,7 +376,7 @@ async function load(){
     const r = await fetch('../trips/2026-09-osaka-full/places.json');
     const data = await r.json();
     places = data.places;
-    places.forEach(p => delete p.choice); // start every session from scratch
+    places.forEach(p => { delete p.choice; delete p.choice_reason; }); // start from scratch
     (data.categories||[]).forEach(c => CAT[c.id] = c.label);
   }catch(e){
     places = SAMPLE;
@@ -586,6 +599,14 @@ document.querySelector('#actions .info').onclick  = ()=>openDetail(places[idx]);
 const pileViewEl = document.getElementById('pileView');
 let openPile = null;
 const PILE_LABEL = {yes:'♥ 想去', maybe:'〜 待定', no:'✕ 不去'};
+/* reason presets per pile: rejections explain "why not", maybes explain
+   "what would settle it", yeses need no explaining (free text only) */
+const REASONS = {
+  no:['没兴趣','去过了','太贵','排不下','当天闭馆'],
+  maybe:['看天气','看时间','顺路才去','再研究下'],
+  yes:[],
+};
+const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 
 function openPileView(pile){
   openPile = pile;
@@ -614,6 +635,11 @@ function renderPileView(animate){
         <div class="gchoice">
           ${['no','maybe','yes'].map(k=>`<button class="${k}${p.choice===k?' on':''}" data-id="${p.id}" data-k="${k}">${{no:'✕',maybe:'〜',yes:'♥'}[k]}</button>`).join('')}
         </div>
+        <div class="greason">
+          ${REASONS[openPile].map(r=>`<button data-id="${p.id}" data-r="${escAttr(r)}" class="${p.choice_reason===r?'on':''}">${r}</button>`).join('')}
+        </div>
+        <input class="ginput" data-id="${p.id}" placeholder="补充理由（可选）"
+          value="${escAttr(p.choice_reason||'')}">
       </div>`;
     }).join('')}</div>` : `<div class="pempty">这个牌堆还是空的</div>`}`;
   card.querySelector('.dclose').onclick = closePileView;
@@ -626,6 +652,23 @@ function renderPileView(animate){
         p.choice = b.dataset.k;
         renderDocks(b.dataset.k); renderPileView();
       }
+    };
+  });
+  // optional reasons: a chip sets/clears choice_reason, free text overrides
+  card.querySelectorAll('.greason button').forEach(b=>{
+    b.onclick = e=>{
+      e.stopPropagation();
+      const p = places.find(x=>String(x.id)===b.dataset.id);
+      if(!p) return;
+      p.choice_reason = (p.choice_reason === b.dataset.r) ? '' : b.dataset.r;
+      renderPileView();
+    };
+  });
+  card.querySelectorAll('.ginput').forEach(inp=>{
+    inp.onclick = e=>e.stopPropagation();
+    inp.onchange = ()=>{
+      const p = places.find(x=>String(x.id)===inp.dataset.id);
+      if(p){ p.choice_reason = inp.value.trim(); renderPileView(); }
     };
   });
   // clicking the card itself opens the detail on top
@@ -716,7 +759,7 @@ function showSummary(){
     `<div class="row"><button id="copyBtn">复制结果 JSON</button><button id="againBtn">重来一遍</button></div>`;
   summaryEl.classList.add('show');
   document.getElementById('copyBtn').onclick = ()=>{
-    const out = places.map(p=>({id:p.id, choice:p.choice||'maybe'}));
+    const out = places.map(p=>({id:p.id, choice:p.choice||'maybe', reason:p.choice_reason||''}));
     navigator.clipboard.writeText(JSON.stringify(out,null,2)).then(()=>toast('已复制到剪贴板'));
   };
   document.getElementById('againBtn').onclick = ()=>{
