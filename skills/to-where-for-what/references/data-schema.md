@@ -1,7 +1,7 @@
 # places.json data contract
 
 This is the core of the whole skill. **Everything the AI produces converges into
-this one file**: all four views render from it, and user choices are written
+this one file**: every view renders from it, and user choices are written
 back into it.
 
 **Hard rule: never invent fields.** If you need a new field, change this file and

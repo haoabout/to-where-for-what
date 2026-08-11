@@ -6,7 +6,7 @@ description: Plan a trip and produce an interactive itinerary page (attraction s
 
 # Trip Planning
 
-Split a trip into four stages and produce a **single `trip.html`** (four views: swipe deck / shortlist / map / guide).
+Split a trip into four stages and produce a **single `trip.html`** (three tabs: places — as a swipe deck or a flat grid — plus map and guide).
 
 ```
 A search places →(you)→ ┌ ① shortlist ⇄ ② map (filter + schedule) ┐ →(you)→ ③ guide
@@ -26,7 +26,7 @@ Break any one of them and the output is bad.
 
 **1. Never hand-write HTML.**
 You only produce `places.json` and `route.md`, then run `build.py` to generate the
-page. The template already handles the four views, map fallbacks, weather,
+page. The template already handles all the views, map fallbacks, weather,
 responsive layout, and light/dark theming. Hand-written HTML gets you an
 inconsistent, buggy page.
 
@@ -528,7 +528,7 @@ current choices. That is the form to hand back to an AI; the built page is
 ```
 <trips_root>/2026-09-osaka/          # root: see "Where trip files live"
 ├── brief.md          # trip parameters (answers to the opening questionnaire)
-├── places.json       # ★ the single source of truth; all four views render from it
+├── places.json       # ★ the single source of truth; every view renders from it
 ├── transit.geojson   # metro lines & stations (from enrich.py --transit)
 ├── route.md          # guide body (you write this)
 └── trip.html         # build artifact — never hand-edit

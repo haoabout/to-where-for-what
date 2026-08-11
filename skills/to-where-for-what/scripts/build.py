@@ -408,7 +408,7 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 
     n = len(data.get("places") or [])
     chosen = sum(1 for p in data.get("places") or [] if p.get("choice"))
-    kind = "guide page (standalone, for sharing)" if standalone else "trip page (four views)"
+    kind = "guide page (standalone, for sharing)" if standalone else "trip page"
     print(f"✓ {kind}: {out}")
     print(f"  {n} places, {chosen} with a choice, {out.stat().st_size / 1024:.0f} KB"
           + (", guide body included" if route_md else ", guide body not yet written"))

@@ -2365,6 +2365,9 @@ pre.code{
   display:flex; flex-direction:column; align-items:center; gap:8px;
   -webkit-user-select:none; user-select:none;
 }
+/* Same slot as the list toolbar's first row, so the mode switch sits at the
+   same spot in both modes and toggling never moves it under the pointer. */
+.dk-toolbar{align-self:stretch; display:flex; padding:2px 0 4px}
 .dk-head{
   width:min(440px,92vw); display:flex; align-items:baseline;
   justify-content:space-between; gap:12px; font-size:13px; font-weight:700;
@@ -2723,7 +2726,6 @@ pre.code{
     <div class="navwrap">
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span></button>
-        <button class="tab" role="tab" id="tab-deck"  aria-selected="false" aria-controls="view-deck"  tabindex="-1" data-view="deck">Swipe</button>
         <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
         <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
       </nav>
@@ -2735,6 +2737,16 @@ pre.code{
   <!-- ══════════════ View ① Place list ══════════════ -->
   <section class="view" id="view-list" role="tabpanel" aria-labelledby="tab-list">
     <div class="toolbar">
+      <!-- The deck is not a page of its own but another way of looking at
+           this same set of places, so the switch lives here — first in the
+           toolbar, before search/group/filter: "how do I want to browse"
+           precedes everything else. The deck view carries a twin control at
+           the same spot, so toggling never moves the control under the
+           pointer. -->
+      <div class="seg mode-seg" role="group" aria-label="Browse as">
+        <button type="button" data-mode="deck" aria-pressed="false">Cards</button>
+        <button type="button" data-mode="list" aria-pressed="true">Grid</button>
+      </div>
       <input class="search" id="q" type="search" placeholder="Search names, highlights, tags…" autocomplete="off"
         aria-label="Search places">
       <!-- By-tier first because it is the default (ui.group starts at "tier"),
@@ -2870,7 +2882,13 @@ pre.code{
        through setChoice() like every other view, so the piles, the list and
        the map can never disagree. All labels are written at runtime from T;
        the DECK module owns everything inside this section. -->
-  <section class="view" id="view-deck" role="tabpanel" aria-labelledby="tab-deck" hidden>
+  <section class="view" id="view-deck" role="tabpanel" aria-labelledby="tab-list" hidden>
+    <div class="dk-toolbar">
+      <div class="seg mode-seg" role="group" aria-label="Browse as">
+        <button type="button" data-mode="deck" aria-pressed="true">Cards</button>
+        <button type="button" data-mode="list" aria-pressed="false">Grid</button>
+      </div>
+    </div>
     <div class="dk-head"><span id="dk-left"></span><span id="dk-counter"></span></div>
     <div class="dk-bar"><i id="dk-bar-i"></i></div>
     <div id="dk-main">
@@ -3127,7 +3145,7 @@ en: {
   restoredChoices:"{n} earlier choices", restoredItin:"{n} scheduled items",
   restoredAdded:"{n} hand-added places",
   restoredToast:"Restored from this browser's cache: {list}",
-  tabDeck:"Swipe",
+  modeDeck:"Cards", modeFlat:"Grid", modeAria:"Browse as",
   deckLeft:"{n} to sort",
   deckEmpty:"Nothing left to sort — every place is rated.",
   deckEmptySub:"Tap a pile below to review, or head to the Places tab.",
@@ -3329,8 +3347,7 @@ zh: {
   restoredChoices:"{n} 个之前的选择", restoredItin:"{n} 项日程安排",
   restoredAdded:"{n} 个手动添加的地点",
   restoredToast:"从浏览器缓存恢复了 {list}",
-  // 两字，与其余 tab 对齐（见 tabList 的注释）
-  tabDeck:"滑牌",
+  modeDeck:"卡牌", modeFlat:"平铺", modeAria:"浏览形态",
   deckLeft:"还剩 {n} 张",
   deckEmpty:"没有待分的卡片了——所有地点都已表态。",
   deckEmptySub:"点下面的牌堆可以回看调整，或者去「景点」页。",
@@ -8513,15 +8530,32 @@ function layoutMap(){
     (!!mapView && !mapView.hidden) || (!!deckView && !deckView.hidden));
 }
 
+/* The deck is a browse mode of the places tab, not a page: which of the two
+   the tab opens is remembered here, and defaults to the deck while unrated
+   places exist (sorting is the page's first job). */
+function placesMode(){
+  let m = null;
+  try{ m = localStorage.getItem(LS_KEY + ":pmode"); }catch(e){}
+  if(m === "deck" || m === "list") return m;
+  return (window.DECK && DECK.pending() > 0) ? "deck" : "list";
+}
+
 function switchView(v){
   // Roving tabindex: a tab group occupies one stop in the Tab order, with
   // ←→ moving inside it. Leaving every tab at tabindex=0 would make keyboard
   // users press Tab three times to get past the tab bar.
+  // The deck has no tab of its own — it highlights the places tab.
+  const tabView = v === "deck" ? "list" : v;
   $$(".tab").forEach(t => {
-    const on = t.dataset.view === v;
+    const on = t.dataset.view === tabView;
     t.setAttribute("aria-selected", on);
     t.tabIndex = on ? 0 : -1;
   });
+  if(v === "deck" || v === "list"){
+    try{ localStorage.setItem(LS_KEY + ":pmode", v); }catch(e){}
+    for(const b of $$(".mode-seg button"))
+      b.setAttribute("aria-pressed", String((b.dataset.mode === "deck") === (v === "deck")));
+  }
   $$(".view").forEach(s => s.hidden = (s.id !== "view-" + v));
   // Export sits inside the map, but what it exports is the set of points the
   // map view has filtered, so it only exists while that view is on screen.
@@ -8561,8 +8595,12 @@ function applyStaticI18n(){
   const txt = (sel, v) => { const el = $(sel); if(el) el.textContent = v; };
   const attr = (sel, a, v) => { const el = $(sel); if(el) el.setAttribute(a, v); };
   txt("#tab-list-txt", T.tabList);
-  txt("#tab-deck", T.tabDeck);
   txt("#tab-map", T.tabMap);
+  for(const s of $$(".mode-seg")){
+    s.setAttribute("aria-label", T.modeAria);
+    for(const b of s.querySelectorAll("button"))
+      b.textContent = b.dataset.mode === "deck" ? T.modeDeck : T.modeFlat;
+  }
   txt("#tab-guide", T.tabGuide);
   attr("#tab-guide", "title", T.guideTabDisabled);
   txt("#pg-print", T.pgPrint);
@@ -8716,8 +8754,7 @@ function boot(){
     // deck: sorting the cards is the page's first job.
     let v = null;
     try{ v = localStorage.getItem(LS_KEY + ":view"); }catch(e){}
-    if(!["list", "map", "guide", "deck"].includes(v))
-      v = (window.DECK && DECK.pending() > 0) ? "deck" : "list";
+    if(!["list", "map", "guide", "deck"].includes(v)) v = placesMode();
     if(v === "guide" && !ROUTE_HTML) v = "list";
     switchView(v);
   }
@@ -8832,8 +8869,14 @@ document.addEventListener("click", e => {
     return;
   }
 
+  const mode = e.target.closest(".mode-seg button");
+  if(mode){ switchView(mode.dataset.mode); return; }
+
   const tab = e.target.closest(".tab");
-  if(tab && !tab.disabled){ switchView(tab.dataset.view); return; }
+  if(tab && !tab.disabled){
+    switchView(tab.dataset.view === "list" ? placesMode() : tab.dataset.view);
+    return;
+  }
 });
 
 $("#q").addEventListener("input", e => { ui.q = e.target.value; render(); });
@@ -8858,7 +8901,8 @@ document.addEventListener("keydown", e => {
     const to = e.key === "Home" ? 0
              : e.key === "End"  ? tabs.length - 1
              : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    switchView(tabs[to].dataset.view);
+    const tv = tabs[to].dataset.view;
+    switchView(tv === "list" ? placesMode() : tv);
     tabs[to].focus();
   }
 });

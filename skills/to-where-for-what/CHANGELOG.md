@@ -18,7 +18,8 @@ Bump rules:
 
 ### Added
 
-- **Swipe deck view** — a fourth tab on `trip.html` for first-pass triage.
+- **Swipe deck mode** — a card-deck browse mode on the places tab (a Cards/Grid
+  toggle at the left of the toolbar) for first-pass triage.
   Every unrated place (not lodging, not an uncompleted user stub) is dealt as
   a card; decide by dragging (right = yes, left = no, down = maybe), arrow
   keys, or buttons, with Z/Backspace undo. Decided cards fly onto three
@@ -27,9 +28,9 @@ Bump rules:
   tap / Enter opens the shared detail dialog. Rating "no" from the deck is
   deliberately silent — reasons are optional, added later in the overlay or
   the list view.
-- First open of a trip with unrated places lands on the deck; a stored view
-  preference always wins afterwards. Sorting the last card toasts and
-  auto-switches to the list view. All decisions go through the existing
+- First open of a trip with unrated places lands on the deck; the stored
+  mode/view preference always wins afterwards. Sorting the last card toasts
+  and flips the places tab to the grid. All decisions go through the existing
   `setChoice()` path, so auto-save, localStorage, the list, the map and the
   progress tallies stay in sync; choices made in other views update the deck
   live. The standalone `guide.html` build carries no deck.
