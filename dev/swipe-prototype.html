@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>滑牌抉择 · 原型</title>
+<style>
+/* Tokens lifted from assets/template-trip.html so the prototype reads as the
+   same product. Hard zero-blur shadows, near-black outlines, warm paper. */
+:root{
+  --paper:#F4F4F0; --paper-2:#EFEAE4; --card:#FEFEFE;
+  --ink:#0E0E0E; --ink-2:#333333; --ink-3:#545454;
+  --line:#4A4A4A; --line-soft:#DDD8D2; --fill:#E7E2DB;
+  --accent:#0E0E0E; --accent-soft:#FFEF85; --on-accent:#FEFEFE;
+  --ok:#38733C; --danger:#BE2229; --warn:#955E00;
+  --r-card:28px; --card-pad:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  display:flex; flex-direction:column; align-items:center;
+  overflow:hidden; touch-action:none;
+  -webkit-user-select:none; user-select:none;
+}
+
+/* ---- header: progress ---- */
+header{
+  width:min(440px,92vw); padding:18px 4px 10px;
+  display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+}
+header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
+#counter{font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums}
+#bar{width:min(440px,92vw); height:4px; background:var(--fill); border-radius:2px; overflow:hidden}
+#bar i{display:block; height:100%; width:0; background:var(--ink); transition:width .25s ease}
+
+/* ---- deck ---- */
+#stage{flex:1; width:100%; display:flex; align-items:center; justify-content:center; position:relative}
+#deck{position:relative; width:min(400px,90vw); height:min(560px,72vh)}
+.card{
+  position:absolute; inset:0;
+  background:var(--card); border:1.5px solid var(--line); border-radius:var(--r-card);
+  padding:var(--card-pad);
+  box-shadow:5px 6px 0 0 var(--line);
+  display:flex; flex-direction:column; gap:10px;
+  cursor:grab; will-change:transform;
+}
+.card.dragging{cursor:grabbing; transition:none !important}
+.card.settle{transition:transform .3s cubic-bezier(.2,.9,.3,1.15)}
+.card.fly{transition:transform .38s ease-in, opacity .38s ease-in}
+/* the two behind */
+.card[data-depth="1"]{transform:translateY(18px) scale(.97); box-shadow:4px 5px 0 0 var(--line)}
+.card[data-depth="2"]{transform:translateY(34px) scale(.94); box-shadow:3px 4px 0 0 var(--line)}
+.card[data-depth="1"],.card[data-depth="2"]{pointer-events:none}
+.card[data-depth]{transition:transform .25s ease, box-shadow .25s ease}
+
+.photo{
+  flex:0 0 46%; border-radius:calc(var(--r-card) - var(--card-pad));
+  background:var(--paper-2); border:1px solid var(--line-soft);
+  overflow:hidden; position:relative;
+}
+.photo img{width:100%; height:100%; object-fit:cover; display:block; pointer-events:none}
+.photo .cat{
+  position:absolute; left:10px; top:10px; font-size:11px; font-weight:800;
+  background:var(--accent-soft); color:var(--ink); border:1px solid var(--line);
+  padding:3px 8px; border-radius:99px;
+}
+.body{flex:1; display:flex; flex-direction:column; gap:8px; padding:2px 6px 6px; min-height:0}
+.name{font-size:20px; font-weight:800; line-height:1.25}
+.name small{display:block; font-size:11.5px; font-weight:400; color:var(--ink-3); margin-top:2px}
+.facts{font-size:12px; color:var(--ink-2); display:flex; gap:8px; flex-wrap:wrap}
+.facts b{font-weight:700}
+.pitch{
+  font-size:13px; line-height:1.55; color:var(--ink-2);
+  overflow:hidden; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical;
+}
+.tags{margin-top:auto; display:flex; gap:6px; flex-wrap:wrap}
+.tags span{
+  font-size:11px; color:var(--ink-3); background:var(--paper);
+  border:1px solid var(--line-soft); padding:2px 8px; border-radius:99px;
+}
+
+/* verdict stamps, revealed by drag tilt or key flash */
+.stamp{
+  position:absolute; top:26px; font-size:26px; font-weight:900; letter-spacing:.1em;
+  padding:6px 14px; border:4px solid; border-radius:10px; opacity:0;
+  background:var(--card); pointer-events:none; z-index:2;
+}
+.stamp.yes{left:20px; color:var(--ok); border-color:var(--ok); transform:rotate(-14deg)}
+.stamp.no{right:20px; color:var(--danger); border-color:var(--danger); transform:rotate(14deg)}
+.stamp.maybe{left:50%; top:auto; bottom:30px; transform:translateX(-50%) rotate(-4deg); color:var(--warn); border-color:var(--warn)}
+
+/* ---- action bar ---- */
+#actions{
+  display:flex; align-items:center; gap:18px; padding:14px 0 10px;
+}
+#actions button{
+  width:58px; height:58px; border-radius:50%;
+  border:1.5px solid var(--line); background:var(--card); color:var(--ink);
+  font-size:24px; cursor:pointer; box-shadow:3px 4px 0 0 var(--line);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+#actions button:active{transform:translate(2px,3px); box-shadow:1px 1px 0 0 var(--line)}
+#actions .no{color:var(--danger)}
+#actions .yes{color:var(--ok)}
+#actions .maybe{color:var(--warn); width:48px; height:48px; font-size:18px}
+#actions .undo{width:44px; height:44px; font-size:17px; color:var(--ink-3)}
+#actions button:disabled{opacity:.35; cursor:default}
+
+/* keyboard hints: desktop only (hover + fine pointer) */
+#keys{display:none; gap:16px; padding-bottom:16px; font-size:11.5px; color:var(--ink-3)}
+#keys kbd{
+  font-family:inherit; background:var(--card); border:1px solid var(--line-2,#C2BDB7);
+  border-bottom-width:2px; border-radius:5px; padding:1px 6px; margin-right:4px; font-size:11px;
+}
+@media (hover:hover) and (pointer:fine){ #keys{display:flex} }
+
+/* ---- summary ---- */
+#summary{display:none; flex:1; width:min(560px,92vw); overflow:auto; padding:10px 0 30px}
+#summary.show{display:block}
+#summary h2{font-size:18px; font-weight:800; margin:14px 0 10px}
+.pile{background:var(--card); border:1.5px solid var(--line); border-radius:16px;
+  box-shadow:4px 5px 0 0 var(--line); padding:14px 16px; margin-bottom:14px}
+.pile h3{font-size:14px; display:flex; gap:8px; align-items:center; margin-bottom:8px}
+.pile ul{list-style:none; font-size:13px; color:var(--ink-2); line-height:1.9}
+.pile.yes h3{color:var(--ok)} .pile.no h3{color:var(--danger)} .pile.maybe h3{color:var(--warn)}
+#summary .row{display:flex; gap:10px; margin-top:6px}
+#summary .row button{
+  font-size:13px; font-weight:700; padding:9px 16px; border-radius:10px; cursor:pointer;
+  border:1.5px solid var(--line); background:var(--card); box-shadow:3px 3px 0 0 var(--line);
+}
+#toast{
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px);
+  background:var(--accent); color:var(--on-accent); font-size:13px;
+  padding:9px 18px; border-radius:99px; transition:transform .3s ease; z-index:9;
+}
+#toast.show{transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){
+  .card.settle,.card.fly,.card[data-depth]{transition:none}
+}
+</style>
+</head>
+<body>
+<header><h1>这次想去哪？</h1><span id="counter"></span></header>
+<div id="bar"><i></i></div>
+
+<div id="stage"><div id="deck"></div></div>
+
+<div id="actions">
+  <button class="undo" title="撤销 (Z)">↺</button>
+  <button class="no"   title="不想去 (←)">✕</button>
+  <button class="maybe" title="待定 (↓)">〜</button>
+  <button class="yes"  title="想去 (→)">♥</button>
+</div>
+<div id="keys">
+  <span><kbd>→</kbd>想去</span>
+  <span><kbd>←</kbd>不想去</span>
+  <span><kbd>↓</kbd>待定</span>
+  <span><kbd>Z</kbd>撤销</span>
+</div>
+
+<div id="summary"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const CAT = {hidden:'冷门', landmark:'地标', shrine:'神社寺庙', museum:'博物馆',
+             arch:'建筑', nature:'自然', market:'市集', food:'美食', media:'影视',
+             event:'活动'};
+let places = [], idx = 0, history = [];
+const deck = document.getElementById('deck');
+const summaryEl = document.getElementById('summary');
+
+/* Fallback so the file still demos when opened via file:// */
+const SAMPLE = [
+  {id:'a',name:'大阪府立中之岛图书馆',name_local:'大阪府立中之島図書館',category:'hidden',
+   area:'中之岛',duration_min:40,ticket:'免费',pitch:'还在正常运作的公共图书馆，可以真的推门进去看书、在旋转楼梯拍照。',
+   tags:['近代建筑','免费','冷门'],images:[]},
+  {id:'b',name:'大阪城天守阁',name_local:'大阪城天守閣',category:'landmark',
+   area:'大阪城',duration_min:120,ticket:'600円',pitch:'丰臣秀吉的居城，关西最著名的地标之一。',
+   tags:['地标','历史'],images:[]},
+  {id:'c',name:'黑门市场',name_local:'黒門市場',category:'market',
+   area:'日本桥',duration_min:60,ticket:'免费',pitch:'大阪的厨房，边走边吃的海鲜与和牛串。',
+   tags:['美食','市集'],images:[]},
+];
+
+async function load(){
+  try{
+    const r = await fetch('../trips/2026-09-osaka-full/places.json');
+    places = (await r.json()).places;
+  }catch(e){ places = SAMPLE; }
+  render();
+}
+
+function cardEl(p, depth){
+  const el = document.createElement('article');
+  el.className = 'card'; el.dataset.depth = depth;
+  const img = (p.images && p.images[0]) ? `<img src="${p.images[0].url}" alt="" loading="lazy">` : '';
+  el.innerHTML = `
+    <div class="stamp yes">想去</div>
+    <div class="stamp no">不去</div>
+    <div class="stamp maybe">待定</div>
+    <div class="photo">${img}<span class="cat">${CAT[p.category]||p.category}</span></div>
+    <div class="body">
+      <div class="name">${p.name}<small>${p.name_local||''}</small></div>
+      <div class="facts"><b>${p.area||''}</b><span>约${p.duration_min}分钟</span><span>${p.ticket||''}</span></div>
+      <div class="pitch">${p.pitch||''}</div>
+      <div class="tags">${(p.tags||[]).slice(0,4).map(t=>`<span>${t}</span>`).join('')}</div>
+    </div>`;
+  return el;
+}
+
+function render(){
+  deck.innerHTML = '';
+  for(let d = Math.min(2, places.length-1-idx); d >= 0; d--){
+    if(places[idx+d]) deck.appendChild(cardEl(places[idx+d], d));
+  }
+  const top = deck.querySelector('[data-depth="0"]');
+  if(top) attachDrag(top);
+  updateHud();
+  if(idx >= places.length) showSummary();
+}
+
+function updateHud(){
+  document.getElementById('counter').textContent = `${Math.min(idx+1,places.length)} / ${places.length}`;
+  document.querySelector('#bar i').style.width = (idx/places.length*100)+'%';
+  document.querySelector('#actions .undo').disabled = history.length===0;
+}
+
+/* ---- drag (Pointer Events: one code path for mouse and touch) ---- */
+const TH_X = 110, TH_Y = 100;
+function attachDrag(el){
+  let sx=0, sy=0, dx=0, dy=0, active=false;
+  el.addEventListener('pointerdown', e=>{
+    active=true; sx=e.clientX; sy=e.clientY;
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('dragging'); el.classList.remove('settle');
+  });
+  el.addEventListener('pointermove', e=>{
+    if(!active) return;
+    dx=e.clientX-sx; dy=e.clientY-sy;
+    el.style.transform=`translate(${dx}px,${dy}px) rotate(${dx/18}deg)`;
+    el.querySelector('.stamp.yes').style.opacity   = Math.max(0, Math.min(1, dx/TH_X));
+    el.querySelector('.stamp.no').style.opacity    = Math.max(0, Math.min(1,-dx/TH_X));
+    el.querySelector('.stamp.maybe').style.opacity = Math.abs(dx)<60 ? Math.max(0,Math.min(1,dy/TH_Y)) : 0;
+  });
+  el.addEventListener('pointerup', ()=>{
+    if(!active) return; active=false;
+    el.classList.remove('dragging');
+    if(dx > TH_X) commit('yes');
+    else if(dx < -TH_X) commit('no');
+    else if(dy > TH_Y && Math.abs(dx) < 60) commit('maybe');
+    else{ // spring back
+      el.classList.add('settle');
+      el.style.transform='';
+      el.querySelectorAll('.stamp').forEach(s=>s.style.opacity=0);
+    }
+    dx=dy=0;
+  });
+}
+
+function commit(choice){
+  const p = places[idx];
+  if(!p) return;
+  history.push({idx, choice});
+  p.choice = choice;
+  const el = deck.querySelector('[data-depth="0"]');
+  if(el){
+    el.classList.add('fly');
+    const off = {yes:'translate(130vw,-8vh) rotate(28deg)',
+                 no:'translate(-130vw,-8vh) rotate(-28deg)',
+                 maybe:'translate(0,120vh) rotate(4deg)'}[choice];
+    el.style.transform = off; el.style.opacity = 0;
+    el.querySelector('.stamp.'+choice).style.opacity = 1;
+    setTimeout(()=>{ idx++; render(); }, 260);
+  } else { idx++; render(); }
+}
+
+function undo(){
+  const last = history.pop();
+  if(!last) return;
+  idx = last.idx;
+  delete places[idx].choice;
+  summaryEl.classList.remove('show');
+  document.getElementById('stage').style.display='';
+  document.getElementById('actions').style.display='';
+  document.getElementById('keys').style.display='';
+  render();
+}
+
+/* ---- buttons ---- */
+document.querySelector('#actions .yes').onclick   = ()=>commit('yes');
+document.querySelector('#actions .no').onclick    = ()=>commit('no');
+document.querySelector('#actions .maybe').onclick = ()=>commit('maybe');
+document.querySelector('#actions .undo').onclick  = undo;
+
+/* ---- keyboard: the primary desktop path ---- */
+addEventListener('keydown', e=>{
+  if(e.repeat) return;
+  const map = {ArrowRight:'yes', ArrowLeft:'no', ArrowDown:'maybe'};
+  if(map[e.key]){ e.preventDefault(); commit(map[e.key]); }
+  else if(e.key==='z' || e.key==='Z' || e.key==='Backspace'){ e.preventDefault(); undo(); }
+});
+
+/* ---- summary ---- */
+function showSummary(){
+  document.getElementById('stage').style.display='none';
+  document.getElementById('actions').style.display='none';
+  document.getElementById('keys').style.display='none';
+  const piles = {yes:[], maybe:[], no:[]};
+  places.forEach(p=>{ if(p.choice) piles[p.choice].push(p); });
+  const label = {yes:'♥ 想去', maybe:'〜 待定', no:'✕ 不去'};
+  summaryEl.innerHTML = '<h2>分完了！</h2>' +
+    ['yes','maybe','no'].map(k=>`
+      <div class="pile ${k}">
+        <h3>${label[k]}<span style="color:var(--ink-3);font-weight:400">${piles[k].length}</span></h3>
+        <ul>${piles[k].map(p=>`<li>${p.name} <span style="color:var(--ink-3)">· ${p.area||''}</span></li>`).join('')||'<li style="color:var(--ink-3)">（空）</li>'}</ul>
+      </div>`).join('') +
+    `<div class="row"><button id="copyBtn">复制结果 JSON</button><button id="againBtn">重来一遍</button></div>`;
+  summaryEl.classList.add('show');
+  document.getElementById('copyBtn').onclick = ()=>{
+    const out = places.map(p=>({id:p.id, choice:p.choice||'maybe'}));
+    navigator.clipboard.writeText(JSON.stringify(out,null,2)).then(()=>toast('已复制到剪贴板'));
+  };
+  document.getElementById('againBtn').onclick = ()=>{
+    places.forEach(p=>delete p.choice); idx=0; history=[];
+    summaryEl.classList.remove('show');
+    document.getElementById('stage').style.display='';
+    document.getElementById('actions').style.display='';
+    document.getElementById('keys').style.display='';
+    render();
+  };
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+load();
+</script>
+</body>
+</html>

@@ -23,3 +23,7 @@ trips/
 
 # Development-time scratch files
 .tmp/
+
+# Local Claude Code config (preview server launch config etc.) — per-machine
+# tooling, same reasoning as .impeccable/ above.
+.claude/
