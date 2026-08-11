@@ -2367,7 +2367,14 @@ pre.code{
 }
 /* Same slot as the list toolbar's first row, so the mode switch sits at the
    same spot in both modes and toggling never moves it under the pointer. */
-.dk-toolbar{align-self:stretch; display:flex; padding:2px 0 4px}
+/* Reproduces the list toolbar's row context so the mode switch lands on the
+   identical pixel in both modes. The list's .toolbar centres its items
+   against the search input, whose height differs by pointer type: 34px on
+   desktop, 36.5px under the touch font bump (see the hover:none block that
+   raises inputs to 16px). Mirror both numbers, or the switch sits ~1px off
+   in one of the modes. */
+.dk-toolbar{align-self:stretch; display:flex; align-items:center; min-height:34px; margin-bottom:4px}
+@media (hover:none){ .dk-toolbar{min-height:36.5px} }
 .dk-head{
   width:min(440px,92vw); display:flex; align-items:baseline;
   justify-content:space-between; gap:12px; font-size:13px; font-weight:700;
