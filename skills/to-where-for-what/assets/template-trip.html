@@ -3173,7 +3173,7 @@ en: {
   modeDeck:"Cards", modeFlat:"Grid", modeAria:"Browse as",
   deckLeft:"{n} to sort",
   deckEmpty:"Nothing left to sort — every place is rated.",
-  deckEmptySub:"Tap a pile below to review, or head to the Places tab.",
+  deckEmptySub:"Tap a pile to review, or switch to Grid to see everything laid out.",
   deckDone:"All sorted!",
   deckUndo:"Undo",
   deckInfo:"Details",
@@ -3375,7 +3375,7 @@ zh: {
   modeDeck:"卡牌", modeFlat:"平铺", modeAria:"浏览形态",
   deckLeft:"还剩 {n} 张",
   deckEmpty:"没有待分的卡片了——所有地点都已表态。",
-  deckEmptySub:"点下面的牌堆可以回看调整，或者去「景点」页。",
+  deckEmptySub:"点牌堆回看调整，或切到「平铺」摊开看全部。",
   deckDone:"全部分完！",
   deckUndo:"撤销",
   deckInfo:"详情",
@@ -8242,15 +8242,17 @@ const DECK = (() => {
     el.addEventListener("lostpointercapture", () => { if(active) reset(true); });
   }
 
-  /* ── the "all sorted" transition, as one cancellable state change ── */
+  /* ── the "all sorted" moment: a toast, nothing more. The deck stays put —
+     the empty state plus the piles are the natural place to review from,
+     and the Cards/Grid switch is right there for whoever wants the grid.
+     Still a cancellable timer: an undo inside the window (or an un-rating
+     from another view) must silence the stale congratulation. ── */
   function clearDone(){ if(doneTimer){ clearTimeout(doneTimer); doneTimer = 0; } }
   function scheduleDone(){
     if(doneTimer) return;
     doneTimer = setTimeout(() => {
       doneTimer = 0;
-      // Re-verify at fire time: an undo, or an un-rating in another view,
-      // may have refilled the queue while the timer ran.
-      if(shown() && pending() === 0){ toast(T.deckDone); switchView("list"); }
+      if(shown() && pending() === 0) toast(T.deckDone);
     }, REDUCED.matches ? 400 : 900);
   }
 

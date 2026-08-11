@@ -29,8 +29,9 @@ Bump rules:
   deliberately silent — reasons are optional, added later in the overlay or
   the list view.
 - First open of a trip with unrated places lands on the deck; the stored
-  mode/view preference always wins afterwards. Sorting the last card toasts
-  and flips the places tab to the grid. All decisions go through the existing
+  mode/view preference always wins afterwards. Sorting the last card toasts;
+  the deck stays put, with browsable piles and the Cards/Grid switch at
+  hand. All decisions go through the existing
   `setChoice()` path, so auto-save, localStorage, the list, the map and the
   progress tallies stay in sync; choices made in other views update the deck
   live. The standalone `guide.html` build carries no deck.
