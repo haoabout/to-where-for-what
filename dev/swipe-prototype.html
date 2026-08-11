@@ -197,7 +197,12 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 }
 #detail{z-index:20}
 #pileView{z-index:18}
-#detail.show,#pileView.show{display:flex}
+#detail.show,#pileView.show{display:flex; animation:fadein .18s ease}
+@keyframes fadein{from{opacity:0}}
+/* opening a pile deals its cards onto the table: each one drifts up from a
+   slight seeded tilt (its pile scatter) and lies straight, one after another */
+.gcard.deal{animation:deal .32s cubic-bezier(.3,.7,.3,1) backwards; animation-delay:var(--d,0ms)}
+@keyframes deal{from{opacity:0; transform:translateY(16px) rotate(var(--r,3deg)) scale(.94)}}
 
 /* pile view: every card of one pile laid flat on the dimmed backdrop —
    no container, the title chip and cards float directly */
@@ -291,7 +296,7 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 #toast.show{transform:translateX(-50%) translateY(0)}
 @media (prefers-reduced-motion:reduce){
   .card.settle,.card.windup,.card.fly,.dock,#bar i,.act button{transition:none}
-  .pstack .mini.pop{animation:none}
+  .pstack .mini.pop,.gcard.deal,#detail.show,#pileView.show{animation:none}
 }
 </style>
 </head>
@@ -584,14 +589,14 @@ const PILE_LABEL = {yes:'♥ 想去', maybe:'〜 待定', no:'✕ 不去'};
 
 function openPileView(pile){
   openPile = pile;
-  renderPileView();
+  renderPileView(true); // deal the cards in — later re-renders stay still
   pileViewEl.classList.add('show');
 }
 function closePileView(){
   openPile = null;
   pileViewEl.classList.remove('show');
 }
-function renderPileView(){
+function renderPileView(animate){
   if(!openPile) return;
   const members = places.filter(p=>p.choice===openPile);
   const card = pileViewEl.querySelector('.pcard');
@@ -599,9 +604,10 @@ function renderPileView(){
   card.innerHTML = `
     <button class="dclose" title="关闭 (Esc)">✕</button>
     <h2>${PILE_LABEL[openPile]} · <b>${members.length}</b></h2>
-    ${members.length ? `<div class="pgrid">${members.map(p=>{
+    ${members.length ? `<div class="pgrid">${members.map((p,i)=>{
       const img = (p.images && p.images[0]) ? `<img src="${p.images[0].url}" alt="">` : '';
-      return `<div class="gcard" data-id="${p.id}">
+      const deal = animate ? ` class="gcard deal" style="--d:${Math.min(i*25,300)}ms; --r:${scatter(p,5).rot.toFixed(1)}deg"` : ' class="gcard"';
+      return `<div${deal} data-id="${p.id}">
         <div class="gphoto">${img}</div>
         <div class="gname">${p.name}</div>
         <div class="garea">${p.area||''} · 约${p.duration_min}分钟</div>
