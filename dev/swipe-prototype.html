@@ -38,13 +38,18 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 #bar{width:min(440px,92vw); height:4px; background:var(--fill); border-radius:2px; overflow:hidden}
 #bar i{display:block; height:100%; width:100%; transform:scaleX(0); transform-origin:0 0; background:var(--ink); transition:transform .25s ease}
 
-/* ---- three-column main: side piles flex, the deck never shrinks ---- */
+/* ---- main: a deck row (side piles centre against the deck alone) with the
+   maybe pile on its own row below ---- */
 #main{
-  flex:1; width:100%; min-height:0;
+  flex:1; width:100%; min-height:0; position:relative;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:28px; padding:14px 0 6px;
+}
+#row{
+  width:100%;
   display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
   align-items:center;
 }
-#center{display:flex; flex-direction:column; align-items:center; gap:28px; padding:14px 0 6px}
 #deck{position:relative; width:min(380px,88vw); height:clamp(320px, calc(100vh - 380px), 500px)}
 
 .card{
@@ -59,6 +64,7 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .card.settle{transition:transform .3s cubic-bezier(.2,.9,.3,1.15), box-shadow .3s ease}
 .card.windup{transition:transform .13s ease-out}
 .card.fly{transition:transform .42s cubic-bezier(.45,.05,.25,1); pointer-events:none; box-shadow:var(--hard)}
+.card.fly-back{transition:transform .38s cubic-bezier(.3,.7,.3,1); pointer-events:none; box-shadow:var(--hard)}
 .card.flying{z-index:10}
 .card[data-depth="1"],.card[data-depth="2"]{pointer-events:none}
 
@@ -111,7 +117,7 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .dock.no .ptitle{color:var(--danger)}
 .dock.maybe .ptitle{color:var(--warn)}
 .dock.yes .ptitle{color:var(--ok)}
-.pstack{position:relative; width:128px; height:92px}
+.pstack{position:relative; width:120px; height:86px}
 .pstack .mini{
   position:absolute; inset:6px; border-radius:9px; overflow:hidden;
   background:var(--card); border:1px solid var(--line); padding:4px;
@@ -131,27 +137,31 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
   .dock:hover .pstack .mini.top{box-shadow:var(--hard-sm)}
   .dock:hover .ptitle{border-color:var(--line); background:var(--card); box-shadow:2px 2px 0 0 var(--line)}
 }
-.side.no{justify-self:end; padding-right:26px}
-.side.yes{justify-self:start; padding-left:26px}
-/* the maybe pile sits under the deck and runs horizontal + smaller */
-#maybeDock{flex-direction:row; gap:10px}
-#maybeDock .pstack{width:104px; height:64px}
-#maybeDock .pstack .mini{inset:4px}
+/* the side piles keep their distance from the deck — the roomier the
+   viewport, the further out they sit. The translate lifts each dock so its
+   card stack (not the title+stack group) centres on the deck's midline;
+   `translate` keeps clear of the transform the .arm lift uses. */
+.side{translate:0 -16px}
+.side.no{justify-self:end; padding-right:clamp(28px,7vw,110px)}
+.side.yes{justify-self:start; padding-left:clamp(28px,7vw,110px)}
+/* the maybe pile sits under the deck and runs horizontal */
+#maybeDock{flex-direction:row; gap:12px}
 
 /* stage 2: side stacks give way, title text remains as the fly target */
 @media (max-width:920px){
-  .pstack{width:96px; height:70px}
-  #maybeDock .pstack{width:96px; height:58px}
+  .pstack{width:100px; height:72px}
 }
 @media (max-width:760px){
   /* the grid has no room left beside the deck: the side piles collapse to
      text chips floated above the deck's top corners instead */
-  #main{display:block; position:relative; padding-top:38px}
-  #center{margin:0 auto; width:fit-content}
-  .side{position:absolute; top:4px; z-index:5}
+  #main{padding-top:38px}
+  .side{position:absolute; top:4px; z-index:5; translate:none}
   .side .pstack{display:none}
   .side .ptitle{border-color:var(--line); background:var(--card)}
   .side.no{left:10px; padding-right:0} .side.yes{right:10px; padding-left:0}
+  /* all three piles degrade together: text chips only */
+  #maybeDock .pstack{display:none}
+  #maybeDock .ptitle{border-color:var(--line); background:var(--card)}
 }
 
 /* ---- action buttons with their keys printed right underneath ---- */
@@ -245,19 +255,19 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 <div id="bar"><i></i></div>
 
 <div id="main">
-  <div class="dock side no" data-pile="no" title="不想去 (←)">
-    <div class="ptitle">✕ 不去 · <b>0</b></div>
-    <div class="pstack empty"></div>
-  </div>
-  <div id="center">
+  <div id="row">
+    <div class="dock side no" data-pile="no" title="不想去 (←)">
+      <div class="ptitle">✕ 不去 · <b>0</b></div>
+      <div class="pstack empty"></div>
+    </div>
     <div id="deck"></div>
-    <div class="dock" id="maybeDock" data-pile="maybe" title="待定 (↓)">
-      <div class="ptitle">〜 待定 · <b>0</b></div>
+    <div class="dock side yes" data-pile="yes" title="想去 (→)">
+      <div class="ptitle">♥ 想去 · <b>0</b></div>
       <div class="pstack empty"></div>
     </div>
   </div>
-  <div class="dock side yes" data-pile="yes" title="想去 (→)">
-    <div class="ptitle">♥ 想去 · <b>0</b></div>
+  <div class="dock" id="maybeDock" data-pile="maybe" title="待定 (↓)">
+    <div class="ptitle">〜 待定 · <b>0</b></div>
     <div class="pstack empty"></div>
   </div>
 </div>
@@ -490,12 +500,26 @@ function undo(){
   const last = history.pop();
   if(!last) return;
   idx = last.idx;
-  delete places[idx].choice;
+  const p = places[idx];
+  delete p.choice;
   closeDetail();
   summaryEl.classList.remove('show');
   document.getElementById('main').style.display='';
   document.getElementById('actions').style.display='';
-  render(); renderDocks();
+  render(); renderDocks(); // the pile loses its top mini as the card departs
+  // the card flies back from its pile onto the deck
+  const el = deck.querySelector('[data-depth="0"]');
+  if(el){
+    const t = dockTarget(last.choice, p);
+    el.style.transition = 'none';
+    el.style.transform = `translate(${t.dx}px,${t.dy}px) rotate(${t.rot}deg) scale(${t.s})`;
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      el.style.transition = '';
+      el.classList.add('fly-back');
+      el.style.transform = '';
+      setTimeout(()=>el.classList.remove('fly-back'), 400);
+    }));
+  }
 }
 
 /* ---- buttons; the piles stay clickable too ---- */
