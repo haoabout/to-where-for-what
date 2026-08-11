@@ -6,7 +6,8 @@
 <title>滑牌抉择 · 原型</title>
 <style>
 /* Tokens lifted from assets/template-trip.html so the prototype reads as the
-   same product. Hard zero-blur shadows, near-black outlines, warm paper. */
+   same product. Near-black outlines, warm paper; the hard zero-blur shadow
+   is reserved for hover/drag — resting elements lie flat. */
 :root{
   --paper:#F4F4F0; --paper-2:#EFEAE4; --card:#FEFEFE;
   --ink:#0E0E0E; --ink-2:#333333; --ink-3:#545454;
@@ -14,6 +15,8 @@
   --accent:#0E0E0E; --accent-soft:#FFEF85; --on-accent:#FEFEFE;
   --ok:#38733C; --danger:#BE2229; --warn:#955E00;
   --r-card:28px; --card-pad:12px;
+  --hard:5px 6px 0 0 var(--line);
+  --hard-sm:3px 4px 0 0 var(--line);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -27,7 +30,7 @@ body{
 
 /* ---- header: progress ---- */
 header{
-  width:min(440px,92vw); padding:16px 4px 8px;
+  width:min(440px,92vw); padding:14px 4px 8px;
   display:flex; align-items:baseline; justify-content:space-between; gap:12px;
 }
 header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
@@ -35,30 +38,32 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 #bar{width:min(440px,92vw); height:4px; background:var(--fill); border-radius:2px; overflow:hidden}
 #bar i{display:block; height:100%; width:100%; transform:scaleX(0); transform-origin:0 0; background:var(--ink); transition:transform .25s ease}
 
-/* ---- deck ---- */
-#stage{flex:1; width:100%; display:flex; align-items:center; justify-content:center; position:relative; min-height:0}
-#deck{position:relative; width:min(380px,88vw); height:min(520px,64vh)}
+/* ---- three-column main: side piles flex, the deck never shrinks ---- */
+#main{
+  flex:1; width:100%; min-height:0;
+  display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;
+}
+#center{display:flex; flex-direction:column; align-items:center; gap:12px; padding:14px 0 6px}
+#deck{position:relative; width:min(380px,88vw); height:clamp(340px, calc(100vh - 330px), 500px)}
+
 .card{
   position:absolute; inset:0;
   background:var(--card); border:1.5px solid var(--line); border-radius:var(--r-card);
   padding:var(--card-pad);
-  box-shadow:5px 6px 0 0 var(--line);
   display:flex; flex-direction:column; gap:10px;
   cursor:grab; will-change:transform;
 }
-.card.dragging{cursor:grabbing; transition:none !important}
-.card.settle{transition:transform .3s cubic-bezier(.2,.9,.3,1.15)}
+@media (hover:hover){ .card[data-depth="0"]:hover{box-shadow:var(--hard)} }
+.card.dragging{cursor:grabbing; transition:none !important; box-shadow:var(--hard)}
+.card.settle{transition:transform .3s cubic-bezier(.2,.9,.3,1.15), box-shadow .3s ease}
 .card.windup{transition:transform .13s ease-out}
-.card.fly{transition:transform .42s cubic-bezier(.45,.05,.25,1); pointer-events:none}
+.card.fly{transition:transform .42s cubic-bezier(.45,.05,.25,1); pointer-events:none; box-shadow:var(--hard)}
 .card.flying{z-index:10}
-/* the two behind */
-.card[data-depth="1"]{transform:translateY(18px) scale(.97); box-shadow:4px 5px 0 0 var(--line)}
-.card[data-depth="2"]{transform:translateY(34px) scale(.94); box-shadow:3px 4px 0 0 var(--line)}
 .card[data-depth="1"],.card[data-depth="2"]{pointer-events:none}
-.card[data-depth]{transition:transform .25s ease, box-shadow .25s ease}
 
 .photo{
-  flex:0 0 44%; border-radius:calc(var(--r-card) - var(--card-pad));
+  flex:0 0 42%; border-radius:calc(var(--r-card) - var(--card-pad));
   background:var(--paper-2); border:1px solid var(--line-soft);
   overflow:hidden; position:relative;
 }
@@ -84,8 +89,7 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
   border:1px solid var(--line-soft); padding:2px 8px; border-radius:99px;
 }
 
-/* verdict stamps: they appear on the side the card is travelling towards —
-   drag left, 「不去」 shows on the left edge leading the motion. */
+/* verdict stamps: they appear on the side the card is travelling towards. */
 .stamp{
   position:absolute; top:26px; font-size:26px; font-weight:900; letter-spacing:.1em;
   padding:6px 14px; border:4px solid; border-radius:10px; opacity:0;
@@ -95,56 +99,84 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .stamp.no{left:20px; color:var(--danger); border-color:var(--danger); transform:rotate(-14deg)}
 .stamp.maybe{left:50%; top:auto; bottom:30px; transform:translateX(-50%) rotate(-4deg); color:var(--warn); border-color:var(--warn)}
 
-/* ---- docks: the three destination piles. They are also the buttons. ---- */
-#docks{
-  display:flex; align-items:stretch; gap:12px; padding:12px 0 8px;
-  width:min(440px,92vw); justify-content:center;
+/* ---- piles: loose scattered stacks; also legal fly-to / click targets ---- */
+.dock{cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px;
+  transition:transform .15s ease}
+.dock.arm{transform:translateY(-5px)}
+.dock .ptitle{
+  font-size:12px; font-weight:800; white-space:nowrap;
+  padding:4px 10px; border-radius:99px; border:1.5px solid transparent;
 }
-#docks .undo{
-  align-self:center; width:42px; height:42px; border-radius:50%; flex:none;
-  border:1.5px solid var(--line); background:var(--card); color:var(--ink-3);
-  font-size:16px; cursor:pointer; box-shadow:2px 3px 0 0 var(--line);
+.dock .ptitle b{font-weight:400; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.dock.no .ptitle{color:var(--danger)}
+.dock.maybe .ptitle{color:var(--warn)}
+.dock.yes .ptitle{color:var(--ok)}
+.pstack{position:relative; width:128px; height:92px}
+.pstack .mini{
+  position:absolute; inset:6px; border-radius:9px; overflow:hidden;
+  background:var(--paper-2); border:1px solid var(--line);
 }
-#docks .undo:active{transform:translate(1px,2px); box-shadow:1px 1px 0 0 var(--line)}
-#docks .undo:disabled{opacity:.35; cursor:default}
-.dock{
-  flex:1; max-width:120px; cursor:pointer;
-  background:var(--card); border:1.5px solid var(--line); border-radius:14px;
-  box-shadow:3px 4px 0 0 var(--line); padding:6px;
-  display:flex; flex-direction:column; gap:4px; align-items:stretch;
-  transition:transform .15s ease, box-shadow .15s ease;
-}
-.dock:active{transform:translate(2px,3px); box-shadow:1px 1px 0 0 var(--line)}
-.dock.arm{transform:translateY(-4px); box-shadow:3px 8px 0 0 var(--line)}
-.dock .mini{
-  height:46px; border-radius:9px; background:var(--paper-2);
-  border:1px dashed var(--line-soft); overflow:hidden; position:relative;
-}
-.dock .mini.filled{border-style:solid; border-color:var(--line)}
-.dock .mini img{width:100%; height:100%; object-fit:cover; display:block}
-.dock .mini .mname{
+.pstack .mini img{width:100%; height:100%; object-fit:cover; display:block}
+.pstack .mini .mname{
   position:absolute; left:0; right:0; bottom:0; font-size:9.5px; font-weight:700;
   color:#fff; background:rgba(14,14,14,.62); padding:2px 5px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.dock .mini.pop{animation:pop .3s ease}
-@keyframes pop{0%{transform:scale(1.14)}100%{transform:scale(1)}}
-.dock .dlabel{
-  display:flex; justify-content:space-between; align-items:center;
-  font-size:11.5px; font-weight:800; padding:0 3px;
+.pstack .mini.pop{animation:pop .3s ease}
+@keyframes pop{0%{scale:1.12}100%{scale:1}}
+.pstack.empty{border:1.5px dashed var(--line-soft); border-radius:12px}
+@media (hover:hover){
+  .dock:hover{transform:translateY(-3px)}
+  .dock:hover .pstack .mini.top{box-shadow:var(--hard-sm)}
+  .dock:hover .ptitle{border-color:var(--line); background:var(--card); box-shadow:2px 2px 0 0 var(--line)}
 }
-.dock .dlabel b{font-weight:400; color:var(--ink-3); font-variant-numeric:tabular-nums}
-.dock.no .dlabel{color:var(--danger)}
-.dock.maybe .dlabel{color:var(--warn)}
-.dock.yes .dlabel{color:var(--ok)}
+.side.no{justify-self:end; padding-right:26px}
+.side.yes{justify-self:start; padding-left:26px}
+/* the maybe pile sits under the deck and runs horizontal + smaller */
+#maybeDock{flex-direction:row; gap:10px}
+#maybeDock .pstack{width:104px; height:64px}
+#maybeDock .pstack .mini{inset:4px}
 
-/* keyboard hints: desktop only (hover + fine pointer) */
-#keys{display:none; gap:16px; padding-bottom:12px; font-size:11.5px; color:var(--ink-3)}
-#keys kbd{
-  font-family:inherit; background:var(--card); border:1px solid #C2BDB7;
-  border-bottom-width:2px; border-radius:5px; padding:1px 6px; margin-right:4px; font-size:11px;
+/* stage 2: side stacks give way, title text remains as the fly target */
+@media (max-width:920px){
+  .pstack{width:96px; height:70px}
+  #maybeDock .pstack{width:96px; height:58px}
 }
-@media (hover:hover) and (pointer:fine){ #keys{display:flex} }
+@media (max-width:760px){
+  /* the grid has no room left beside the deck: the side piles collapse to
+     text chips floated above the deck's top corners instead */
+  #main{display:block; position:relative; padding-top:38px}
+  #center{margin:0 auto; width:fit-content}
+  .side{position:absolute; top:4px; z-index:5}
+  .side .pstack{display:none}
+  .side .ptitle{border-color:var(--line); background:var(--card)}
+  .side.no{left:10px; padding-right:0} .side.yes{right:10px; padding-left:0}
+}
+@media (max-height:760px){
+  #maybeDock .pstack{display:none}
+  #maybeDock .ptitle{border-color:var(--line); background:var(--card)}
+}
+
+/* ---- action buttons with their keys printed right underneath ---- */
+#actions{display:flex; gap:20px; padding:10px 0 14px; align-items:flex-start}
+.act{display:flex; flex-direction:column; align-items:center; gap:5px}
+.act button{
+  width:54px; height:54px; border-radius:50%;
+  border:1.5px solid var(--line); background:var(--card); color:var(--ink);
+  font-size:22px; cursor:pointer;
+  transition:box-shadow .15s ease, transform .15s ease;
+}
+.act button.small{width:44px; height:44px; font-size:16px; color:var(--ink-3)}
+@media (hover:hover){ .act button:hover{box-shadow:var(--hard-sm); transform:translate(-1px,-2px)} }
+.act button:active{transform:translate(1px,2px); box-shadow:none}
+.act button:disabled{opacity:.35; cursor:default; box-shadow:none}
+.act .no{color:var(--danger)} .act .maybe{color:var(--warn)} .act .yes{color:var(--ok)}
+.act kbd{
+  font-family:inherit; font-size:11px; color:var(--ink-3);
+  background:var(--card); border:1px solid #C2BDB7; border-bottom-width:2px;
+  border-radius:5px; padding:1px 7px;
+}
+@media (hover:none), (pointer:coarse){ .act kbd{display:none} }
 
 /* ---- detail overlay ---- */
 #detail{
@@ -163,8 +195,9 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .dclose{
   position:absolute; right:12px; top:12px; z-index:2;
   width:34px; height:34px; border-radius:50%; font-size:15px; cursor:pointer;
-  border:1.5px solid var(--line); background:var(--card); box-shadow:2px 2px 0 0 var(--line);
+  border:1.5px solid var(--line); background:var(--card);
 }
+.dclose:active{transform:translate(1px,1px)}
 .dphoto{height:220px; flex:none; border-radius:12px; overflow:hidden; background:var(--paper-2); border:1px solid var(--line-soft)}
 .dphoto img{width:100%; height:100%; object-fit:cover; display:block}
 .dcard h2{font-size:20px; line-height:1.3}
@@ -176,9 +209,11 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .dactions{display:flex; gap:10px; margin-top:2px}
 .dactions button{
   flex:1; font-size:14px; font-weight:800; padding:11px 0; border-radius:12px; cursor:pointer;
-  border:1.5px solid var(--line); background:var(--card); box-shadow:3px 3px 0 0 var(--line);
+  border:1.5px solid var(--line); background:var(--card);
+  transition:box-shadow .15s ease;
 }
-.dactions button:active{transform:translate(2px,2px); box-shadow:1px 1px 0 0 var(--line)}
+@media (hover:hover){ .dactions button:hover{box-shadow:var(--hard-sm)} }
+.dactions button:active{transform:translate(2px,2px); box-shadow:none}
 .dactions .no{color:var(--danger)} .dactions .maybe{color:var(--warn)} .dactions .yes{color:var(--ok)}
 
 /* ---- summary ---- */
@@ -186,15 +221,16 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 #summary.show{display:block}
 #summary h2{font-size:18px; font-weight:800; margin:14px 0 10px}
 .pile{background:var(--card); border:1.5px solid var(--line); border-radius:16px;
-  box-shadow:4px 5px 0 0 var(--line); padding:14px 16px; margin-bottom:14px}
+  padding:14px 16px; margin-bottom:14px}
 .pile h3{font-size:14px; display:flex; gap:8px; align-items:center; margin-bottom:8px}
 .pile ul{list-style:none; font-size:13px; color:var(--ink-2); line-height:1.9}
 .pile.yes h3{color:var(--ok)} .pile.no h3{color:var(--danger)} .pile.maybe h3{color:var(--warn)}
 #summary .row{display:flex; gap:10px; margin-top:6px}
 #summary .row button{
   font-size:13px; font-weight:700; padding:9px 16px; border-radius:10px; cursor:pointer;
-  border:1.5px solid var(--line); background:var(--card); box-shadow:3px 3px 0 0 var(--line);
+  border:1.5px solid var(--line); background:var(--card);
 }
+#summary .row button:active{transform:translate(1px,1px)}
 #toast{
   position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px);
   background:var(--accent); color:var(--on-accent); font-size:13px;
@@ -202,8 +238,8 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 }
 #toast.show{transform:translateX(-50%) translateY(0)}
 @media (prefers-reduced-motion:reduce){
-  .card.settle,.card.windup,.card.fly,.card[data-depth],.dock,#bar i{transition:none}
-  .dock .mini.pop{animation:none}
+  .card.settle,.card.windup,.card.fly,.dock,#bar i,.act button{transition:none}
+  .pstack .mini.pop{animation:none}
 }
 </style>
 </head>
@@ -211,26 +247,30 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 <header><h1>这次想去哪？</h1><span id="counter"></span></header>
 <div id="bar"><i></i></div>
 
-<div id="stage"><div id="deck"></div></div>
-
-<div id="docks">
-  <button class="undo" title="撤销 (Z)">↺</button>
-  <div class="dock no" data-pile="no" title="不想去 (←)">
-    <div class="mini"></div><div class="dlabel"><span>✕ 不去</span><b>0</b></div>
+<div id="main">
+  <div class="dock side no" data-pile="no" title="不想去 (←)">
+    <div class="ptitle">✕ 不去 · <b>0</b></div>
+    <div class="pstack empty"></div>
   </div>
-  <div class="dock maybe" data-pile="maybe" title="待定 (↓)">
-    <div class="mini"></div><div class="dlabel"><span>〜 待定</span><b>0</b></div>
+  <div id="center">
+    <div id="deck"></div>
+    <div class="dock" id="maybeDock" data-pile="maybe" title="待定 (↓)">
+      <div class="ptitle">〜 待定 · <b>0</b></div>
+      <div class="pstack empty"></div>
+    </div>
   </div>
-  <div class="dock yes" data-pile="yes" title="想去 (→)">
-    <div class="mini"></div><div class="dlabel"><span>♥ 想去</span><b>0</b></div>
+  <div class="dock side yes" data-pile="yes" title="想去 (→)">
+    <div class="ptitle">♥ 想去 · <b>0</b></div>
+    <div class="pstack empty"></div>
   </div>
 </div>
-<div id="keys">
-  <span><kbd>→</kbd>想去</span>
-  <span><kbd>←</kbd>不想去</span>
-  <span><kbd>↓</kbd>待定</span>
-  <span><kbd>Z</kbd>撤销</span>
-  <span><kbd>↵</kbd>详情</span>
+
+<div id="actions">
+  <div class="act"><button class="undo small" title="撤销">↺</button><kbd>Z</kbd></div>
+  <div class="act"><button class="no" title="不想去">✕</button><kbd>←</kbd></div>
+  <div class="act"><button class="maybe" title="待定">〜</button><kbd>↓</kbd></div>
+  <div class="act"><button class="yes" title="想去">♥</button><kbd>→</kbd></div>
+  <div class="act"><button class="info small" title="详情">ⓘ</button><kbd>↵</kbd></div>
 </div>
 
 <div id="detail"><div class="dcard"></div></div>
@@ -276,6 +316,18 @@ async function load(){
 
 function catLabel(p){ return CAT[p.category] || p.category || ''; }
 
+/* Stable per-place scatter: the same card always lies at the same angle, so
+   re-renders never make a pile twitch. */
+function seed(id){ let h=0; for(const c of String(id)) h=(h*31+c.charCodeAt(0))|0; return Math.abs(h); }
+function scatter(p, maxDeg){
+  const h = seed(p.id);
+  return {
+    rot: ((h%100)/100 - .5) * 2 * maxDeg,
+    ox: (h>>2)%9 - 4,
+    oy: (h>>4)%7 - 3,
+  };
+}
+
 function cardEl(p, depth){
   const el = document.createElement('article');
   el.className = 'card'; el.dataset.depth = depth;
@@ -292,6 +344,10 @@ function cardEl(p, depth){
       <div class="more">点击卡片看详情</div>
       <div class="tags">${(p.tags||[]).slice(0,4).map(t=>`<span>${t}</span>`).join('')}</div>
     </div>`;
+  if(depth > 0){ // the loose pile look; the top card always lies straight
+    const s = scatter(p, 2.5);
+    el.style.transform = `translate(${s.ox}px,${s.oy + depth*7}px) rotate(${s.rot}deg)`;
+  }
   return el;
 }
 
@@ -311,38 +367,45 @@ function render(){
 function updateHud(){
   document.getElementById('counter').textContent = `${Math.min(idx+1,places.length)} / ${places.length}`;
   document.querySelector('#bar i').style.transform = `scaleX(${places.length ? idx/places.length : 0})`;
-  document.querySelector('#docks .undo').disabled = history.length===0;
+  document.querySelector('#actions .undo').disabled = history.length===0;
 }
 
-/* ---- docks ---- */
+/* ---- piles ---- */
 function renderDocks(popPile){
   ['yes','maybe','no'].forEach(k=>{
     const members = places.filter(p=>p.choice===k);
     const dock = document.querySelector(`.dock[data-pile="${k}"]`);
-    dock.querySelector('.dlabel b').textContent = members.length;
-    const mini = dock.querySelector('.mini');
-    const top = members[members.length-1];
-    if(top){
-      const img = (top.images && top.images[0]) ? `<img src="${top.images[0].url}" alt="">` : '';
-      mini.className = 'mini filled';
-      mini.innerHTML = `${img}<span class="mname">${top.name}</span>`;
-    }else{
-      mini.className = 'mini'; mini.innerHTML = '';
-    }
-    if(popPile===k){
-      mini.classList.remove('pop'); void mini.offsetWidth; mini.classList.add('pop');
+    dock.querySelector('.ptitle b').textContent = members.length;
+    const stack = dock.querySelector('.pstack');
+    const top3 = members.slice(-3);
+    stack.classList.toggle('empty', top3.length===0);
+    stack.innerHTML = top3.map((p,i)=>{
+      const s = scatter(p, 8);
+      const img = (p.images && p.images[0]) ? `<img src="${p.images[0].url}" alt="">` : '';
+      return `<div class="mini ${i===top3.length-1?'top':''}"
+        style="transform:translate(${s.ox}px,${s.oy}px) rotate(${s.rot}deg); z-index:${i}">
+        ${img}<span class="mname">${p.name}</span></div>`;
+    }).join('');
+    if(popPile===k && top3.length){
+      const m = stack.querySelector('.mini.top');
+      m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
     }
   });
 }
 
-/* Where a card must fly to land on its dock, in deck-local translate terms. */
-function dockTarget(choice){
-  const dr = document.querySelector(`.dock[data-pile="${choice}"] .mini`).getBoundingClientRect();
+/* Where a card must fly to land on its pile, in deck-local translate terms.
+   When a pile has collapsed to its text title, the title is the target. */
+function dockTarget(choice, p){
+  const dock = document.querySelector(`.dock[data-pile="${choice}"]`);
+  const stack = dock.querySelector('.pstack');
+  const visible = stack.offsetParent !== null && getComputedStyle(stack).display !== 'none';
+  const dr = (visible ? stack : dock.querySelector('.ptitle')).getBoundingClientRect();
   const er = deck.getBoundingClientRect();
   return {
     dx: dr.left + dr.width/2 - (er.left + er.width/2),
     dy: dr.top + dr.height/2 - (er.top + er.height/2),
-    s: Math.max(dr.width / er.width, .12),
+    s: Math.min(Math.max(dr.width / er.width, .09), .4),
+    rot: visible ? scatter(p, 8).rot : 0,
   };
 }
 
@@ -389,9 +452,8 @@ function attachDrag(el){
   });
 }
 
-/* One commit path for drag, keys and dock clicks, so the card always flies
-   to its pile. Drag commits fly from wherever the hand let go; key/click
-   commits get a short wind-up first so the motion reads as a throw. */
+/* One commit path for drag, keys and pile clicks, so the card always flies
+   to its pile — and lands already lying at its final scattered angle. */
 function commit(choice, fromDrag){
   const p = places[idx];
   if(!p || idx >= places.length) return;
@@ -407,10 +469,10 @@ function commit(choice, fromDrag){
   el.querySelector('.stamp.'+choice).style.opacity = 1;
 
   const fly = ()=>{
-    const t = dockTarget(choice);
+    const t = dockTarget(choice, p);
     el.classList.remove('windup');
     el.classList.add('fly');
-    el.style.transform = `translate(${t.dx}px,${t.dy}px) rotate(0deg) scale(${t.s})`;
+    el.style.transform = `translate(${t.dx}px,${t.dy}px) rotate(${t.rot}deg) scale(${t.s})`;
     setTimeout(()=>{ el.remove(); renderDocks(choice); }, 430);
   };
 
@@ -434,16 +496,19 @@ function undo(){
   delete places[idx].choice;
   closeDetail();
   summaryEl.classList.remove('show');
-  document.getElementById('stage').style.display='';
-  document.getElementById('docks').style.display='';
-  document.getElementById('keys').style.display='';
+  document.getElementById('main').style.display='';
+  document.getElementById('actions').style.display='';
   render(); renderDocks();
 }
 
-/* ---- docks are the buttons ---- */
+/* ---- buttons; the piles stay clickable too ---- */
 document.querySelectorAll('.dock').forEach(d=>
   d.addEventListener('click', ()=>commit(d.dataset.pile, false)));
-document.querySelector('#docks .undo').onclick = undo;
+document.querySelector('#actions .undo').onclick  = undo;
+document.querySelector('#actions .no').onclick    = ()=>commit('no', false);
+document.querySelector('#actions .maybe').onclick = ()=>commit('maybe', false);
+document.querySelector('#actions .yes').onclick   = ()=>commit('yes', false);
+document.querySelector('#actions .info').onclick  = ()=>openDetail(places[idx]);
 
 /* ---- detail overlay ---- */
 function openDetail(p){
@@ -491,9 +556,8 @@ addEventListener('keydown', e=>{
 
 /* ---- summary ---- */
 function showSummary(){
-  document.getElementById('stage').style.display='none';
-  document.getElementById('docks').style.display='none';
-  document.getElementById('keys').style.display='none';
+  document.getElementById('main').style.display='none';
+  document.getElementById('actions').style.display='none';
   const piles = {yes:[], maybe:[], no:[]};
   places.forEach(p=>{ if(p.choice) piles[p.choice].push(p); });
   const label = {yes:'♥ 想去', maybe:'〜 待定', no:'✕ 不去'};
@@ -512,9 +576,8 @@ function showSummary(){
   document.getElementById('againBtn').onclick = ()=>{
     places.forEach(p=>delete p.choice); idx=0; history=[];
     summaryEl.classList.remove('show');
-    document.getElementById('stage').style.display='';
-    document.getElementById('docks').style.display='';
-    document.getElementById('keys').style.display='';
+    document.getElementById('main').style.display='';
+    document.getElementById('actions').style.display='';
     render(); renderDocks();
   };
 }
