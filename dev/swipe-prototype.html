@@ -199,17 +199,21 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 #pileView{z-index:18}
 #detail.show,#pileView.show{display:flex}
 
-/* pile view: every card of one pile, laid out flat */
+/* pile view: every card of one pile laid flat on the dimmed backdrop —
+   no container, the title chip and cards float directly */
 .pcard{
-  width:min(720px,94vw); max-height:88vh; overflow:auto; touch-action:pan-y;
-  background:var(--paper); border:1.5px solid var(--line); border-radius:22px;
-  box-shadow:6px 7px 0 0 var(--line); padding:18px; position:relative;
-  display:flex; flex-direction:column; gap:14px;
+  width:min(960px,94vw); max-height:88vh; overflow:auto; touch-action:pan-y;
+  padding:8px 8px 24px; position:relative;
+  display:flex; flex-direction:column; gap:16px;
 }
-.pcard h2{font-size:16px; font-weight:800}
+.pcard h2{
+  font-size:15px; font-weight:800; align-self:flex-start;
+  background:var(--card); border:1.5px solid var(--line); border-radius:99px;
+  padding:7px 16px;
+}
 .pcard h2 b{font-weight:400; color:var(--ink-3); font-variant-numeric:tabular-nums}
 .pcard.no h2{color:var(--danger)} .pcard.maybe h2{color:var(--warn)} .pcard.yes h2{color:var(--ok)}
-.pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px}
+.pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(165px,1fr)); gap:14px}
 .pgrid .gcard{
   background:var(--card); border:1px solid var(--line); border-radius:12px;
   padding:6px; cursor:pointer; display:flex; flex-direction:column; gap:6px;
@@ -229,7 +233,10 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 .gchoice button.on.no{background:var(--danger); border-color:var(--danger); color:#fff}
 .gchoice button.on.maybe{background:var(--warn); border-color:var(--warn); color:#fff}
 .gchoice button.on.yes{background:var(--ok); border-color:var(--ok); color:#fff}
-.pempty{font-size:13px; color:var(--ink-3); padding:20px 0; text-align:center}
+.pempty{
+  font-size:13px; color:var(--ink-3); padding:14px 18px; align-self:flex-start;
+  background:var(--card); border:1px solid var(--line-soft); border-radius:12px;
+}
 .dcard{
   width:min(520px,94vw); max-height:92vh; overflow:auto; touch-action:pan-y;
   background:var(--card); border:1.5px solid var(--line); border-radius:22px;
@@ -624,6 +631,10 @@ function renderPileView(){
   });
 }
 pileViewEl.addEventListener('click', e=>{ if(e.target===pileViewEl) closePileView(); });
+// the content area is transparent now — clicks in the gaps also close
+pileViewEl.querySelector('.pcard').addEventListener('click', e=>{
+  if(e.target===e.currentTarget || e.target.classList.contains('pgrid')) closePileView();
+});
 
 /* ---- detail overlay. From the deck it decides (card flies to a pile);
    from the pile view it re-assigns the already-decided card. ---- */
