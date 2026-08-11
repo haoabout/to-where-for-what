@@ -2583,10 +2583,14 @@ pre.code{
 @media (max-width:760px){
   /* No room beside the deck: side piles collapse to text chips floated above
      the deck's top corners. The absolutely-positioned chips leave the grid,
-     which would drop the deck into the first 1fr column — recenter with flex. */
+     which would drop the deck into the first 1fr column — recenter with flex.
+     The chips sit BELOW the mode-switch row (top:46px), never above it: the
+     switch keeps the same first-row spot it has in the grid mode, so
+     toggling modes never moves the control. */
   #dk-row{display:flex; justify-content:center}
-  #view-deck{padding-top:34px}
-  .dk-side{position:absolute; top:2px; z-index:5; translate:none}
+  .dk-side{position:absolute; top:46px; z-index:5; translate:none}
+  /* the HUD row steps aside for the chip row wedged in above it */
+  .dk-head{margin-top:46px}
   .dk-side .dk-pstack{display:none}
   .dk-side .dk-ptitle{border-color:var(--line); background:var(--card)}
   .dk-side.dk-no{left:10px; padding-right:0} .dk-side.dk-yes{right:10px; padding-left:0}
