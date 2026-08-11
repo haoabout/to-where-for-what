@@ -8395,6 +8395,21 @@ const DECK = (() => {
       buildActions();
       $$(".dk-dock").forEach(d => d.addEventListener("click", () => openPileView(d.dataset.pile)));
       $("#dk-pileview").addEventListener("click", e => { if(e.target === e.currentTarget) closePileView(); });
+      /* Focus stays inside the open overlay: Tab wraps last→first (and
+         Shift+Tab first→last, with the initially-focused title counting as
+         "before first"). Without this, Tab walks into the blurred page
+         behind the aria-modal surface. Registered on the element so the
+         document-level guards (which ignore inputs) can't swallow it. */
+      $("#dk-pileview").addEventListener("keydown", e => {
+        if(e.key !== "Tab" || !openPile) return;
+        const items = $$("#dk-pileview button, #dk-pileview input")
+          .filter(el => el.offsetParent !== null && !el.disabled);
+        if(!items.length) return;
+        const first = items[0], last = items[items.length - 1];
+        const cur = document.activeElement;
+        if(e.shiftKey && (cur === first || cur === $("#dk-pv-title"))){ e.preventDefault(); last.focus(); }
+        else if(!e.shiftKey && cur === last){ e.preventDefault(); first.focus(); }
+      });
     }
     clearDone();
     queue = deriveQueue(null);
