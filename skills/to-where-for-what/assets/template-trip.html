@@ -2348,6 +2348,249 @@ pre.code{
 /* One line each, or a long day heading pushes the rail wider than its gutter */
 .pgnav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* ═══════════════════════════════════════════════ Deck view
+   Ported from dev/swipe-prototype.html. Every class is dk- prefixed and every
+   rule is scoped under #view-deck (or the dk- overlay), because the template
+   already owns .card/.media/.pitch/.tags with very different rules. The hard
+   zero-blur shadow is reserved for hover/drag ("picked up"); resting elements
+   lie flat. Deck-local tokens live on the section, not :root. */
+#view-deck{
+  --dk-r:26px; --dk-pad:12px;
+  --dk-hard:5px 6px 0 0 var(--line); --dk-hard-sm:3px 4px 0 0 var(--line);
+  /* min-height, not height: on a short window the deck's own minimum
+     (HUD + 300px row + actions) exceeds --map-h, and a fixed height would
+     make the centred card stack overflow upward through the HUD. Growing
+     instead keeps everything in flow; the page scrolls, as the map does. */
+  min-height:var(--map-h,560px); position:relative;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  -webkit-user-select:none; user-select:none;
+}
+.dk-head{
+  width:min(440px,92vw); display:flex; align-items:baseline;
+  justify-content:space-between; gap:12px; font-size:13px; font-weight:700;
+}
+#dk-counter{font-weight:400; font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.dk-bar{width:min(440px,92vw); height:4px; background:var(--fill,var(--line-soft)); border-radius:2px; overflow:hidden; flex:none}
+.dk-bar i{display:block; height:100%; width:100%; transform:scaleX(0); transform-origin:0 0; background:var(--ink); transition:transform .25s ease}
+#dk-main{flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px}
+#dk-row{width:100%; flex:1; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center}
+/* A definite height, derived from the measured viewport slot rather than a
+   percentage: the deck sits in an auto grid track, and height:100% against
+   an auto track resolves to 0 — the cards (absolute-positioned) then paint
+   as a 0-high jumble. ~250px is the section's own chrome: HUD + maybe pile
+   + action row + gaps. The section grows (min-height) when this exceeds the
+   slot, so a short window scrolls instead of overlapping. */
+#dk-deck{position:relative; width:min(380px,88vw); height:clamp(300px, calc(var(--map-h,560px) - 250px), 520px)}
+
+.dk-card{
+  position:absolute; inset:0;
+  background:var(--card); border:1.5px solid var(--line); border-radius:var(--dk-r);
+  padding:var(--dk-pad);
+  display:flex; flex-direction:column; gap:8px;
+  cursor:grab; will-change:transform; touch-action:none;
+}
+@media (hover:hover){ #view-deck .dk-card[data-depth="0"]:hover{box-shadow:var(--dk-hard)} }
+.dk-card.dk-dragging{cursor:grabbing; transition:none !important; box-shadow:var(--dk-hard)}
+.dk-card.dk-settle{transition:transform .3s cubic-bezier(.2,.9,.3,1.15), box-shadow .3s ease}
+.dk-card.dk-windup{transition:transform .13s ease-out}
+.dk-card.dk-fly{transition:transform .42s cubic-bezier(.45,.05,.25,1); pointer-events:none; box-shadow:var(--dk-hard)}
+.dk-card.dk-flyback{transition:transform .38s cubic-bezier(.3,.7,.3,1); pointer-events:none; box-shadow:var(--dk-hard)}
+.dk-card.dk-flying{z-index:10}
+.dk-card[data-depth="1"],.dk-card[data-depth="2"]{pointer-events:none}
+
+.dk-media{
+  flex:0 0 42%; border-radius:calc(var(--dk-r) - var(--dk-pad));
+  background:var(--paper-2,var(--fill)); border:1px solid var(--line-soft);
+  overflow:hidden; position:relative;
+}
+.dk-media img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; pointer-events:none}
+.dk-media-fb{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:8px; color:var(--ink-3);
+  font-size:12px;
+}
+.dk-media-fb svg{color:color-mix(in srgb,var(--ink-3) 40%,var(--line-2))}
+.dk-cat{
+  position:absolute; left:10px; top:10px; z-index:2; font-size:11px; font-weight:800;
+  background:var(--accent-soft,#FFEF85); color:var(--ink); border:1px solid var(--line);
+  padding:3px 8px; border-radius:99px;
+}
+.dk-body{flex:1; display:flex; flex-direction:column; gap:7px; padding:2px 6px 4px; min-height:0}
+.dk-name{font-size:18px; font-weight:800; line-height:1.25}
+.dk-name small{display:block; font-size:11.5px; font-weight:400; color:var(--ink-3); margin-top:2px}
+.dk-facts{font-size:12px; color:var(--ink-2); display:flex; gap:8px; flex-wrap:wrap}
+.dk-facts b{font-weight:700}
+.dk-pitch{
+  font-size:13px; line-height:1.55; color:var(--ink-2);
+  overflow:hidden; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical;
+}
+.dk-more{font-size:11.5px; color:var(--ink-3)}
+.dk-tags{margin-top:auto; display:flex; gap:6px; flex-wrap:wrap}
+.dk-tags span{
+  font-size:11px; color:var(--ink-3); background:var(--paper);
+  border:1px solid var(--line-soft); padding:2px 8px; border-radius:99px;
+}
+
+/* Verdict stamps appear on the side the card travels towards: drag left and
+   「不想去」 leads the motion on the left edge. */
+.dk-stamp{
+  position:absolute; top:24px; font-size:24px; font-weight:900; letter-spacing:.1em;
+  padding:5px 13px; border:4px solid; border-radius:10px; opacity:0;
+  background:var(--card); pointer-events:none; z-index:2; white-space:nowrap;
+}
+.dk-stamp.yes{right:18px; color:var(--ok); border-color:var(--ok); transform:rotate(14deg)}
+.dk-stamp.no{left:18px; color:var(--danger); border-color:var(--danger); transform:rotate(-14deg)}
+.dk-stamp.maybe{left:50%; top:auto; bottom:28px; transform:translateX(-50%) rotate(-4deg); color:var(--warn); border-color:var(--warn)}
+
+/* ── Piles: loose scattered stacks; whole dock is one <button> (browse) ── */
+.dk-dock{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  background:none; border:none; padding:0; cursor:pointer; font:inherit;
+  color:inherit; transition:transform .15s ease;
+}
+.dk-dock.dk-arm{transform:translateY(-5px)}
+.dk-ptitle{
+  display:inline-block; font-size:12px; font-weight:800; white-space:nowrap;
+  padding:4px 10px; border-radius:99px; border:1.5px solid transparent;
+}
+.dk-ptitle b{font-weight:400; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.dk-no .dk-ptitle{color:var(--danger)}
+.dk-maybe .dk-ptitle{color:var(--warn)}
+.dk-yes .dk-ptitle{color:var(--ok)}
+.dk-pstack{position:relative; display:block; width:120px; height:86px}
+.dk-mini{
+  position:absolute; inset:6px; display:block; border-radius:9px; overflow:hidden;
+  background:var(--card); border:1px solid var(--line); padding:4px;
+}
+.dk-mini img{width:100%; height:100%; object-fit:cover; display:block; border-radius:5px; background:var(--paper-2,var(--fill))}
+.dk-mname{
+  position:absolute; left:4px; right:4px; bottom:4px; font-size:9.5px; font-weight:700;
+  color:#fff; background:rgba(14,14,14,.62); padding:2px 5px;
+  border-radius:0 0 5px 5px; text-align:left;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.dk-mini.dk-pop{animation:dk-pop .3s ease}
+@keyframes dk-pop{0%{scale:1.12}100%{scale:1}}
+.dk-pstack.dk-empty{border:1.5px dashed var(--line-soft); border-radius:12px}
+@media (hover:hover){
+  .dk-dock:hover{transform:translateY(-3px)}
+  .dk-dock:hover .dk-mini.dk-top{box-shadow:var(--dk-hard-sm)}
+  .dk-dock:hover .dk-ptitle{border-color:var(--line); background:var(--card); box-shadow:2px 2px 0 0 var(--line)}
+}
+.dk-side{translate:0 -16px} /* stack (not title+stack) centres on the deck midline; `translate` stays clear of .dk-arm's transform */
+.dk-side.dk-no{justify-self:end; padding-right:clamp(28px,7vw,110px)}
+.dk-side.dk-yes{justify-self:start; padding-left:clamp(28px,7vw,110px)}
+#dk-maybedock{flex-direction:row; gap:12px}
+
+/* ── Action buttons with their keys printed right underneath ── */
+#dk-actions{display:flex; gap:14px; padding:2px 0 6px; align-items:flex-start; flex:none}
+.dk-act{display:flex; flex-direction:column; align-items:center; gap:5px}
+.dk-act button{
+  width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--line); background:var(--card); color:var(--ink);
+  cursor:pointer; transition:box-shadow .15s ease, transform .15s ease;
+}
+.dk-act button.dk-sm{width:34px; height:34px; color:var(--ink-3); margin-top:4px}
+@media (hover:hover){ .dk-act button:hover{box-shadow:var(--dk-hard-sm); transform:translate(-1px,-2px)} }
+.dk-act button:active{transform:translate(1px,2px); box-shadow:none}
+.dk-act button:disabled{opacity:.35; cursor:default; box-shadow:none}
+.dk-act .dk-b-no{color:var(--danger)} .dk-act .dk-b-maybe{color:var(--warn)} .dk-act .dk-b-yes{color:var(--ok)}
+.dk-act kbd{
+  font-family:inherit; font-size:11px; color:var(--ink-3);
+  background:var(--card); border:1px solid var(--line-2); border-bottom-width:2px;
+  border-radius:5px; padding:1px 7px;
+}
+@media (hover:none), (pointer:coarse){ .dk-act kbd{display:none} }
+
+/* ── Pile browse overlay: cards flat on the dimmed backdrop, no container ── */
+#dk-pileview{
+  position:fixed; inset:0; z-index:70; display:none;
+  background:rgba(14,14,14,.35); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px);
+  padding:4vh 16px; align-items:center; justify-content:center;
+}
+#dk-pileview.show{display:flex; animation:dk-fadein .18s ease}
+@keyframes dk-fadein{from{opacity:0}}
+.dk-pcard{
+  width:min(960px,94vw); max-height:88vh; overflow:auto; touch-action:pan-y;
+  padding:8px 8px 24px; position:relative;
+  display:flex; flex-direction:column; gap:16px;
+  -webkit-user-select:text; user-select:text;
+}
+.dk-pcard h2{
+  font-size:15px; font-weight:800; align-self:flex-start; margin:0;
+  background:var(--card); border:1.5px solid var(--line); border-radius:99px;
+  padding:7px 16px;
+}
+.dk-pcard h2 b{font-weight:400; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.dk-pcard.no h2{color:var(--danger)} .dk-pcard.maybe h2{color:var(--warn)} .dk-pcard.yes h2{color:var(--ok)}
+.dk-pclose{
+  position:absolute; right:12px; top:12px; z-index:2;
+  width:34px; height:34px; border-radius:50%; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--line); background:var(--card); color:var(--ink);
+}
+.dk-pclose:active{transform:translate(1px,1px)}
+.dk-pgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(165px,1fr)); gap:14px}
+.dk-gcard{
+  background:var(--card); border:1px solid var(--line); border-radius:12px;
+  padding:6px; cursor:pointer; display:flex; flex-direction:column; gap:6px;
+  text-align:left;
+  transition:box-shadow .15s ease;
+}
+@media (hover:hover){ .dk-gcard:hover{box-shadow:var(--dk-hard-sm)} }
+.dk-gcard.dk-deal{animation:dk-deal .32s cubic-bezier(.3,.7,.3,1) backwards; animation-delay:var(--dk-d,0ms)}
+@keyframes dk-deal{from{opacity:0; transform:translateY(16px) rotate(var(--dk-rt,3deg)) scale(.94)}}
+.dk-gphoto{height:86px; border-radius:8px; overflow:hidden; position:relative; background:var(--paper-2,var(--fill)); border:1px solid var(--line-soft)}
+.dk-gphoto img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block}
+.dk-gphoto .dk-media-fb svg{width:30px;height:30px}
+.dk-gname{font-size:12px; font-weight:700; line-height:1.3; padding:0 2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.dk-garea{font-size:10.5px; color:var(--ink-3); padding:0 2px}
+.dk-gchoice{display:flex; gap:6px; padding:2px}
+.dk-gchoice button{
+  flex:1; height:26px; border-radius:8px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--line-soft); background:var(--paper); color:var(--ink-3);
+}
+.dk-gchoice button.on.dk-v-no{background:var(--danger); border-color:var(--danger); color:#fff}
+.dk-gchoice button.on.dk-v-maybe{background:var(--warn); border-color:var(--warn); color:#fff}
+.dk-gchoice button.on.dk-v-yes{background:var(--ok); border-color:var(--ok); color:#fff}
+.dk-greason{display:flex; flex-wrap:wrap; gap:4px; padding:0 2px}
+.dk-greason button{
+  font-size:10.5px; padding:2px 8px; border-radius:99px; cursor:pointer;
+  border:1px solid var(--line-soft); background:var(--paper); color:var(--ink-3);
+}
+.dk-greason button.on{background:var(--ink); border-color:var(--ink); color:var(--paper)}
+.dk-ginput{
+  width:100%; font-size:11px; padding:4px 8px; border-radius:8px;
+  border:1px dashed var(--line-2); background:var(--paper); color:var(--ink);
+  font-family:inherit;
+}
+.dk-ginput:focus{outline:none; border-style:solid; border-color:var(--line)}
+.dk-pempty{
+  font-size:13px; color:var(--ink-3); padding:14px 18px; align-self:flex-start;
+  background:var(--card); border:1px solid var(--line-soft); border-radius:12px;
+}
+/* The deck's own empty state fills the (position:relative) deck slot */
+#dk-deck .empty-state{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:20px}
+
+@media (max-width:920px){
+  #view-deck .dk-pstack{width:100px; height:72px}
+}
+@media (max-width:760px){
+  /* No room beside the deck: side piles collapse to text chips floated above
+     the deck's top corners. The absolutely-positioned chips leave the grid,
+     which would drop the deck into the first 1fr column — recenter with flex. */
+  #dk-row{display:flex; justify-content:center}
+  #view-deck{padding-top:34px}
+  .dk-side{position:absolute; top:2px; z-index:5; translate:none}
+  .dk-side .dk-pstack{display:none}
+  .dk-side .dk-ptitle{border-color:var(--line); background:var(--card)}
+  .dk-side.dk-no{left:10px; padding-right:0} .dk-side.dk-yes{right:10px; padding-left:0}
+  #dk-maybedock .dk-pstack{display:none}
+  #dk-maybedock .dk-ptitle{border-color:var(--line); background:var(--card)}
+}
+
 /* ═══════════════════════════════════════════════ Empty states / toast */
 .empty-state{text-align:center;padding:66px 20px;color:var(--ink-3)}
 .empty-state .big{font:400 21px var(--serif);color:var(--ink-2);margin-bottom:9px}
@@ -2406,6 +2649,12 @@ pre.code{
      outline stay, so "the pointer is on this card" still reads. */
   .card{transition:border-color .15s,opacity .2s,box-shadow .15s}
   .card:hover{transform:none}
+  /* Deck: the fly/windup/deal choreography goes (the DECK module also skips
+     its timers under REDUCED.matches, so cards snap straight onto their
+     piles); pile counts and stamps still change state. */
+  .dk-card.dk-settle,.dk-card.dk-windup,.dk-card.dk-fly,.dk-card.dk-flyback,
+  .dk-dock,.dk-bar i,.dk-act button{transition:none}
+  .dk-mini.dk-pop,.dk-gcard.dk-deal,#dk-pileview.show{animation:none}
 }
 @media print{
   .top,.actionbar,.toolbar,.chips,.pick,
@@ -2474,6 +2723,7 @@ pre.code{
     <div class="navwrap">
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span></button>
+        <button class="tab" role="tab" id="tab-deck"  aria-selected="false" aria-controls="view-deck"  tabindex="-1" data-view="deck">Swipe</button>
         <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
         <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
       </nav>
@@ -2611,6 +2861,35 @@ pre.code{
         <div id="guide-body"></div>
         <div id="guide-auto"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ View ④ Swipe deck ══════════════
+       A first-pass triage surface: every unrated place is dealt as a card,
+       one decision at a time (drag / arrow keys / buttons). Decisions go
+       through setChoice() like every other view, so the piles, the list and
+       the map can never disagree. All labels are written at runtime from T;
+       the DECK module owns everything inside this section. -->
+  <section class="view" id="view-deck" role="tabpanel" aria-labelledby="tab-deck" hidden>
+    <div class="dk-head"><span id="dk-left"></span><span id="dk-counter"></span></div>
+    <div class="dk-bar"><i id="dk-bar-i"></i></div>
+    <div id="dk-main">
+      <div id="dk-row">
+        <button type="button" class="dk-dock dk-side dk-no" data-pile="no">
+          <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
+        </button>
+        <div id="dk-deck"></div>
+        <button type="button" class="dk-dock dk-side dk-yes" data-pile="yes">
+          <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
+        </button>
+      </div>
+      <button type="button" class="dk-dock dk-maybe" id="dk-maybedock" data-pile="maybe">
+        <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
+      </button>
+    </div>
+    <div id="dk-actions"></div>
+    <div id="dk-pileview" role="dialog" aria-modal="true" aria-labelledby="dk-pv-title" hidden>
+      <div class="dk-pcard"></div>
     </div>
   </section>
 </main>
@@ -2848,6 +3127,16 @@ en: {
   restoredChoices:"{n} earlier choices", restoredItin:"{n} scheduled items",
   restoredAdded:"{n} hand-added places",
   restoredToast:"Restored from this browser's cache: {list}",
+  tabDeck:"Swipe",
+  deckLeft:"{n} to sort",
+  deckEmpty:"Nothing left to sort — every place is rated.",
+  deckEmptySub:"Tap a pile below to review, or head to the Places tab.",
+  deckDone:"All sorted!",
+  deckUndo:"Undo",
+  deckInfo:"Details",
+  deckTapDetail:"Tap the card for details",
+  deckPileAria:"Browse the “{c}” pile",
+  deckPileEmpty:"This pile is empty",
   wmo:{0:"Clear",1:"Mostly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Rime fog",
     51:"Drizzle",53:"Light rain",55:"Rain",56:"Freezing rain",57:"Freezing rain",
     61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",
@@ -3040,6 +3329,17 @@ zh: {
   restoredChoices:"{n} 个之前的选择", restoredItin:"{n} 项日程安排",
   restoredAdded:"{n} 个手动添加的地点",
   restoredToast:"从浏览器缓存恢复了 {list}",
+  // 两字，与其余 tab 对齐（见 tabList 的注释）
+  tabDeck:"滑牌",
+  deckLeft:"还剩 {n} 张",
+  deckEmpty:"没有待分的卡片了——所有地点都已表态。",
+  deckEmptySub:"点下面的牌堆可以回看调整，或者去「景点」页。",
+  deckDone:"全部分完！",
+  deckUndo:"撤销",
+  deckInfo:"详情",
+  deckTapDetail:"点击卡片看详情",
+  deckPileAria:"查看「{c}」的地点",
+  deckPileEmpty:"这个牌堆还是空的",
   wmo:{0:"晴",1:"多云转晴",2:"多云",3:"阴",45:"雾",48:"雾凇",
     51:"毛毛雨",53:"小雨",55:"中雨",56:"冻雨",57:"冻雨",
     61:"小雨",63:"中雨",65:"大雨",66:"冻雨",67:"冻雨",
@@ -3676,9 +3976,10 @@ function render(){
   }
   updateProgress();
   // A choice changed in the list must recolor the map markers immediately —
-  // that's the whole point of the three views living in one page: no AI
-  // regeneration step in between.
+  // that's the whole point of the views living in one page: no AI
+  // regeneration step in between. Same for the deck's deal queue and piles.
   if(window.MAP) MAP.refresh();
+  if(window.DECK) DECK.refresh();
 }
 
 function renderChips(){
@@ -3831,6 +4132,7 @@ function setChoice(id, v, reason){
   syncChoice(p);
   updateProgress();
   if(window.MAP) MAP.refresh();
+  if(window.DECK) DECK.refresh();
 }
 
 function saveLocal(){
@@ -7613,6 +7915,524 @@ const PAGER = (() => {
 })();
 window.PAGER = PAGER;
 
+/* ═══════════════════════════════════════════════════════════════════
+   Deck view — first-pass triage as a swipe deck.
+   Interaction ported from dev/swipe-prototype.html; state was not. The deck
+   owns no choice state at all: every decision goes through setChoice() (which
+   already persists, syncs the list card, recounts the tallies and recolors
+   the map), and the deal queue is re-derived from PLACES whenever any other
+   view changes a choice (see refresh(), hooked from setChoice/render).
+
+   The one hazard that shapes this module: setChoice(id, v) TOGGLES to null
+   when p.choice === v. So commit() must only ever fire on a card that is
+   still undecided (the eligible() re-check), undo() exploits the toggle on
+   purpose, and reasons go through setReason() — never setChoice — because
+   re-sending "no" to an already-"no" place would silently un-rate it.
+   ═══════════════════════════════════════════════════════════════════ */
+const DECK = (() => {
+  /* The single authority on what gets dealt: undecided, not lodging (it is
+     not a "go / don't go" kind of place) and not an uncompleted user stub
+     (no tier/pitch/photo — the card would be blank and undecidable; stubs
+     stay ratable in the list, and once rated they do appear on the piles). */
+  const eligible = p => !!p && !p.choice && !isLodging(p) && !isStubP(p);
+  const PILES = ["no", "maybe", "yes"];
+
+  let queue = [];        // place ids only — PLACES is the truth, the DOM never is
+  let hist = [];         // this session's undo stack: {id, choice}
+  let openPile = null;   // which pile the browse overlay shows, or null
+  let suppress = false;  // our own setChoice call is in flight; skip refresh()
+  let doneTimer = 0;     // the pending "all sorted → list view" transition
+  let reasonTimer = 0;   // debounce for the overlay's free-text reason
+  let lastFocus = null;  // where focus returns when the overlay closes
+  let booted = false;
+
+  const dv = () => $("#view-deck");
+  const deckEl = () => $("#dk-deck");
+  const shown = () => { const v = dv(); return !!v && !v.hidden; };
+
+  /* Action-row icons: same contract as MARK_ICON (16 viewBox, currentColor),
+     drawn at button size. No font symbols — see the icon() comment. */
+  const MARK_BTN = {
+    yes:   icon(`<path d="M3 8.4 6.3 11.7 13 4.6" ${SVG_ST}/>`, 18),
+    maybe: icon(`<circle cx="8" cy="8" r="5.2" ${SVG_ST}/>`
+              + `<path d="M8 2.8a5.2 5.2 0 0 1 0 10.4z" fill="currentColor"/>`, 18),
+    no:    icon(`<path d="M4.3 4.3l7.4 7.4M11.7 4.3l-7.4 7.4" ${SVG_ST}/>`, 18),
+  };
+  const I_UNDO = icon(`<path d="M6.6 2.9 3.9 5.5l2.7 2.6" ${SVG_ST}/>`
+    + `<path d="M3.9 5.5h5.3a3.9 3.9 0 1 1 0 7.8H6.4" ${SVG_ST}/>`, 15);
+  const I_INFO = icon(`<circle cx="8" cy="8" r="5.6" ${SVG_ST}/>`
+    + `<path d="M8 7.6v3.2" ${SVG_ST}/>`
+    + `<circle cx="8" cy="5.2" r=".9" fill="currentColor"/>`, 15);
+
+  /* Seeded scatter: the same card always lies at the same angle, so a
+     re-render never makes a pile twitch. */
+  function seed(id){ let h = 0; for(const c of String(id)) h = (h*31 + c.charCodeAt(0)) | 0; return Math.abs(h); }
+  function scatter(id, maxDeg){
+    const h = seed(id);
+    return { rot: ((h % 100) / 100 - .5) * 2 * maxDeg,
+             ox: (h >> 2) % 9 - 4, oy: (h >> 4) % 7 - 3 };
+  }
+
+  /* Deliberately not media(): that emits .media/.media-fb, which the list's
+     cards, the print styles and the narrow-viewport rules all address. The
+     deck card renders the same content under dk- classes instead. */
+  function dkMedia(p){
+    const im = (p.images || [])[0];
+    const label = CATMAP[p.category] || "";
+    return `<span class="dk-media">
+      <span class="dk-media-fb">${catIcon(p.category, 44)}</span>
+      ${im && im.url ? `<img src="${esc(im.url)}" alt="" loading="lazy" onerror="this.remove()">` : ""}
+      ${label ? `<span class="dk-cat">${esc(label)}</span>` : ""}
+    </span>`;
+  }
+
+  function cardEl(p, depth){
+    const el = document.createElement("article");
+    el.className = "dk-card";
+    el.dataset.depth = depth;
+    el.dataset.dkId = p.id;
+    const loc = p.name_local && p.name_local !== p.name
+      ? `<small${langAttr}>${esc(p.name_local)}</small>` : "";
+    const facts = [
+      p.area ? `<b>${esc(p.area)}</b>` : "",
+      SCALE_TXT[p.scale] ? `<span>${esc(SCALE_TXT[p.scale])}</span>` : "",
+      `<span>${esc(priceLabel(p.ticket))}</span>`,
+    ].filter(Boolean).join("");
+    el.innerHTML = `
+      <span class="dk-stamp yes">${esc(T.yes)}</span>
+      <span class="dk-stamp no">${esc(T.no)}</span>
+      <span class="dk-stamp maybe">${esc(T.maybe)}</span>
+      ${dkMedia(p)}
+      <div class="dk-body">
+        <div class="dk-name">${esc(p.name)}${loc}</div>
+        <div class="dk-facts">${facts}</div>
+        ${p.pitch ? `<p class="dk-pitch">${rich(p.pitch)}</p>` : ""}
+        <div class="dk-more">${esc(T.deckTapDetail)}</div>
+        <div class="dk-tags">${(p.tags || []).slice(0, 4).map(t => `<span>${esc(t)}</span>`).join("")}</div>
+      </div>`;
+    if(depth > 0){   // the loose-pile look; the top card always lies straight
+      const s = scatter(p.id, 6);
+      el.style.transform = `translate(${s.ox}px,${s.oy + depth*7}px) rotate(${s.rot}deg)`;
+    }
+    return el;
+  }
+
+  /* Rebuild the stack; cards mid-flight (.dk-flying) are left alone so their
+     animation continues over the new stack. */
+  function render(){
+    const dk = deckEl();
+    if(!dk) return;
+    dk.querySelectorAll(".dk-card:not(.dk-flying)").forEach(c => c.remove());
+    for(let d = Math.min(2, queue.length - 1); d >= 0; d--){
+      const p = BY_ID[queue[d]];
+      if(p) dk.appendChild(cardEl(p, d));
+    }
+    const top = dk.querySelector('[data-depth="0"]');
+    if(top) attachDrag(top);
+    let es = dk.querySelector(".empty-state");
+    if(!queue.length && !es){
+      es = document.createElement("div");
+      es.className = "empty-state";
+      es.innerHTML = `<div class="big">${esc(T.deckEmpty)}</div><div>${esc(T.deckEmptySub)}</div>`;
+      dk.appendChild(es);
+    }else if(queue.length && es) es.remove();
+    updateHud();
+  }
+
+  /* Global progress, not session progress: decided ÷ all dealable places.
+     Stable across resumed sessions, undo, and choices made in other views. */
+  function updateHud(){
+    const base = PLACES.filter(p => !isLodging(p) && !isStubP(p));
+    const done = base.filter(p => p.choice).length;
+    $("#dk-left").textContent = tf("deckLeft", { n: base.length - done });
+    $("#dk-counter").textContent = `${done} / ${base.length}`;
+    $("#dk-bar-i").style.transform = `scaleX(${base.length ? done / base.length : 0})`;
+    const u = $("#dk-actions .dk-b-undo");
+    if(u) u.disabled = !hist.length;
+  }
+
+  /* Piles hold every decided place (not just this session's), so resuming a
+     half-sorted trip starts with populated piles. */
+  function renderDocks(popPile){
+    for(const k of PILES){
+      const dock = $(`.dk-dock[data-pile="${k}"]`);
+      if(!dock) continue;
+      const members = PLACES.filter(p => p.choice === k && !isLodging(p));
+      dock.querySelector(".dk-ptitle").innerHTML = `${esc(T[k])} · <b>${members.length}</b>`;
+      dock.setAttribute("aria-label", tf("deckPileAria", { c: T[k] }));
+      const stack = dock.querySelector(".dk-pstack");
+      const top3 = members.slice(-3);
+      stack.classList.toggle("dk-empty", !top3.length);
+      stack.innerHTML = top3.map((p, i) => {
+        const s = scatter(p.id, 8);
+        const im = (p.images || [])[0];
+        return `<span class="dk-mini${i === top3.length - 1 ? " dk-top" : ""}"
+          style="transform:translate(${s.ox}px,${s.oy}px) rotate(${s.rot.toFixed(1)}deg); z-index:${i}">
+          ${im && im.url ? `<img src="${esc(im.url)}" alt="" onerror="this.remove()">` : ""}
+          <span class="dk-mname">${esc(p.name)}</span></span>`;
+      }).join("");
+      if(popPile === k && top3.length){
+        const m = stack.querySelector(".dk-mini.dk-top");
+        m.classList.remove("dk-pop"); void m.offsetWidth; m.classList.add("dk-pop");
+      }
+    }
+  }
+
+  /* Where a committed card flies to, in deck-local translate terms. When a
+     pile has collapsed to its text chip (narrow viewports), the chip is the
+     target and the card lands straight. */
+  function dockTarget(choice, id){
+    const dock = $(`.dk-dock[data-pile="${choice}"]`);
+    const stack = dock.querySelector(".dk-pstack");
+    const vis = stack.offsetParent !== null && getComputedStyle(stack).display !== "none";
+    const dr = (vis ? stack : dock.querySelector(".dk-ptitle")).getBoundingClientRect();
+    const er = deckEl().getBoundingClientRect();
+    return {
+      dx: dr.left + dr.width / 2 - (er.left + er.width / 2),
+      dy: dr.top + dr.height / 2 - (er.top + er.height / 2),
+      s: Math.min(Math.max(dr.width / Math.max(er.width, 1), .09), .4),
+      rot: vis ? scatter(id, 8).rot : 0,
+    };
+  }
+
+  /* ── drag: Pointer Events, one code path for mouse and touch ── */
+  const TH_X = 110, TH_Y = 100;
+  function armDock(pile){
+    $$(".dk-dock").forEach(d => d.classList.toggle("dk-arm", d.dataset.pile === pile));
+  }
+  function attachDrag(el){
+    let sx = 0, sy = 0, dx = 0, dy = 0, active = false, moved = 0;
+    const clearStamps = () => el.querySelectorAll(".dk-stamp").forEach(s => s.style.opacity = 0);
+    /* One cleanup for every way a drag can end — including the OS stealing
+       the gesture (pointercancel) or capture being lost. Without it a broken
+       drag leaves a tilted card and an armed pile behind forever. */
+    const reset = spring => {
+      active = false;
+      el.classList.remove("dk-dragging");
+      armDock(null);
+      if(spring){
+        el.classList.add("dk-settle");
+        el.style.transform = "";
+        clearStamps();
+      }
+      dx = dy = 0;
+    };
+    el.addEventListener("pointerdown", e => {
+      if(e.button !== 0) return;   // primary button/touch only
+      active = true; moved = 0; sx = e.clientX; sy = e.clientY;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("dk-dragging"); el.classList.remove("dk-settle");
+    });
+    el.addEventListener("pointermove", e => {
+      if(!active) return;
+      dx = e.clientX - sx; dy = e.clientY - sy;
+      moved = Math.max(moved, Math.hypot(dx, dy));
+      el.style.transform = `translate(${dx}px,${dy}px) rotate(${dx / 18}deg)`;
+      el.querySelector(".dk-stamp.yes").style.opacity   = Math.max(0, Math.min(1,  dx / TH_X));
+      el.querySelector(".dk-stamp.no").style.opacity    = Math.max(0, Math.min(1, -dx / TH_X));
+      el.querySelector(".dk-stamp.maybe").style.opacity = Math.abs(dx) < 60 ? Math.max(0, Math.min(1, dy / TH_Y)) : 0;
+      armDock(dx > TH_X ? "yes" : dx < -TH_X ? "no" : (dy > TH_Y && Math.abs(dx) < 60) ? "maybe" : null);
+    });
+    el.addEventListener("pointerup", () => {
+      if(!active) return;
+      const cdx = dx, cdy = dy, cmoved = moved;
+      reset(false);
+      if(cdx > TH_X) commit("yes", true);
+      else if(cdx < -TH_X) commit("no", true);
+      else if(cdy > TH_Y && Math.abs(cdx) < 60) commit("maybe", true);
+      else if(cmoved < 8){   // a click, not a drag
+        el.style.transform = ""; clearStamps();
+        openDetail(el.dataset.dkId, el);
+      }else{
+        el.classList.add("dk-settle");
+        el.style.transform = ""; clearStamps();
+      }
+    });
+    el.addEventListener("pointercancel", () => { if(active) reset(true); });
+    el.addEventListener("lostpointercapture", () => { if(active) reset(true); });
+  }
+
+  /* ── the "all sorted" transition, as one cancellable state change ── */
+  function clearDone(){ if(doneTimer){ clearTimeout(doneTimer); doneTimer = 0; } }
+  function scheduleDone(){
+    if(doneTimer) return;
+    doneTimer = setTimeout(() => {
+      doneTimer = 0;
+      // Re-verify at fire time: an undo, or an un-rating in another view,
+      // may have refilled the queue while the timer ran.
+      if(shown() && pending() === 0){ toast(T.deckDone); switchView("list"); }
+    }, REDUCED.matches ? 400 : 900);
+  }
+
+  /* One commit path for drag, keys and buttons: record, hand the choice to
+     setChoice, then fly the card onto its pile. Key/button commits get a
+     short wind-up first so the motion reads as a throw. */
+  function commit(choice, fromDrag){
+    const id = queue[0];
+    if(id == null) return;
+    const p = BY_ID[id];
+    if(!p || !eligible(p)){ refresh(); return; }   // top changed under us: resync, never re-rate
+    clearDone();
+    hist.push({ id, choice });
+    suppress = true;
+    try{ setChoice(id, choice); }finally{ suppress = false; }
+    queue.shift();
+
+    const el = deckEl().querySelector('[data-depth="0"]');
+    if(!el || REDUCED.matches){
+      if(el) el.remove();
+      render(); renderDocks(choice);
+      if(!queue.length) scheduleDone();
+      return;
+    }
+    el.classList.add("dk-flying");
+    el.removeAttribute("data-depth");
+    el.querySelectorAll(".dk-stamp").forEach(s => s.style.opacity = 0);
+    el.querySelector(".dk-stamp." + choice).style.opacity = 1;
+    const fly = () => {
+      const t = dockTarget(choice, id);
+      el.classList.remove("dk-windup");
+      el.classList.add("dk-fly");
+      el.style.transform = `translate(${t.dx}px,${t.dy}px) rotate(${t.rot}deg) scale(${t.s})`;
+      setTimeout(() => { el.remove(); renderDocks(choice); }, 430);
+    };
+    if(fromDrag) fly();
+    else{
+      el.classList.add("dk-windup");
+      el.style.transform = { yes:"translate(70px,-8px) rotate(6deg)",
+                             no:"translate(-70px,-8px) rotate(-6deg)",
+                             maybe:"translate(0,64px)" }[choice];
+      setTimeout(fly, 140);
+    }
+    render();   // the next card is live while this one is in the air
+    if(!queue.length) scheduleDone();
+  }
+
+  /* Undo pops until it finds a record that still matches reality — an entry
+     whose place was re-rated in another view is no longer undoable and is
+     dropped rather than silently eating the keypress. */
+  function undo(){
+    clearDone();
+    let last = null;
+    while(hist.length){
+      const c = hist.pop();
+      const p = BY_ID[c.id];
+      if(p && p.choice === c.choice){ last = c; break; }
+    }
+    if(!last){ updateHud(); return; }
+    suppress = true;
+    try{ setChoice(last.id, last.choice); }finally{ suppress = false; }   // same value → toggles back to null
+    queue = deriveQueue(last.id);
+    render(); renderDocks();
+    if(REDUCED.matches) return;
+    const el = deckEl().querySelector('[data-depth="0"]');
+    if(!el || el.dataset.dkId !== String(last.id)) return;
+    const t = dockTarget(last.choice, last.id);
+    el.style.transition = "none";
+    el.style.transform = `translate(${t.dx}px,${t.dy}px) rotate(${t.rot}deg) scale(${t.s})`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transition = "";
+      el.classList.add("dk-flyback");
+      el.style.transform = "";
+      setTimeout(() => el.classList.remove("dk-flyback"), 400);
+    }));
+  }
+
+  function deriveQueue(front){
+    const q = PLACES.filter(eligible).map(p => p.id);
+    if(front != null){
+      const i = q.indexOf(front);
+      if(i > 0){ q.splice(i, 1); q.unshift(front); }
+    }
+    return q;
+  }
+  const pending = () => PLACES.filter(eligible).length;
+
+  /* External-sync entry point, called from setChoice()/render() like
+     MAP.refresh(). Invariant: the current top card stays first only while it
+     is still eligible; decided elsewhere, it leaves the deck at once — the
+     next commit must never fire on an already-rated place. */
+  function refresh(){
+    if(suppress || !booted) return;
+    if(!shown()){ clearDone(); return; }
+    const top = queue[0];
+    const keep = top != null && eligible(BY_ID[top]) ? top : null;
+    queue = deriveQueue(keep);
+    if(queue.length) clearDone();
+    render(); renderDocks();
+    if(openPile) renderPileView(false);
+  }
+
+  /* ── pile browse overlay ── */
+  function openPileView(pile){
+    openPile = pile;
+    lastFocus = document.activeElement;
+    renderPileView(true);
+    const pv = $("#dk-pileview");
+    pv.hidden = false; pv.classList.add("show");
+    const h = pv.querySelector("h2");
+    if(h) h.focus();
+  }
+  function closePileView(){
+    if(!openPile) return;
+    flushReason();
+    openPile = null;
+    const pv = $("#dk-pileview");
+    pv.classList.remove("show"); pv.hidden = true;
+    if(lastFocus && document.contains(lastFocus)) lastFocus.focus();
+    lastFocus = null;
+  }
+  function renderPileView(animate){
+    if(!openPile) return;
+    const members = PLACES.filter(p => p.choice === openPile && !isLodging(p));
+    const card = $("#dk-pileview .dk-pcard");
+    card.className = "dk-pcard " + openPile;
+    card.innerHTML = `
+      <button type="button" class="dk-pclose" aria-label="${esc(T.close)}">${xmark()}</button>
+      <h2 id="dk-pv-title" tabindex="-1">${esc(T[openPile])} · <b>${members.length}</b></h2>
+      ${members.length ? `<div class="dk-pgrid">${members.map((p, i) => {
+        const im = (p.images || [])[0];
+        const s = scatter(p.id, 5);
+        const deal = animate ? ` style="--dk-d:${Math.min(i * 25, 300)}ms; --dk-rt:${s.rot.toFixed(1)}deg"` : "";
+        return `<div class="dk-gcard${animate ? " dk-deal" : ""}"${deal} data-dk-id="${esc(p.id)}">
+          <span class="dk-gphoto"><span class="dk-media-fb">${catIcon(p.category, 30)}</span>
+            ${im && im.url ? `<img src="${esc(im.url)}" alt="" loading="lazy" onerror="this.remove()">` : ""}</span>
+          <button type="button" class="bare dk-gname" data-dk-detail="${esc(p.id)}">${esc(p.name)}</button>
+          <span class="dk-garea">${esc(p.area || "")}${p.duration_min ? ` · ${esc(tf("aboutMin", { n: p.duration_min }))}` : ""}</span>
+          <span class="dk-gchoice">
+            ${PILES.map(k => `<button type="button" class="dk-v-${k}${p.choice === k ? " on" : ""}"
+              data-dk-id="${esc(p.id)}" data-v="${k}" aria-pressed="${p.choice === k}" title="${esc(T[k])}">${MARK_BTN[k]}</button>`).join("")}
+          </span>
+          ${openPile === "no" ? `
+          <span class="dk-greason">
+            ${QUICK.map(r => `<button type="button" data-dk-id="${esc(p.id)}" data-r="${esc(r)}"
+              class="${p.choice_reason === r ? "on" : ""}" aria-pressed="${p.choice_reason === r}">${esc(r)}</button>`).join("")}
+          </span>
+          <input class="dk-ginput" data-dk-id="${esc(p.id)}" placeholder="${esc(T.reasonPh)}" value="${esc(p.choice_reason || "")}">` : ""}
+        </div>`;
+      }).join("")}</div>` : `<div class="dk-pempty">${esc(T.deckPileEmpty)}</div>`}`;
+    wirePileView(card);
+  }
+  function wirePileView(card){
+    card.querySelector(".dk-pclose").onclick = closePileView;
+    card.onclick = e => {
+      // the content area is transparent — clicks in the gaps close the overlay
+      if(e.target === card || e.target.classList.contains("dk-pgrid")){ closePileView(); return; }
+      const b = e.target.closest("button");
+      if(b && b.dataset.v){
+        const p = BY_ID[b.dataset.dkId];
+        // Guarded: re-sending the active state would toggle the place back
+        // to unrated through setChoice's same-value branch.
+        if(p && p.choice !== b.dataset.v){ flushReason(); setChoice(p.id, b.dataset.v); }
+        return;
+      }
+      if(b && b.dataset.r !== undefined){
+        const p = BY_ID[b.dataset.dkId];
+        if(p) setReason(p.id, p.choice_reason === b.dataset.r ? "" : b.dataset.r);
+        renderPileView(false);
+        return;
+      }
+      const g = e.target.closest(".dk-gcard");
+      if(g && !e.target.closest("input")) openDetail(g.dataset.dkId, g);
+    };
+    card.oninput = e => {
+      const inp = e.target.closest(".dk-ginput");
+      if(!inp) return;
+      clearTimeout(reasonTimer);
+      reasonTimer = setTimeout(() => { reasonTimer = 0; setReason(inp.dataset.dkId, inp.value); }, 400);
+    };
+    card.onchange = e => {
+      const inp = e.target.closest(".dk-ginput");
+      if(!inp) return;
+      clearTimeout(reasonTimer); reasonTimer = 0;
+      setReason(inp.dataset.dkId, inp.value);
+      renderPileView(false);
+    };
+  }
+  /* Closing the overlay must not lose a reason still sitting in its debounce
+     window (typed, then Esc within 400ms). */
+  function flushReason(){
+    clearTimeout(reasonTimer); reasonTimer = 0;
+    for(const inp of $$("#dk-pileview .dk-ginput")) setReason(inp.dataset.dkId, inp.value);
+  }
+  /* Reasons never travel through setChoice (see the module comment). Guarded
+     to "no": schema says choice_reason belongs to skipped places only. */
+  function setReason(id, reason){
+    const p = BY_ID[id];
+    if(!p || p.choice !== "no") return;
+    const r = String(reason || "").trim();
+    if((p.choice_reason || "") === r) return;
+    p.choice_reason = r;
+    saveLocal();
+    scheduleAuto();
+    syncChoice(p);   // the list card's "Reason:" strip follows live
+  }
+
+  /* ── actions row ── */
+  function buildActions(){
+    const bar = $("#dk-actions");
+    const mk = (cls, inner, kbd, title, small) =>
+      `<span class="dk-act"><button type="button" class="${cls}${small ? " dk-sm" : ""}" title="${esc(title)}" aria-label="${esc(title)}">${inner}</button><kbd>${kbd}</kbd></span>`;
+    bar.innerHTML =
+      mk("dk-b-undo", I_UNDO, "Z", T.deckUndo, true)
+      + mk("dk-b-no", MARK_BTN.no, "←", T.no)
+      + mk("dk-b-maybe", MARK_BTN.maybe, "↓", T.maybe)
+      + mk("dk-b-yes", MARK_BTN.yes, "→", T.yes)
+      + mk("dk-b-info", I_INFO, "Enter", T.deckInfo, true);
+    bar.querySelector(".dk-b-undo").onclick  = undo;
+    bar.querySelector(".dk-b-no").onclick    = () => commit("no", false);
+    bar.querySelector(".dk-b-maybe").onclick = () => commit("maybe", false);
+    bar.querySelector(".dk-b-yes").onclick   = () => commit("yes", false);
+    bar.querySelector(".dk-b-info").onclick  = () => {
+      const id = queue[0];
+      if(id != null) openDetail(id, deckEl().querySelector('[data-depth="0"]'));
+    };
+  }
+
+  function onShow(){
+    if(!booted){
+      booted = true;
+      buildActions();
+      $$(".dk-dock").forEach(d => d.addEventListener("click", () => openPileView(d.dataset.pile)));
+      $("#dk-pileview").addEventListener("click", e => { if(e.target === e.currentTarget) closePileView(); });
+    }
+    clearDone();
+    queue = deriveQueue(null);
+    render(); renderDocks();
+  }
+
+  /* Keyboard. Guards in order: view visible (null-safe for standalone, which
+     removes the section) → the tab bar's own arrow handler wins → typing
+     surfaces win → native dialogs own their keys (their Esc closes them
+     first; a second Esc reaches us and closes the overlay) → IME composition
+     / repeats / modifier combos are never ours (plain Backspace is, and is
+     preventDefault()ed so it can't navigate the browser back). */
+  document.addEventListener("keydown", e => {
+    const v = dv();
+    if(!v || v.hidden) return;
+    if(e.target.closest && e.target.closest(".tab")) return;
+    if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+    const dlg = $("#dlg"), rdlg = $("#rdlg");
+    if((dlg && dlg.open) || (rdlg && rdlg.open)) return;
+    if(e.isComposing || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if(openPile){
+      if(e.key === "Escape"){ e.preventDefault(); closePileView(); }
+      return;   // arrows must not decide the deck card under the overlay
+    }
+    const map = { ArrowRight:"yes", ArrowLeft:"no", ArrowDown:"maybe" };
+    if(map[e.key]){ e.preventDefault(); commit(map[e.key], false); }
+    else if(e.key === "z" || e.key === "Z" || e.key === "Backspace"){ e.preventDefault(); undo(); }
+    else if(e.key === "Enter"){
+      e.preventDefault();
+      const id = queue[0];
+      if(id != null) openDetail(id, deckEl().querySelector('[data-depth="0"]'));
+    }
+  });
+
+  return { onShow, refresh, pending, setReason };
+})();
+window.DECK = DECK;
+
 /* ─────────────────────────────────────────────── View switching */
 /* The map view's height used to be hardcoded as calc(100vh - 210px). That
    constant matched no situation at all: measured on a 1440×900 desktop, the
@@ -7629,7 +8449,9 @@ function layoutMap(){
   const h = innerHeight - topH - 20 - (barH + 14);
   document.documentElement.style.setProperty("--map-h", Math.max(360, Math.round(h)) + "px");
   const mapView = $("#view-map");            // standalone mode removes this view entirely
-  if(main) main.classList.toggle("tight", !!mapView && !mapView.hidden);
+  const deckView = $("#view-deck");          // the deck sizes itself from --map-h too
+  if(main) main.classList.toggle("tight",
+    (!!mapView && !mapView.hidden) || (!!deckView && !deckView.hidden));
 }
 
 function switchView(v){
@@ -7657,6 +8479,7 @@ function switchView(v){
     MAP.init();      // lazy: MapLibre is 275KB and shouldn't slow the first paint
     MAP.onShow();    // resize on every return + refit on the first
   }
+  if(v === "deck" && window.DECK) DECK.onShow();   // re-derives the queue from live choices
   if(v === "guide" && window.GUIDE){
     GUIDE.render();                                  // the checklist must reflect the latest choices
     if(window.PAGER) PAGER.auto();                   // choices just changed under the sheets
@@ -7679,6 +8502,7 @@ function applyStaticI18n(){
   const txt = (sel, v) => { const el = $(sel); if(el) el.textContent = v; };
   const attr = (sel, a, v) => { const el = $(sel); if(el) el.setAttribute(a, v); };
   txt("#tab-list-txt", T.tabList);
+  txt("#tab-deck", T.tabDeck);
   txt("#tab-map", T.tabMap);
   txt("#tab-guide", T.tabGuide);
   attr("#tab-guide", "title", T.guideTabDisabled);
@@ -7819,13 +8643,22 @@ function boot(){
     document.querySelector(".actionbar").hidden = true;
     document.querySelector("#view-list").remove();
     document.querySelector("#view-map").remove();
+    // The deck is a filtering surface too; removing the section also removes
+    // its overlay, and the DECK keyboard guard null-checks the view.
+    document.querySelector("#view-deck").remove();
     document.querySelector("main").style.paddingBottom = "60px";
     // Export needs no relocation here any more: it lives in the guide's own
     // rail, which this page shows exactly as the trip page does.
     switchView("guide");
   }else{
-    let v = "list";
-    try{ v = localStorage.getItem(LS_KEY + ":view") || "list"; }catch(e){}
+    // The stored view always wins — but only after validation: switchView
+    // with an unknown value would hide every section. With no (valid) record
+    // this is a first open, and a trip with unrated places starts on the
+    // deck: sorting the cards is the page's first job.
+    let v = null;
+    try{ v = localStorage.getItem(LS_KEY + ":view"); }catch(e){}
+    if(!["list", "map", "guide", "deck"].includes(v))
+      v = (window.DECK && DECK.pending() > 0) ? "deck" : "list";
     if(v === "guide" && !ROUTE_HTML) v = "list";
     switchView(v);
   }
