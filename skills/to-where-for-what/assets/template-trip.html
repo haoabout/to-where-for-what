@@ -8471,7 +8471,7 @@ function layoutMap(){
 
 function switchView(v){
   // Roving tabindex: a tab group occupies one stop in the Tab order, with
-  // ←→ moving inside it. Leaving all three at tabindex=0 would make keyboard
+  // ←→ moving inside it. Leaving every tab at tabindex=0 would make keyboard
   // users press Tab three times to get past the tab bar.
   $$(".tab").forEach(t => {
     const on = t.dataset.view === v;

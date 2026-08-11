@@ -1,12 +1,12 @@
 ---
 name: to-where-for-what
-version: 2.0.0
+version: 2.1.0
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
 
 # Trip Planning
 
-Split a trip into four stages and produce a **single `trip.html`** (three views: shortlist / map / guide).
+Split a trip into four stages and produce a **single `trip.html`** (four views: swipe deck / shortlist / map / guide).
 
 ```
 A search places →(you)→ ┌ ① shortlist ⇄ ② map (filter + schedule) ┐ →(you)→ ③ guide
@@ -26,7 +26,7 @@ Break any one of them and the output is bad.
 
 **1. Never hand-write HTML.**
 You only produce `places.json` and `route.md`, then run `build.py` to generate the
-page. The template already handles the three views, map fallbacks, weather,
+page. The template already handles the four views, map fallbacks, weather,
 responsive layout, and light/dark theming. Hand-written HTML gets you an
 inconsistent, buggy page.
 
@@ -528,7 +528,7 @@ current choices. That is the form to hand back to an AI; the built page is
 ```
 <trips_root>/2026-09-osaka/          # root: see "Where trip files live"
 ├── brief.md          # trip parameters (answers to the opening questionnaire)
-├── places.json       # ★ the single source of truth; all three views render from it
+├── places.json       # ★ the single source of truth; all four views render from it
 ├── transit.geojson   # metro lines & stations (from enrich.py --transit)
 ├── route.md          # guide body (you write this)
 └── trip.html         # build artifact — never hand-edit

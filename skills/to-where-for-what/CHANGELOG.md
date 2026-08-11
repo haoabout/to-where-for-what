@@ -14,7 +14,25 @@ Bump rules:
 
 ---
 
-## 2.0.0 — 2026-08-10
+## 2.1.0 — 2026-08-11
+
+### Added
+
+- **Swipe deck view** — a fourth tab on `trip.html` for first-pass triage.
+  Every unrated place (not lodging, not an uncompleted user stub) is dealt as
+  a card; decide by dragging (right = yes, left = no, down = maybe), arrow
+  keys, or buttons, with Z/Backspace undo. Decided cards fly onto three
+  scattered piles; clicking a pile opens a browse overlay (flat grid, quick
+  re-assign, skip-reason chips and free text on the "no" pile only). Card
+  tap / Enter opens the shared detail dialog. Rating "no" from the deck is
+  deliberately silent — reasons are optional, added later in the overlay or
+  the list view.
+- First open of a trip with unrated places lands on the deck; a stored view
+  preference always wins afterwards. Sorting the last card toasts and
+  auto-switches to the list view. All decisions go through the existing
+  `setChoice()` path, so auto-save, localStorage, the list, the map and the
+  progress tallies stay in sync; choices made in other views update the deck
+  live. The standalone `guide.html` build carries no deck.
 
 ### Removed
 
