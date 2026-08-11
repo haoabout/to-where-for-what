@@ -33,7 +33,7 @@ header{
 header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
 #counter{font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums}
 #bar{width:min(440px,92vw); height:4px; background:var(--fill); border-radius:2px; overflow:hidden}
-#bar i{display:block; height:100%; width:0; background:var(--ink); transition:width .25s ease}
+#bar i{display:block; height:100%; width:100%; transform:scaleX(0); transform-origin:0 0; background:var(--ink); transition:transform .25s ease}
 
 /* ---- deck ---- */
 #stage{flex:1; width:100%; display:flex; align-items:center; justify-content:center; position:relative}
@@ -224,7 +224,7 @@ function render(){
 
 function updateHud(){
   document.getElementById('counter').textContent = `${Math.min(idx+1,places.length)} / ${places.length}`;
-  document.querySelector('#bar i').style.width = (idx/places.length*100)+'%';
+  document.querySelector('#bar i').style.transform = `scaleX(${idx/places.length})`;
   document.querySelector('#actions .undo').disabled = history.length===0;
 }
 
