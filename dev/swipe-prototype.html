@@ -155,6 +155,9 @@ header h1{font-size:15px; font-weight:800; letter-spacing:.02em}
   /* the grid has no room left beside the deck: the side piles collapse to
      text chips floated above the deck's top corners instead */
   #main{padding-top:38px}
+  /* the absolutely-positioned side chips leave the grid, which would drop
+     the deck into the first 1fr column — recenter with flex instead */
+  #row{display:flex; justify-content:center}
   .side{position:absolute; top:4px; z-index:5; translate:none}
   .side .pstack{display:none}
   .side .ptitle{border-color:var(--line); background:var(--card)}
@@ -352,7 +355,7 @@ function cardEl(p, depth){
       <div class="tags">${(p.tags||[]).slice(0,4).map(t=>`<span>${t}</span>`).join('')}</div>
     </div>`;
   if(depth > 0){ // the loose pile look; the top card always lies straight
-    const s = scatter(p, 4.5);
+    const s = scatter(p, 6);
     el.style.transform = `translate(${s.ox}px,${s.oy + depth*7}px) rotate(${s.rot}deg)`;
   }
   return el;
