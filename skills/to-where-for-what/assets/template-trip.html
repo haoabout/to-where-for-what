@@ -2472,7 +2472,7 @@ pre.code{
 #dk-row{width:100%; flex:1; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center}
 /* The wing owns the left 1fr cell: two piles stacked, centred on the card.
    The wide gap keeps the two piles reading as two destinations, not one. */
-.dk-wing{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:60px; min-width:0}
+.dk-wing{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:96px; min-width:0}
 /* A definite height, derived from the measured viewport slot rather than a
    percentage: the deck sits in an auto grid track, and height:100% against
    an auto track resolves to 0 — the cards (absolute-positioned) then paint
@@ -2482,7 +2482,7 @@ pre.code{
 /* Full-detail cards: wide and tall enough to read in, while the docks stay
    in the wings. The height formula is the same measured-slot arithmetic as
    before, only the cap rises. */
-#dk-deck{position:relative; width:min(620px,92vw); height:clamp(340px, calc(var(--map-h,560px) - 140px), 860px)}
+#dk-deck{position:relative; width:min(560px,92vw); height:clamp(340px, calc(var(--map-h,560px) - 140px), 860px)}
 
 .dk-card{
   position:absolute; inset:0;
@@ -2713,8 +2713,8 @@ pre.code{
 @media (max-width:920px){
   #view-deck .dk-pstack{width:100px; height:72px}
 }
-@media (max-width:900px){
-  /* No room beside the deck (the full-detail card is 620px wide — wings
+@media (max-width:840px){
+  /* No room beside the deck (the full-detail card is 560px wide — wings
      thinner than a pile go under this earlier than the old 760px): side
      piles collapse to text chips floated above the deck's top corners. The
      absolutely-positioned chips leave the grid, which would drop the deck
