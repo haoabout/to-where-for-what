@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 2.1.0
+version: 2.2.0
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -359,7 +359,7 @@ In the same message, set two expectations:
   subagent inherits nothing from this conversation, including every rule
   you've read). Parallel agents never write the same file: each writes its
   own `partial-<group>.json`, and you merge into `places.json` afterwards,
-  then run A3 yourself. No subagent capability (plain chat, Codex)? Search in
+  then run A3 yourself (A3 spawns one further subagent, for images — see A3). No subagent capability (plain chat, Codex)? Search in
   the main conversation as before — the time warning matters even more then.
 
 ### A2. Search and produce `places.json`
@@ -376,9 +376,9 @@ Key points:
   obtained in the first pass** — otherwise the user filters for an hour and then
   discovers the place is shut that day
 - Coordinates use the `{"lon":…, "lat":…}` object form, never an array
-- Image URLs: let `enrich.py`'s chain run first; fill leftovers by hand from
-  official pages. Wikimedia thumbnail URLs specifically are **never
-  hand-assembled** (see the playbook's image section)
+- Image URLs: let `enrich.py`'s chain run first; leftovers and verification
+  belong to the A3 image subagent. Wikimedia thumbnail URLs specifically are
+  **never hand-assembled** (see the playbook's image section)
 - **Create the lodging entry now** — the moment the questionnaire yields a
   hotel name or address, it goes into `places.json` as `kind: "lodging"`
   (contract: data-schema.md, "Lodging"), so the hotel is on the map from the
@@ -412,8 +412,23 @@ Overpass allocates execution slots per IP, and back-to-back requests get
 throttled. If it fails, skip it — the transit layer is a bonus, never a blocker.
 
 Whatever `enrich.py` can't fill, it reports explicitly (usually not found, or the
-hit falls outside the bbox) — only then do you step in manually. **It prefers
-leaving a blank over writing a plausible-looking wrong coordinate.**
+hit falls outside the bbox). **It prefers leaving a blank over writing a
+plausible-looking wrong coordinate.** Only then does manual work start, and it
+splits two ways:
+
+- **Coordinates — fix them yourself, in the main conversation.** Misses are
+  usually few, and the judgment calls (is an out-of-bbox hit a same-name
+  mismatch, or a place the user really means to visit?) need trip context
+  only you have. Rules: playbook, "Getting coordinates".
+- **Images — spawn one image subagent, always**, the moment
+  `--coords --images` finishes. It finds images for the misses and visually
+  verifies every image the chain filled — the slowest part of A3 — in the
+  background while you fix coordinates and run `--transit`. Build its prompt
+  from [references/image-agent-briefing.md](references/image-agent-briefing.md)
+  — copy the template, fill the placeholders; don't improvise. Prefer a
+  vision-capable model. It writes only `images-patch.json`; review it and
+  merge into `places.json` before validating (merge rules in the briefing).
+  No subagent capability? Do the image work yourself, same playbook rules.
 
 **Delivery requires zero P0.** Read each P1 and decide to fix or ignore.
 
@@ -617,6 +632,7 @@ local edits, then merge the directory as one unit).
 | [references/data-schema.md](references/data-schema.md) | Before writing `places.json` — required |
 | [references/research-playbook.md](references/research-playbook.md) | Before stage-A searching — required |
 | [references/subagent-briefing.md](references/subagent-briefing.md) | When spawning stage-A search subagents |
+| [references/image-agent-briefing.md](references/image-agent-briefing.md) | When spawning the A3 image subagent |
 | [references/route-design.md](references/route-design.md) | Before stage-D routing — required |
 | [references/checklist.md](references/checklist.md) | Before delivery |
 | [references/updating.md](references/updating.md) | When the user asks to update this skill |

@@ -14,6 +14,25 @@ Bump rules:
 
 ---
 
+## 2.2.0 — 2026-08-12
+
+### Added
+
+- **A3 image subagent** — the manual half of A3 is now split by kind of work.
+  Coordinate misses stay in the main conversation (few, and the bbox judgment
+  calls need trip context); image work — finding images for places the
+  `enrich.py` chain missed, and visually verifying every image it filled —
+  moves to a single background subagent spawned unconditionally right after
+  `enrich.py --coords --images`. It runs while the main conversation fixes
+  coordinates and pulls `--transit`, writes only `images-patch.json`
+  (reviewed and merged by the main conversation before validation), and its
+  prompt is built from the new
+  [references/image-agent-briefing.md](references/image-agent-briefing.md).
+  Without subagent capability the flow is unchanged — same work, same
+  playbook rules, done in the main conversation.
+
+---
+
 ## 2.1.0 — 2026-08-11
 
 ### Added
