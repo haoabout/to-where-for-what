@@ -587,7 +587,7 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:6px 13px;font-size:13px;font-weight:600;color:var(--ink-2);
   display:flex;align-items:center;transition:background .14s,color .14s,scale .14s;
 }
-.tab:hover:not(:disabled):not([aria-selected=true]){background:rgba(255,255,255,.45)}
+.tab:hover:not(:disabled):not([aria-disabled=true]):not([aria-selected=true]){background:rgba(255,255,255,.45)}
 /* --pill-nav and --pill-nav-on both carry --ink safely (14.98:1 / 17.86:1) but
    differ from each other by only 1.19:1, and neither pill has an outline or a
    shadow.
@@ -600,7 +600,21 @@ button{font:inherit;color:inherit;cursor:pointer}
    selected tab. That padding is therefore load-bearing, not decorative: thin it
    and the two pills merge into one smudge. */
 .tab[aria-selected=true]{background:var(--pill-nav-on);color:var(--ink);font-weight:700}
-.tab:disabled{color:color-mix(in srgb,var(--ink) 35%,transparent);cursor:not-allowed}
+/* The guide tab is aria-disabled rather than disabled: a truly disabled
+   button receives no pointer events, so Safari never shows a reason and
+   touch gets nothing at all. aria-disabled keeps hover and click alive —
+   hover/focus grows a bubble out of data-tip, click toasts the same text. */
+.tab:disabled,.tab[aria-disabled=true]{color:color-mix(in srgb,var(--ink) 35%,transparent);cursor:not-allowed}
+.tab[aria-disabled=true][data-tip]{position:relative}
+.tab[aria-disabled=true][data-tip]:hover::after,
+.tab[aria-disabled=true][data-tip]:focus-visible::after{
+  content:attr(data-tip);
+  position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);
+  z-index:30;white-space:nowrap;pointer-events:none;
+  background:var(--ink);color:var(--paper);
+  font-size:11.5px;font-weight:500;line-height:1;
+  padding:6px 9px;border-radius:6px;box-shadow:var(--shadow);
+}
 
 /* First breakpoint: undo the desktop mirror, then let navigation drop below.
    The destination and facts return to their semantic/source order on the first
@@ -2820,7 +2834,7 @@ pre.code{
       <nav class="tabs" role="tablist">
         <button class="tab" role="tab" id="tab-list"  aria-selected="true"  aria-controls="view-list"  tabindex="0"  data-view="list"><span id="tab-list-txt">Places</span></button>
         <button class="tab" role="tab" id="tab-map"   aria-selected="false" aria-controls="view-map"   tabindex="-1" data-view="map">Map</button>
-        <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" disabled title="Available once the guide is written">Guide</button>
+        <button class="tab" role="tab" id="tab-guide" aria-selected="false" aria-controls="view-guide" tabindex="-1" data-view="guide" aria-disabled="true" data-tip="Available once the guide is written">Guide</button>
       </nav>
     </div>
   </div>
@@ -8801,7 +8815,10 @@ function applyStaticI18n(){
       b.textContent = b.dataset.mode === "deck" ? T.modeDeck : T.modeFlat;
   }
   txt("#tab-guide", T.tabGuide);
-  attr("#tab-guide", "title", T.guideTabDisabled);
+  // data-tip, not title: the CSS bubble shows it instantly on hover/focus,
+  // where a native title is delayed on Chrome, absent on a disabled control
+  // in Safari, and invisible on touch (click → toast covers that).
+  attr("#tab-guide", "data-tip", T.guideTabDisabled);
   txt("#pg-print", T.pgPrint);
   txt("#pg-hint", T.pgHint);
   txt("#pg-md", T.pgMd);
@@ -8941,7 +8958,9 @@ function boot(){
 
   if(ROUTE_HTML){
     $("#guide-body").innerHTML = ROUTE_HTML;
-    $("#tab-guide").disabled = false;
+    const tg = $("#tab-guide");
+    tg.removeAttribute("aria-disabled");
+    tg.removeAttribute("data-tip");
   }else{
     $("#guide-body").innerHTML = `<div class="empty-state">
       <div class="big">${T.noGuideBig}</div>
@@ -9109,6 +9128,9 @@ document.addEventListener("click", e => {
 
   const tab = e.target.closest(".tab");
   if(tab && !tab.disabled){
+    // aria-disabled still clicks — that's the point: touch has no hover, so
+    // the tap is the one moment to say why the tab does nothing.
+    if(tab.getAttribute("aria-disabled") === "true"){ toast(T.guideTabDisabled); return; }
     switchView(tab.dataset.view === "list" ? placesMode() : tab.dataset.view);
     return;
   }
@@ -9129,7 +9151,7 @@ document.addEventListener("keydown", e => {
   // focusable, and landing on it would be a dead end.
   const tab = e.target.closest?.(".tab");
   if(tab && ["ArrowLeft","ArrowRight","Home","End"].includes(e.key)){
-    const tabs = $$(".tab").filter(t => !t.disabled);
+    const tabs = $$(".tab").filter(t => !t.disabled && t.getAttribute("aria-disabled") !== "true");
     if(!tabs.length) return;
     e.preventDefault();
     const i = tabs.indexOf(tab);
