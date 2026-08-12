@@ -2464,28 +2464,14 @@ pre.code{
    in one of the modes. */
 .dk-toolbar{align-self:stretch; display:flex; align-items:center; min-height:34px; margin-bottom:4px}
 @media (hover:none){ .dk-toolbar{min-height:36.5px} }
-/* Progress lives on the right edge as a vertical rail — the deck column
-   keeps its vertical budget for the cards. Fill grows downward. */
-#dk-progress{
-  position:absolute; right:18px; top:50%; translate:0 -50%; z-index:4;
-  display:flex; flex-direction:column; align-items:center; gap:8px;
-}
-#dk-left{font-size:12px; font-weight:700; white-space:nowrap}
-#dk-counter{font-weight:400; font-size:11px; color:var(--ink-3); font-variant-numeric:tabular-nums}
-/* A stacked ratio rail, filling bottom-up like chips piling on the table:
-   yes (green) on the bottom, maybe, then no; the pale remainder above is
-   what's still undealt. Progress and composition in one glance. */
-.dk-vtrack{
-  display:flex; flex-direction:column-reverse;
-  width:5px; height:min(220px,30vh); background:var(--fill,var(--line-soft));
-  border-radius:3px; overflow:hidden;
-}
-.dk-vseg{width:100%; height:0%; flex:none; transition:height .25s ease}
-.dk-vs-yes{background:var(--ok)}
-.dk-vs-maybe{background:var(--warn)}
-.dk-vs-no{background:var(--danger)}
+/* Progress is one quiet number in the toolbar row (decided / total, the
+   remainder in the tooltip) — the old right-edge rail spent a whole column
+   on what a glance at the piles already says. */
+#dk-count{margin-left:auto; font-size:12px; color:var(--ink-3); font-variant-numeric:tabular-nums; white-space:nowrap}
 #dk-main{flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px}
 #dk-row{width:100%; flex:1; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center}
+/* The wing owns the left 1fr cell: two piles stacked, centred on the card. */
+.dk-wing{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:36px; min-width:0}
 /* A definite height, derived from the measured viewport slot rather than a
    percentage: the deck sits in an auto grid track, and height:100% against
    an auto track resolves to 0 — the cards (absolute-positioned) then paint
@@ -2495,7 +2481,7 @@ pre.code{
 /* Full-detail cards: wide and tall enough to read in, while the docks stay
    in the wings. The height formula is the same measured-slot arithmetic as
    before, only the cap rises. */
-#dk-deck{position:relative; width:min(620px,92vw); height:clamp(340px, calc(var(--map-h,560px) - 260px), 780px)}
+#dk-deck{position:relative; width:min(620px,92vw); height:clamp(340px, calc(var(--map-h,560px) - 140px), 860px)}
 
 .dk-card{
   position:absolute; inset:0;
@@ -2621,19 +2607,20 @@ pre.code{
   .dk-dock:hover .dk-ptitle{border-color:var(--line); background:var(--card); box-shadow:2px 2px 0 0 var(--line)}
 }
 .dk-side{translate:0 -16px} /* stack (not title+stack) centres on the deck midline; `translate` stays clear of .dk-arm's transform */
-.dk-side.dk-no{justify-self:end; padding-right:clamp(28px,7vw,110px)}
 .dk-side.dk-yes{justify-self:start; padding-left:clamp(28px,7vw,110px)}
-#dk-maybedock{flex-direction:row; gap:12px}
+/* Wing members are centred by the wing itself — the grid-era nudges would
+   only push them off its axis. */
+.dk-wing .dk-dock{translate:none; padding:0; justify-self:auto}
 
-/* ── Action buttons with their keys printed right underneath ── */
-#dk-actions{display:flex; gap:14px; padding:2px 0 6px; align-items:flex-start; flex:none}
-.dk-act{display:flex; flex-direction:column; align-items:center; gap:5px}
+/* ── Action buttons, keys printed beside them (one flat band) ── */
+#dk-actions{display:flex; gap:13px; padding:2px 0 4px; align-items:center; flex:none}
+.dk-act{display:flex; align-items:center; gap:6px}
 .dk-act button{
-  width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
   border:1.5px solid var(--line); background:var(--card); color:var(--ink);
   cursor:pointer; transition:box-shadow .15s ease, transform .15s ease;
 }
-.dk-act button.dk-sm{width:34px; height:34px; color:var(--ink-3); margin-top:4px}
+.dk-act button.dk-sm{width:30px; height:30px; color:var(--ink-3)}
 @media (hover:hover){ .dk-act button:hover{box-shadow:var(--dk-hard-sm); transform:translate(-1px,-2px)} }
 .dk-act button:active{transform:translate(1px,2px); box-shadow:none}
 .dk-act button:disabled{opacity:.35; cursor:default; box-shadow:none}
@@ -2720,24 +2707,26 @@ pre.code{
 @media (max-width:920px){
   #view-deck .dk-pstack{width:100px; height:72px}
 }
-@media (max-width:760px){
-  /* No room beside the deck: side piles collapse to text chips floated above
-     the deck's top corners. The absolutely-positioned chips leave the grid,
-     which would drop the deck into the first 1fr column — recenter with flex.
+@media (max-width:900px){
+  /* No room beside the deck (the full-detail card is 620px wide — wings
+     thinner than a pile go under this earlier than the old 760px): side
+     piles collapse to text chips floated above the deck's top corners. The
+     absolutely-positioned chips leave the grid, which would drop the deck
+     into the first 1fr column — recenter with flex.
      The chips sit BELOW the mode-switch row (top:46px), never above it: the
      switch keeps the same first-row spot it has in the grid mode, so
      toggling modes never moves the control. */
   #dk-row{display:flex; justify-content:center}
-  .dk-side{position:absolute; top:46px; z-index:5; translate:none}
-  /* the rail's labels need sideways room the phone doesn't have — keep just
-     the thin track hugging the edge */
-  #dk-progress{right:8px}
-  #dk-left,#dk-counter{display:none}
-  .dk-side .dk-pstack{display:none}
-  .dk-side .dk-ptitle{border-color:var(--line); background:var(--card)}
+  /* The wing dissolves so its two piles can pin themselves as chips: no at
+     the top-left corner, maybe right below it, yes top-right — same spots
+     whether they came from the wing or the grid. */
+  .dk-wing{display:contents}
+  .dk-side,#dk-maybedock{position:absolute; z-index:5; translate:none}
+  .dk-side{top:46px}
+  .dk-side .dk-pstack,#dk-maybedock .dk-pstack{display:none}
+  .dk-side .dk-ptitle,#dk-maybedock .dk-ptitle{border-color:var(--line); background:var(--card)}
   .dk-side.dk-no{left:10px; padding-right:0} .dk-side.dk-yes{right:10px; padding-left:0}
-  #dk-maybedock .dk-pstack{display:none}
-  #dk-maybedock .dk-ptitle{border-color:var(--line); background:var(--card)}
+  #dk-maybedock{left:10px; top:88px; padding:0}
 }
 
 /* ═══════════════════════════════════════════════ Empty states / toast */
@@ -2802,7 +2791,7 @@ pre.code{
      its timers under REDUCED.matches, so cards snap straight onto their
      piles); pile counts and stamps still change state. */
   .dk-card.dk-settle,.dk-card.dk-windup,.dk-card.dk-fly,.dk-card.dk-flyback,
-  .dk-dock,.dk-vtrack i,.dk-act button{transition:none}
+  .dk-dock,.dk-act button{transition:none}
   .dk-mini.dk-pop,.dk-gcard.dk-deal,#dk-pileview.show{animation:none}
 }
 @media print{
@@ -3035,21 +3024,26 @@ pre.code{
         <button type="button" data-mode="deck" aria-pressed="true">Cards</button>
         <button type="button" data-mode="list" aria-pressed="false">Grid</button>
       </div>
+      <span id="dk-count"></span>
     </div>
-    <div id="dk-progress"><span id="dk-left"></span><span class="dk-vtrack"><i class="dk-vseg dk-vs-yes"></i><i class="dk-vseg dk-vs-maybe"></i><i class="dk-vseg dk-vs-no"></i></span><span id="dk-counter"></span></div>
     <div id="dk-main">
       <div id="dk-row">
-        <button type="button" class="dk-dock dk-side dk-no" data-pile="no">
-          <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
-        </button>
+        <!-- The left wing stacks no over maybe: the wings have the idle
+             vertical room, and clearing the old bottom pile row is what buys
+             the cards their height. -->
+        <div class="dk-wing">
+          <button type="button" class="dk-dock dk-side dk-no" data-pile="no">
+            <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
+          </button>
+          <button type="button" class="dk-dock dk-maybe" id="dk-maybedock" data-pile="maybe">
+            <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
+          </button>
+        </div>
         <div id="dk-deck"></div>
         <button type="button" class="dk-dock dk-side dk-yes" data-pile="yes">
           <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
         </button>
       </div>
-      <button type="button" class="dk-dock dk-maybe" id="dk-maybedock" data-pile="maybe">
-        <span class="dk-ptitle"></span><span class="dk-pstack dk-empty"></span>
-      </button>
     </div>
     <div id="dk-actions"></div>
     <div id="dk-pileview" role="dialog" aria-modal="true" aria-labelledby="dk-pv-title" hidden>
@@ -8297,12 +8291,12 @@ const DECK = (() => {
   function updateHud(){
     const base = PLACES.filter(p => !isLodging(p) && !isStubP(p));
     const done = base.filter(p => p.choice).length;
-    $("#dk-left").textContent = tf("deckLeft", { n: base.length - done });
-    $("#dk-counter").textContent = `${done} / ${base.length}`;
-    const pct = n => (base.length ? n / base.length * 100 : 0).toFixed(2) + "%";
-    for(const k of PILES){
-      const seg = $(".dk-vs-" + k);
-      if(seg) seg.style.height = pct(base.filter(p => p.choice === k).length);
+    const c = $("#dk-count");
+    if(c){
+      c.textContent = `${done} / ${base.length}`;
+      // The remainder rides along quietly instead of owning a widget.
+      c.title = tf("deckLeft", { n: base.length - done });
+      c.setAttribute("aria-label", tf("deckLeft", { n: base.length - done }));
     }
     const u = $("#dk-actions .dk-b-undo");
     if(u) u.disabled = !hist.length;
