@@ -427,11 +427,13 @@ button{font:inherit;color:inherit;cursor:pointer}
    dropped below the title, the band grew to three rows, and .top-in's stretch
    pulled the nav pill into a three-row-tall blob (measured at 1990 with the
    stale badge on). On one line the same squeeze compresses .title instead,
-   which folds to two clamped lines (see .tname) while the facts hold their
-   place; the band tops out at two text rows and the nav grows only that far —
-   still an end-cap, never a blob. <=900 restores wrap: the nav has a
-   full-width row of its own there, a taller band deforms nothing, and
-   dropping the facts below the destination is the right move on a phone.
+   which folds to two lines at a reduced size — fitTitle() picks it so the
+   folded pill stays at the two fact rows' height — while the facts hold their
+   place. The band keeps its normal height, so the stretch that makes the two
+   end-caps share edges never has more than that to hand the nav. <=900
+   restores wrap: the nav has a full-width row of its own there, a taller band
+   deforms nothing, and dropping the facts below the destination is the right
+   move on a phone.
 
    row-reverse does three jobs as one mirror: it puts the source-first title at
    the far right, lays the facts to its left, and makes flex-start the right
@@ -442,24 +444,29 @@ button{font:inherit;color:inherit;cursor:pointer}
   flex:1;min-width:0;display:flex;flex-direction:row-reverse;
   align-items:stretch;gap:8px 10px;
 }
-/* On desktop the title is the compressible one: it gives way before the facts
-   do, folding to two lines and then an ellipsis (.tname) — the alternative,
-   measured, was the whole .metas block dropping below and dragging the nav
-   into the band's stretch (see .brand).
-   8em is the floor — roughly eight CJK characters, and an em tracks the
-   clamped font-size so the floor scales with the type. Below it the facts
-   start compressing through .mrow's wrap instead, so a wide fact block can
-   never erase the destination. min-width, not flex-basis: a short name still
-   sizes to itself and cedes every spare pixel.
-   Shrink factor 1000, not 1: flex distributes shrinkage by factor × width, and
-   at 1:1 the facts would start wrapping internally while the title still had a
-   line to give. The lopsided factor makes the title absorb effectively all
-   compression until its own floor; only then does .metas take over.
+/* On desktop the title is the compressible one — the only compressible one:
+   .metas is flex:none, so the title alone absorbs the whole squeeze, first
+   through fitTitle(), which refits a name that no longer holds one line into
+   two lines of smaller type, then through .tname's clamp. The alternatives
+   both lost, measured: letting .metas wrap dropped the whole fact block below
+   and dragged the nav into the band's stretch (see .brand), and letting it
+   shrink was worse in a subtler way — flex computes shrink from the one-line
+   flex-basis, not the folded rendering, so even a 1000:1 shrink-factor bias
+   still handed the facts a hairline fraction of every deficit, and a hairline
+   is exactly what re-wraps a row sized to its content (the stale badge kept
+   landing on a third row).
+   min-width:0, not an em floor: with rigid facts a width floor here would push
+   the row past .brand and overlap the nav in the ~910px + stale-badge pinch.
+   Legibility is guarded in the other dimension instead — fitTitle stops at
+   16px and .tname's clamp ellipsises — so a wide fact block can squeeze the
+   destination narrow, but never erase the band's right end-cap.
+   The font-size here is the resting size; fitTitle() writes the compact one
+   inline and clears it when the name fits or the layout goes <=900.
    <=900 flips this back to flex:none — there the nav sits on its own row, a
    taller band deforms nothing, and a narrowing window should squeeze the
    footnotes before the page's largest type. */
 .title{
-  margin:0;max-width:100%;flex:0 1000 auto;min-width:8em;
+  margin:0;max-width:100%;flex:0 1 auto;min-width:0;
   background:var(--pill-name);border-radius:999px;
   padding:6px 22px;font:900 clamp(22px,2.6vw,30px)/1.2 var(--sans);
   letter-spacing:var(--tracking);overflow-wrap:anywhere;
@@ -474,21 +481,25 @@ button{font:inherit;color:inherit;cursor:pointer}
    band's height, and -webkit-box would take that job away from align-items.
    Two lines is a ceiling, not a target — without it a long destination on a
    375px screen wraps to five lines and grows a 300px-tall pill in a sticky
-   region (measured). */
-.tname{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+   region (measured).
+   text-align:right, desktop only: the title is the band's right end-cap, and a
+   folded second line ragged on the right would break the very edge the mirror
+   pins everything else to. <=900 the title moves back to the left edge and the
+   media block restores left alignment. */
+.tname{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;text-align:right}
 
 /* Trip facts: a fixed two-row block to the left of the destination, wrapping
    inside itself rather than starting a new full-width line. The split is by
    meaning — when above, who and how hard below — so it stays two rows even
    when there is width to spare. Its rows and their contents align from the
    destination outwards, mirroring the old left-edge alignment.
-   flex:0 1 auto sizes it to content. On desktop its shrink matters only after
-   .title hits its 8em floor (see the lopsided shrink factors there); then
-   .mrow's wrap refolds the pills onto more rows rather than clipping them.
-   <=900, .brand wraps again and the whole block drops below the title as
-   before. */
+   flex:none on desktop: the facts are the band's rigid part — the title takes
+   every pixel of squeeze (see .title for why even a hairline of shrink here
+   re-wraps a row and grows the band). <=900 restores flex:0 1 auto: there the
+   block sits on its own line inside .brand's wrap and shrinking into .mrow's
+   internal wrap is the safety valve it always was. */
 .metas{
-  flex:0 1 auto;min-width:0;
+  flex:none;min-width:0;
   display:flex;flex-direction:column;justify-content:center;align-items:flex-end;gap:6px;
 }
 .mrow{display:flex;flex-direction:row-reverse;gap:7px;flex-wrap:wrap;min-width:0}
@@ -609,7 +620,8 @@ button{font:inherit;color:inherit;cursor:pointer}
   .top-in{flex-wrap:wrap;gap:8px;padding:9px 20px}
   .brand{--band-in-x:25px;flex-basis:100%;flex-direction:row;flex-wrap:wrap}
   .title{flex:none;min-width:0}
-  .metas{align-items:flex-start}
+  .tname{text-align:left}
+  .metas{flex:0 1 auto;align-items:flex-start}
   .mrow{flex-direction:row}
   .navwrap{order:0;width:100%}
   .tabs{width:100%}
@@ -8723,6 +8735,37 @@ function applyStaticI18n(){
   txt("#more", T.moreBtn);
 }
 
+/* The compact title. CSS cannot ask "does this name still hold one line?", and
+   that is the question the desktop header turns on: a destination that does
+   should keep the resting clamped size, and one that does not should fold to
+   two lines of smaller type — NOT two lines of display type, which grows a
+   90px pill and hands that height to the nav through .top-in's stretch (the
+   measured blob .brand's comment describes). scrollHeight sees past
+   -webkit-line-clamp's scissors, so dividing it by the line height counts the
+   lines the text wants rather than the lines it shows.
+   The walk starts one step under the resting size and keeps the largest type
+   that still holds one line — any one-line size fits the band. From 19px down
+   a second line becomes affordable too: that is where two lines plus the
+   pill's padding equal the two fact rows' height, the band's normal size. The
+   16px floor is where the clamp's ellipsis becomes the better trade than
+   smaller type. The inline size is cleared first so a grown window climbs
+   back to the resting clamp, and cleared <=900, where the title owns a full
+   row and the media queries size it. Re-run on resize (scheduleLayout): the
+   fit depends on the width the flex row hands the title. */
+function fitTitle(){
+  const t = $(".title"), n = $(".tname");
+  t.style.fontSize = "";
+  if(matchMedia("(max-width:900px)").matches) return;
+  const wants = () => Math.round(n.scrollHeight / parseFloat(getComputedStyle(n).lineHeight));
+  if(wants() <= 1) return;
+  const base = Math.floor(parseFloat(getComputedStyle(t).fontSize));
+  for(let f = base - 1; f >= 16; f--){
+    t.style.fontSize = f + "px";
+    if(wants() <= 1) return;
+    if(f <= 19 && wants() <= 2) return;
+  }
+}
+
 function boot(){
   document.title = tf("docTitle", { dest: TRIP.destination || T.trip });
   if(TRIP.output_language) document.documentElement.lang = TRIP.output_language;
@@ -8773,6 +8816,9 @@ function boot(){
     w.style.setProperty("--i", mi++);
     (metas.lastElementChild || metas).appendChild(w);
   }
+  /* Fit before the entrance starts: the animation only translates, so a size
+     settled here means no visible re-wrap mid-slide. */
+  fitTitle();
   /* The band is complete — start every element's entrance from here, one style
      recalc, so the stagger reads in order. See band-in for why this cannot be
      left to the elements' own arrival times. */
@@ -8855,7 +8901,9 @@ function boot(){
 let layoutRaf = 0;
 function scheduleLayout(){
   if(layoutRaf) return;
-  layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; layoutMap(); layoutChips(); });
+  /* fitTitle first: it can change the header's height, which layoutMap is
+     about to measure. */
+  layoutRaf = requestAnimationFrame(() => { layoutRaf = 0; fitTitle(); layoutMap(); layoutChips(); });
 }
 addEventListener("resize", scheduleLayout);
 
