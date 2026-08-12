@@ -2527,11 +2527,15 @@ pre.code{
 .dk-media{
   /* A fixed band, not a percentage: inside the scroller the content height
      is unbounded, and 42% of that would balloon with long detail text. */
-  flex:0 0 216px; border-radius:calc(var(--dk-r) - var(--dk-pad));
+  flex:0 0 280px; border-radius:calc(var(--dk-r) - var(--dk-pad));
   background:var(--paper-2,var(--fill)); border:1px solid var(--line-soft);
   overflow:hidden; position:relative;
 }
 .dk-media img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; pointer-events:none}
+/* Portrait (and square-ish) photos would survive the ~2:1 cover crop as a
+   thin middle slice — they get shown whole on the band's paper backing
+   instead. The .tall class is pinned by the img's own onload. */
+.dk-media img.tall{object-fit:contain}
 .dk-media-fb{
   position:absolute; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:8px; color:var(--ink-3);
@@ -8220,9 +8224,15 @@ const DECK = (() => {
   function dkMedia(p){
     const im = (p.images || [])[0];
     const label = CATMAP[p.category] || "";
+    /* onload sorts each photo by its own shape: landscape covers the band,
+       portrait/square-ish (under 1.2:1) sits whole on the paper backing —
+       cover would reduce those to a sliver of their middle. Inline like the
+       onerror next to it: the handler must ride the markup through every
+       innerHTML rebuild. */
     return `<span class="dk-media">
       <span class="dk-media-fb">${catIcon(p.category, 44)}</span>
-      ${im && im.url ? `<img src="${esc(im.url)}" alt="" loading="lazy" onerror="this.remove()">` : ""}
+      ${im && im.url ? `<img src="${esc(im.url)}" alt="" loading="lazy" onerror="this.remove()"
+        onload="if(this.naturalWidth < this.naturalHeight * 1.2) this.classList.add('tall')">` : ""}
       ${label ? `<span class="dk-cat">${esc(label)}</span>` : ""}
     </span>`;
   }
@@ -8417,7 +8427,11 @@ const DECK = (() => {
       if(!active) return;
       dx = e.clientX - sx; dy = vAllowed ? e.clientY - sy : 0;
       moved = Math.max(moved, Math.hypot(dx, dy));
-      el.style.transform = `translate(${dx}px,${dy}px) rotate(${dx / 18}deg)`;
+      // The card shrinks as it travels — a nod toward the mini card it is
+      // about to become. Bottoms out at .72 (~220px out); the fly animation
+      // then carries the scale the rest of the way down to the pile.
+      const shr = 1 - .28 * Math.min(1, Math.hypot(dx, dy) / 220);
+      el.style.transform = `translate(${dx}px,${dy}px) rotate(${dx / 18}deg) scale(${shr.toFixed(3)})`;
       // One verdict for stamps, dock arming and (at release) the commit —
       // the drag always announces what letting go would do.
       const d = throwDir(dx, dy);
