@@ -1162,6 +1162,11 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 .pick button.y[aria-pressed=true]{background:var(--ok);color:var(--on-ok)}
 .pick button.m[aria-pressed=true]{background:var(--warn);color:var(--on-warn)}
 .pick button.n[aria-pressed=true]{background:var(--ink-3);color:var(--paper)}
+/* Receipt for a keyboard rating in a plain (non-deck) detail dialog: the
+   pressed segment bumps once. Nothing advances there — it's an edit, not
+   triage. */
+@keyframes dk-pick-pulse{50%{transform:scale(1.14)}}
+.pick button.dk-pulse{animation:dk-pick-pulse .22s ease}
 /* Reads as a note about the place, so it sits with the flags rather than
    under the buttons — where, being present on some cards and not others, it
    would push the pick control off the shared floor and break the row's
@@ -1305,6 +1310,82 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
   @starting-style{
     #dlg[open]{transform:translate(var(--from-x,0px),var(--from-y,0px)) scale(.92)}
   }
+}
+
+/* ── Deck browse chrome ──
+   When the detail dialog is opened from the deck it becomes a navigable
+   lightbox: #dlg carries .dk-browse, the DECK module hangs peeks (fixed
+   children of the dialog — legal thanks to the resting transform:none
+   above), a position/stamp HUD in the header, and slides #dlg-inner on
+   every move. All of it is scoped to .dk-browse so a detail opened from
+   the list or the map stays a plain dialog. */
+#dlg.dk-browse #dlg-inner{transition:transform .17s ease, opacity .17s ease}
+#dlg-inner.dk-out-left {transform:translateX(-56px);opacity:0}
+#dlg-inner.dk-out-right{transform:translateX(56px);opacity:0}
+#dlg-inner.dk-out-down {transform:translateY(56px);opacity:0}
+/* Enter poses snap into place without transition; removing the class lets
+   the base rule above animate back to identity. */
+#dlg-inner.dk-in-left  {transform:translateX(-56px);opacity:0;transition:none}
+#dlg-inner.dk-in-right {transform:translateX(56px);opacity:0;transition:none}
+
+/* HUD: strip position + current rating, injected into the sticky header so
+   it survives scrolling and never fights the panel for space. */
+.dk-hud{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none;padding-top:3px}
+.dk-hud .dk-pos{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.dk-stamp2{
+  font-size:11px;font-weight:700;line-height:1;padding:4px 8px;border-radius:999px;
+  letter-spacing:.02em;
+}
+.dk-stamp2.off{display:none}
+.dk-stamp2.yes{background:var(--ok);color:var(--on-ok)}
+.dk-stamp2.maybe{background:var(--warn);color:var(--on-warn)}
+.dk-stamp2.no{background:var(--ink-3);color:var(--paper)}
+@keyframes dk-stamp-pop{from{transform:scale(1.7);opacity:0} to{transform:none;opacity:1}}
+.dk-stamp2.pop{animation:dk-stamp-pop .26s cubic-bezier(.2,.8,.25,1)}
+
+/* Peeks: slivers of the neighbouring cards flanking the panel. Their very
+   presence is the affordance — no left peek on the first card, no right
+   peek on the last. Fixed inside the dialog, so they live in the top layer
+   and stay clickable over the backdrop. */
+.dlg-peek{display:none}
+#dlg.dk-browse .dlg-peek:not([hidden]){
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+  position:fixed;top:50%;transform:translateY(-50%);z-index:1;
+  width:76px;padding:10px 6px 12px;
+  background:color-mix(in srgb,var(--card) 88%,transparent);
+  border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
+  color:var(--ink-2);cursor:pointer;
+}
+.dlg-peek.dk-prev{left:max(6px, calc(50vw - 330px - 92px))}
+.dlg-peek.dk-next{right:max(6px, calc(50vw - 330px - 92px))}
+@media (hover:hover){ .dlg-peek:hover{background:var(--card);color:var(--ink)} }
+.dlg-peek kbd{
+  font:inherit;font-size:10px;color:var(--ink-3);
+  border:1px solid var(--line);border-radius:4px;padding:1px 5px;background:var(--paper-2);
+}
+@media (hover:none), (pointer:coarse){ .dlg-peek kbd{display:none} }
+.dlg-peek .pk-img{
+  width:52px;height:52px;border-radius:8px;overflow:hidden;flex:none;
+  background:var(--paper-2);display:flex;align-items:center;justify-content:center;color:var(--ink-3);
+}
+.dlg-peek .pk-img img{width:100%;height:100%;object-fit:cover}
+.dlg-peek .pk-nm{
+  writing-mode:vertical-rl;max-height:118px;overflow:hidden;text-overflow:ellipsis;
+  font-size:11.5px;line-height:1.2;
+}
+.dlg-peek .pk-st{width:8px;height:8px;border-radius:50%;flex:none;background:transparent}
+.dlg-peek .pk-st.yes{background:var(--ok)}
+.dlg-peek .pk-st.maybe{background:var(--warn)}
+.dlg-peek .pk-st.no{background:var(--ink-3)}
+/* Narrow screens: no room beside the panel — the peeks collapse to slim
+   edge tabs riding the backdrop. Still tappable, still directional. */
+@media (max-width:900px){
+  #dlg.dk-browse .dlg-peek:not([hidden]){width:20px;padding:26px 2px;border-radius:8px}
+  .dlg-peek.dk-prev{left:0;border-top-left-radius:0;border-bottom-left-radius:0}
+  .dlg-peek.dk-next{right:0;border-top-right-radius:0;border-bottom-right-radius:0}
+  .dlg-peek .pk-img,.dlg-peek .pk-nm,.dlg-peek .pk-st,.dlg-peek kbd{display:none}
+  .dlg-peek::after{content:"›";font-size:15px;color:var(--ink-3)}
+  .dlg-peek.dk-prev::after{content:"‹"}
 }
 
 .dlg-h{
@@ -3261,6 +3342,7 @@ en: {
   deckDone:"All sorted!",
   deckUndo:"Undo",
   deckInfo:"Details",
+  browsePos:"{k} / {n} · {r} unrated",
   deckTapDetail:"Tap the card for details",
   deckPileAria:"Browse the “{c}” pile",
   deckPileEmpty:"This pile is empty",
@@ -3464,6 +3546,7 @@ zh: {
   deckDone:"全部分完！",
   deckUndo:"撤销",
   deckInfo:"详情",
+  browsePos:"{k} / {n} · 还剩 {r} 未选",
   deckTapDetail:"点击卡片看详情",
   deckPileAria:"查看「{c}」的地点",
   deckPileEmpty:"这个牌堆还是空的",
@@ -4415,6 +4498,7 @@ function openDetail(id, from){
     </div>`;
   dlgFrom(from);
   const dlg = $("#dlg");
+  dlg.dataset.place = p.id;   // who is on show — the A/S/D handlers key off this
   // Already-open happens legitimately: the deck's ←/→ browse swaps the
   // content in place, and showModal() on an open dialog throws. The swap
   // also destroys the focused node — focus falls to the inert body and
@@ -4911,6 +4995,7 @@ function showCode(){
       </div>
     </div>`;
   dlgFrom(null);   // no source card — open centred, and don't inherit the last card's offset
+  delete $("#dlg").dataset.place;   // not a place: A/S/D must stay inert here
   $("#dlg").showModal();
   $("#dlg").scrollTop = 0;   // same carryover as openDetail: the dialog is the scroll container
   $("#cp").onclick = async () => {
@@ -8104,11 +8189,17 @@ const DECK = (() => {
      not a "go / don't go" kind of place) and not an uncompleted user stub
      (no tier/pitch/photo — the card would be blank and undecidable; stubs
      stay ratable in the list, and once rated they do appear on the piles). */
-  const eligible = p => !!p && !p.choice && !isLodging(p) && !isStubP(p);
+  /* deckable = a candidate place at all; eligible = deckable and still
+     unrated (what the deck deals). The browse strip runs over deckable —
+     it is the whole album in fixed order, rated cards included, so ← is
+     always "the previous place" regardless of what you did to it. */
+  const deckable = p => !!p && !isLodging(p) && !isStubP(p);
+  const eligible = p => deckable(p) && !p.choice;
+  const strip = () => PLACES.filter(deckable);
   const PILES = ["no", "maybe", "yes"];
 
   let queue = [];        // place ids only — PLACES is the truth, the DOM never is
-  let cur = -1;          // detail-browse cursor into queue; -1 = not browsing
+  let cur = -1;          // browse cursor into strip(); -1 = not browsing
   let hist = [];         // this session's undo stack: {id, choice}
   let openPile = null;   // which pile the browse overlay shows, or null
   let suppress = false;  // our own setChoice call is in flight; skip refresh()
@@ -8361,8 +8452,7 @@ const DECK = (() => {
       else if(cdy > TH_Y && Math.abs(cdx) < 60) commit("maybe", true);
       else if(cmoved < 8){   // a click, not a drag
         el.style.transform = ""; clearStamps();
-        cur = 0;   // the tapped card is the top one: ←/→ browse from here
-        openDetail(el.dataset.dkId, el);
+        openBrowse(el.dataset.dkId);   // ←/→ browse the strip from here
       }else{
         el.classList.add("dk-settle");
         el.style.transform = ""; clearStamps();
@@ -8608,46 +8698,152 @@ const DECK = (() => {
     bar.querySelector(".dk-b-no").onclick    = () => commit("no", false);
     bar.querySelector(".dk-b-maybe").onclick = () => commit("maybe", false);
     bar.querySelector(".dk-b-yes").onclick   = () => commit("yes", false);
-    bar.querySelector(".dk-b-info").onclick  = () => showDetail(0);
+    bar.querySelector(".dk-b-info").onclick  = () => openBrowse();
   }
 
   /* ── detail browsing ──
      Most places are unfamiliar — a triage session lives in the detail
-     dialog, so the dialog itself is navigable: ←/→ page through the queue
-     (cur), A/S/D rate the card being read and advance to the next one. */
-  function showDetail(i){
-    if(!queue.length) return;
-    cur = Math.max(0, Math.min(queue.length - 1, i));
-    openDetail(queue[cur], deckEl().querySelector('[data-depth="0"]'));
+     dialog, so the dialog is a lightbox over the whole strip (every
+     candidate place in fixed order, rated or not): ←/→ page, A/S/D rate
+     the card being read and slide on to the next. Rated cards stay in the
+     track wearing their stamp — going back and re-rating IS the undo. */
+
+  /* Which way a rating throws the content — the same directions the deck's
+     swipe uses, so the physics feel like one system. */
+  const OUT_DIR = { no:"left", maybe:"down", yes:"right" };
+
+  function openBrowse(id){
+    const s = strip();
+    if(!s.length) return;
+    const want = id ?? queue[0];
+    const i = Math.max(0, s.findIndex(p => p.id === want));
+    showDetail(i);
+  }
+
+  function showDetail(i, mo){
+    const s = strip();
+    if(!s.length) return;
+    cur = Math.max(0, Math.min(s.length - 1, i));
+    const id = s[cur].id;
+    const dlg = $("#dlg");
+    swapContent(dlg.open ? mo : null, () => {
+      openDetail(id, deckEl().querySelector('[data-depth="0"]'));
+      dlg.classList.add("dk-browse");
+      updateChrome();
+    });
+  }
+
+  /* Two-phase content swap: shove the old card out (mo.out), rebuild, snap
+     the new one to the opposite wing (mo.in) and let it settle. A keypress
+     mid-flight cancels the timer and cuts straight to the swap — fast
+     operators must never wait for choreography. */
+  let animT = 0;
+  function swapContent(mo, swap){
+    const inner = $("#dlg-inner");
+    if(animT){ clearTimeout(animT); animT = 0; }
+    inner.className = "";
+    if(!mo || REDUCED.matches){ swap(); return; }
+    inner.classList.add("dk-out-" + mo.out);
+    animT = setTimeout(() => {
+      animT = 0;
+      inner.className = "";
+      swap();
+      const inCls = "dk-in-" + mo.in;
+      inner.classList.add(inCls);
+      requestAnimationFrame(() => requestAnimationFrame(() => inner.classList.remove(inCls)));
+    }, 170);
   }
 
   function browse(dir){
     const dlg = $("#dlg");
-    // Not opened from the deck (or not open at all): start at the top card
-    // rather than moving a stale cursor.
-    showDetail(dlg && dlg.open && cur >= 0 ? cur + dir : 0);
+    if(!dlg || !dlg.open || cur < 0){ openBrowse(); return; }
+    const to = cur + dir;
+    if(to < 0 || to >= strip().length) return;   // the missing peek already said so
+    showDetail(to, dir > 0 ? { out:"left", in:"right" } : { out:"right", in:"left" });
   }
 
   function rateInDetail(choice){
-    const i = cur >= 0 ? Math.min(cur, queue.length - 1) : 0;
-    const id = queue[i];
-    if(id == null){ $("#dlg").close(); return; }
-    if(i === 0) commit(choice, false);   // the real top card: full commit path, flies behind the dialog
-    else{
-      // Deeper in the queue: commit() only rates the top card, so this is
-      // its bookkeeping minus the fly animation. Not setChoice() alone —
-      // with a choice filter on it skips DECK.refresh(), and the rated card
-      // would linger in the queue.
+    const s = strip();
+    const p = s[cur];
+    if(!p){ $("#dlg").close(); return; }
+    /* Keyboard and in-browse pick clicks SET, never toggle-clear: pressing D
+       on a card already marked yes means "confirmed, next", and silently
+       un-rating it there would be a trap. Clearing stays a deliberate act
+       (the pick row in list view, the pile grid). */
+    if(p.choice !== choice){
       clearDone();
-      hist.push({ id, choice });
+      hist.push({ id: p.id, choice });
+      const wasPending = !p.choice;
       suppress = true;
-      try{ setChoice(id, choice); }finally{ suppress = false; }
-      queue.splice(i, 1);
+      try{ setChoice(p.id, choice); }finally{ suppress = false; }
+      if(wasPending){
+        const qi = queue.indexOf(p.id);
+        if(qi >= 0) queue.splice(qi, 1);
+      }
       render(); renderDocks(choice);
       if(!queue.length) scheduleDone();
     }
-    if(!queue.length){ $("#dlg").close(); return; }
-    showDetail(i);   // the card that slid into this slot is the natural next read
+    stampPop(choice);
+    if(cur >= s.length - 1){ updateChrome(); return; }   // end of strip: the stamp is the event
+    showDetail(cur + 1, { out: OUT_DIR[choice], in:"right" });
+  }
+
+  /* ── browse chrome: header HUD + flanking peeks ── */
+  function ensureChrome(){
+    const dlg = $("#dlg");
+    if(dlg.querySelector(".dlg-peek")) return;
+    for(const dir of [-1, 1]){
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "dlg-peek " + (dir < 0 ? "dk-prev" : "dk-next");
+      b.hidden = true;
+      b.innerHTML = `<kbd>${dir < 0 ? "←" : "→"}</kbd><span class="pk-img"></span><span class="pk-nm"></span><span class="pk-st"></span>`;
+      b.addEventListener("click", () => browse(dir));
+      dlg.appendChild(b);
+    }
+  }
+
+  function setPeek(el, p){
+    if(!el) return;
+    el.hidden = !p;
+    if(!p) return;
+    const im = (p.images || [])[0];
+    el.querySelector(".pk-img").innerHTML =
+      im && im.url ? `<img src="${esc(im.url)}" alt="" loading="lazy" onerror="this.remove()">` : catIcon(p.category, 22);
+    el.querySelector(".pk-nm").textContent = p.name;
+    el.querySelector(".pk-st").className = "pk-st" + (p.choice ? " " + p.choice : "");
+    el.setAttribute("aria-label", p.name);
+  }
+
+  function updateChrome(){
+    ensureChrome();
+    const s = strip(), p = s[cur];
+    if(!p) return;
+    const dlg = $("#dlg");
+    const head = dlg.querySelector(".dlg-h");
+    if(head && !head.querySelector(".dk-hud")){
+      const x = head.querySelector(".x");
+      const hud = document.createElement("span");
+      hud.className = "dk-hud";
+      if(x) x.before(hud); else head.appendChild(hud);
+    }
+    const hud = head && head.querySelector(".dk-hud");
+    if(hud) hud.innerHTML =
+      `<span class="dk-pos">${tf("browsePos", { k: cur + 1, n: s.length, r: pending() })}</span>`
+      + `<b class="dk-stamp2 ${p.choice || "off"}">${p.choice ? T[p.choice] : ""}</b>`;
+    setPeek(dlg.querySelector(".dk-prev"), s[cur - 1]);
+    setPeek(dlg.querySelector(".dk-next"), s[cur + 1]);
+  }
+
+  /* The rating's receipt: the stamp slams into the HUD while the content is
+     still sliding out — feedback lands on the card you acted on. */
+  function stampPop(choice){
+    const st = $("#dlg .dk-hud .dk-stamp2");
+    if(!st) return;
+    st.className = "dk-stamp2 " + choice;
+    st.textContent = T[choice];
+    void st.offsetWidth;
+    st.classList.add("pop");
   }
 
   function onShow(){
@@ -8655,9 +8851,10 @@ const DECK = (() => {
       booted = true;
       buildActions();
       // Whatever closes the detail dialog (Esc, ✕, backdrop) ends the browse:
-      // a later ←/→ must start from the top card, not a stale cursor.
+      // a later ←/→ must start from the top card, not a stale cursor. The
+      // class strips the lightbox chrome so a list-opened detail is plain.
       const dlg = $("#dlg");
-      if(dlg) dlg.addEventListener("close", () => { cur = -1; });
+      if(dlg) dlg.addEventListener("close", () => { cur = -1; dlg.classList.remove("dk-browse"); });
       $$(".dk-dock").forEach(d => d.addEventListener("click", () => openPileView(d.dataset.pile)));
       $("#dk-pileview").addEventListener("click", e => { if(e.target === e.currentTarget) closePileView(); });
       /* Focus stays inside the open overlay: Tab wraps last→first (and
@@ -8688,8 +8885,8 @@ const DECK = (() => {
      Backspace is, and is preventDefault()ed so it can't navigate the
      browser back).
      The detail dialog is NOT a full stop: A/S/D rate the card being read
-     and ←/→ page through the queue — that's the hands-free triage loop.
-     Everything else (Esc, Tab, Enter on a link) stays the dialog's. */
+     and ←/→ page through the strip — that's the hands-free triage loop.
+     Everything else (Tab, Enter on a link) stays the dialog's. */
   document.addEventListener("keydown", e => {
     const v = dv();
     if(!v || v.hidden) return;
@@ -8715,10 +8912,12 @@ const DECK = (() => {
     else if(detail && e.key === "Escape"){ e.preventDefault(); dlg.close(); }
     else if(detail) return;   // the rest belongs to the open dialog
     else if(e.key === "z" || e.key === "Z" || e.key === "Backspace"){ e.preventDefault(); undo(); }
-    else if(e.key === "Enter"){ e.preventDefault(); showDetail(0); }
+    else if(e.key === "Enter"){ e.preventDefault(); openBrowse(); }
   });
 
-  return { onShow, refresh, pending, setReason };
+  // rate: the global pick-click handler routes dialog clicks here while the
+  // deck's browse lightbox is up, so buttons and A/S/D stay one behavior.
+  return { onShow, refresh, pending, setReason, rate: rateInDetail };
 })();
 window.DECK = DECK;
 
@@ -9063,6 +9262,16 @@ document.addEventListener("click", e => {
     if(pick){
       const id = pickWrap.dataset.id;
       const v  = pick.dataset.v;
+      // Inside the deck's browse lightbox the pick row IS the A/S/D keys:
+      // same stamp, same slide, same auto-advance, and no reason dialog —
+      // the deck never interrupts triage to ask why (reasons live in the
+      // pile grid). Everywhere else the row keeps its toggle semantics.
+      const dlgEl = $("#dlg");
+      if(window.DECK && dlgEl && dlgEl.open && dlgEl.classList.contains("dk-browse")
+         && e.target.closest("#dlg") && dlgEl.dataset.place === id){
+        DECK.rate(v);
+        return;
+      }
       const p  = PLACES.find(x => x.id === id);
       if(v === "no" && p && p.choice !== "no"){ $("#dlg").close(); askReason(id); }
       else setChoice(id, v);
@@ -9145,6 +9354,36 @@ $("#copy").onclick     = showCode;
 
 document.addEventListener("keydown", e => {
   if(e.key === "/" && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)){ e.preventDefault(); $("#q").focus(); }
+
+  /* A/S/D rate the place shown in a plain detail dialog (opened from the
+     list or the map). Same keys as the deck, but it's an edit in place: no
+     auto-advance, no slide — the pressed pick segment bumps as the receipt.
+     The deck's own handler owns these keys whenever the deck view is up, so
+     this one stands down there; "no" mirrors the click path (close + ask
+     the reason). Set, never toggle-clear — same rule as the deck. */
+  {
+    const dlgEl = $("#dlg");
+    const dkView = $("#view-deck");
+    if(dlgEl && dlgEl.open && dlgEl.dataset.place && !dlgEl.classList.contains("dk-browse")
+       && (!dkView || dkView.hidden)
+       && !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && !e.target.isContentEditable
+       && !e.isComposing && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey){
+      const rdlg = $("#rdlg");
+      const v = (rdlg && rdlg.open) ? null : { a:"no", s:"maybe", d:"yes" }[e.key.toLowerCase()];
+      if(v){
+        e.preventDefault();
+        const id = dlgEl.dataset.place;
+        const p = PLACES.find(x => x.id === id);
+        if(p && p.choice !== v){
+          if(v === "no"){ dlgEl.close(); askReason(id); return; }
+          setChoice(id, v);
+        }
+        const seg = dlgEl.querySelector(`.pick[data-id="${CSS.escape(id)}"] [data-v="${v}"]`);
+        if(seg){ seg.classList.remove("dk-pulse"); void seg.offsetWidth; seg.classList.add("dk-pulse"); }
+        return;
+      }
+    }
+  }
 
   // ←→ / Home / End within the tab bar. WAI-ARIA's tab pattern requires
   // arrow-key switching; a disabled Guide tab is skipped — it isn't
