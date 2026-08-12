@@ -2867,10 +2867,10 @@ pre.code{
       <div class="map-side">
         <div class="ms-head">
           <div class="ms-fil" role="group" id="seg-mfil" aria-label="Filter by choice">
-            <button class="mfil" data-c="yes"   aria-pressed="true">Yes<span class="c">0</span></button>
-            <button class="mfil" data-c="maybe" aria-pressed="true">Maybe<span class="c">0</span></button>
+            <button class="mfil" data-c="no"    aria-pressed="true">no<span class="c">0</span></button>
+            <button class="mfil" data-c="maybe" aria-pressed="true">maybe<span class="c">0</span></button>
+            <button class="mfil" data-c="yes"   aria-pressed="true">yes<span class="c">0</span></button>
             <button class="mfil" data-c="none"  aria-pressed="true">Unrated<span class="c">0</span></button>
-            <button class="mfil" data-c="no"    aria-pressed="true">No<span class="c">0</span></button>
           </div>
           <!-- Group-by-area is for routing (same area = less walking);
                group-by-choice is for gap-checking: after rating everything,
@@ -2971,7 +2971,8 @@ pre.code{
 
   <!-- ══════════════ View ④ Swipe deck ══════════════
        A first-pass triage surface: every unrated place is dealt as a card,
-       one decision at a time (drag / arrow keys / buttons). Decisions go
+       one decision at a time (drag / A·S·D keys / buttons; ←/→ page the
+       detail dialog through the queue). Decisions go
        through setChoice() like every other view, so the piles, the list and
        the map can never disagree. All labels are written at runtime from T;
        the DECK module owns everything inside this section. -->
@@ -3071,7 +3072,9 @@ en: {
   groupAria:"Group by", byArea:"By area", byTier:"By tier",
   filterAria:"Filter by choice",
   groupLbl:"Group", byChoice:"By choice",
-  yes:"Yes", maybe:"Maybe", no:"No", none:"Unrated",
+  /* The three ratings are literal tokens, identical in every locale — the
+     controls read no/maybe/yes wherever they appear. */
+  yes:"yes", maybe:"maybe", no:"no", none:"Unrated",
   msqPh:"Add a place…", msqAria:"Search for a place and add it to the trip",
   msqGo:"Search", transit:"Transit",
   saveBtn:"Save choices & schedule", saveNow:"Save now",
@@ -3208,15 +3211,15 @@ en: {
   wxEstWarn:"⚠︎ The trip is {n} days out, beyond the 16-day forecast range. These are <b>8-year historical averages</b> for the same dates — rough climate, <b>not a forecast</b>. Reopen this page closer to departure for a real forecast.",
   wxFail:"Couldn't fetch weather ({e}). Reopen this page when online to retry.",
   costTitle:"Cost summary", costHead:"Tickets & admission",
-  costScheduled:"{n} scheduled places", costWanted:"{n} places marked “Yes”",
+  costScheduled:"{n} scheduled places", costWanted:"{n} places marked “yes”",
   costTotal:"{n} parsed, total ≈ <b>{cur}{sum}</b>",
-  costNoSched:"The schedule isn't arranged yet, so this estimates from “Yes” picks. Once scheduled, it switches to the places actually planned per day.",
+  costNoSched:"The schedule isn't arranged yet, so this estimates from “yes” picks. Once scheduled, it switches to the places actually planned per day.",
   costUnparsed:"{n} ticket prices are text-only and not counted: {list}. Special exhibitions, add-on experiences and night surcharges usually cost extra, so the real total will be higher.",
   costOnly:"Tickets only — no transport, meals, or special-exhibition surcharges.",
   markYes:"yes", markMaybe:"maybe", markNo:"no", markNone:"unrated",
   nItems:"{n} items",
-  missedTitle:"Marked “Yes” but scheduled nowhere", nCount:"{n}",
-  missedCaveat:"Either add them to a day or downgrade them to “Maybe” — otherwise you'll only notice the gap mid-trip.",
+  missedTitle:"Marked “yes” but scheduled nowhere", nCount:"{n}",
+  missedCaveat:"Either add them to a day or downgrade them to “maybe” — otherwise you'll only notice the gap mid-trip.",
   unscheduled:"Unscheduled",
   checklistTitle:"All places at a glance",
   checklistIntroDays:"The day boxes are the plan you arranged; the rest is everything unscheduled — the ones you marked no included, so you can reconsider them.",
@@ -3273,7 +3276,8 @@ zh: {
   // （filterAria 是「显示哪些选择」、保存按钮是「保存选择和日程」），
   // 再造一个同义词等于让人多记一个词。顺带和「按区域」同为三字。
   groupLbl:"分组", byChoice:"按选择",
-  yes:"想去", maybe:"待定", no:"不想去", none:"未表态",
+  /* 三档评级是跨语言统一的字面记号，不翻译——所有控件一律 no/maybe/yes */
+  yes:"yes", maybe:"maybe", no:"no", none:"未表态",
   msqPh:"搜索想去的地点…", msqAria:"搜索地点并添加到行程",
   msqGo:"搜索", transit:"地铁",
   saveBtn:"保存选择和日程", saveNow:"立即保存",
@@ -3292,7 +3296,7 @@ zh: {
   vbTell:"查到之后告诉 AI，它会补进数据里。",
   stubFacts:"手动添加 · 详情待 AI 补全",
   indoor:"室内", outdoor:"户外", nightGood:"☾ 适合夜间",
-  stubTier:"待补全", whyNot:"不想去的理由：",
+  stubTier:"待补全", whyNot:"选 no 的理由：",
   spotsHeader:"顺路打卡点 · {n} 个",
   otherArea:"其他", tierGroup:"{t} 级", stubGroup:"手动添加·待补全",
   emptyBig:"没有符合条件的景点", emptySub:"调整一下搜索或筛选条件",
@@ -3308,12 +3312,12 @@ zh: {
   photoAdvice:"拍摄建议", practicalInfo:"实用信息", sources:"信息来源",
   schedRemove:"从第 {n} 天移出", schedAdd:"加进第 {n} 天",
   quick:["太远了","人太多","不感兴趣","时间不够","门票太贵","去过了","那天不开门","和别处重复"],
-  whyNotTitle:"为什么不想去{name}？",
+  whyNotTitle:"为什么给{name}标 no？",
   reasonHint:"记下理由，之后回看清单时能快速判断要不要把它捡回来。不写理由也会记下这个选择。",
   reasonPh:"或者自己写…", skip:"不写理由", ok:"记下理由",
   chipsMore:"还有 {n} 个筛选", chipsLess:"收起筛选",
   reasonCancel:"取消，不做这个选择",
-  scSummary:"# 想去 {y} · 待定 {m} · 不想去 {n} · 未表态 {u}",
+  scSummary:"# yes {y} · maybe {m} · no {n} · 未表态 {u}",
   scDays:" · 日程 {d} 天共 {i} 项（D 行按顺序，即当天路线）",
   scNoDays:" · 尚未排日程",
   fileHint:"以本地文件方式打开，改动不会自动保存。点「{btn}」写回 places.json",
@@ -3406,23 +3410,23 @@ zh: {
   wxEstWarn:"⚠︎ 出行日在 {n} 天后，超出 16 天预报范围。以上是<b>过去 8 年同期的历史平均</b>，只能说明大致气候，<b>不是预报</b>。临近出行请重新打开本页查看真实预报。",
   wxFail:"天气获取失败（{e}）。联网后重新打开本页即可重试。",
   costTitle:"费用汇总", costHead:"门票与入场费",
-  costScheduled:"已排进日程的 {n} 个地点", costWanted:"{n} 个「想去」的地点",
+  costScheduled:"已排进日程的 {n} 个地点", costWanted:"{n} 个标了 yes 的地点",
   costTotal:"已解析 {n} 项，合计约 <b>{cur}{sum}</b>",
-  costNoSched:"日程还没排，这里按「想去」的地点估算。排完之后会改成按每天实际要去的点计算。",
+  costNoSched:"日程还没排，这里按标了 yes 的地点估算。排完之后会改成按每天实际要去的点计算。",
   costUnparsed:"以下 {n} 项的票价是文字描述，未计入合计：{list}。特别展、体验项目、夜间加价通常另计，实际花费会高于此数。",
   costOnly:"仅含门票，不含交通、餐饮与特别展加价。",
   /* These four must stay word-for-word identical to yes / maybe / no / none
      above — they label the same four states on the printed checklist, and a
      second name for a state is a second state as far as the reader knows.
      markNo used to be 放弃 while the button said 不想去. */
-  markYes:"想去", markMaybe:"待定", markNo:"不想去", markNone:"未表态",
+  markYes:"yes", markMaybe:"maybe", markNo:"no", markNone:"未表态",
   nItems:"{n} 项",
-  missedTitle:"想去，但没排进任何一天", nCount:"{n} 个",
-  missedCaveat:"要么加进某一天，要么改成「待定」——否则出发时才发现漏了。",
+  missedTitle:"标了 yes，但没排进任何一天", nCount:"{n} 个",
+  missedCaveat:"要么加进某一天，要么改成「maybe」——否则出发时才发现漏了。",
   unscheduled:"未排入",
   checklistTitle:"全部景点对照表",
-  checklistIntroDays:"按天的盒子是你排好的行程，其余是没排进去的——标了不想去的也列在这里，方便回头判断要不要捡回来。",
-  checklistIntro:"包含所有候选地点，标了不想去的也列在这里，方便你回头判断要不要捡回来。",
+  checklistIntroDays:"按天的盒子是你排好的行程，其余是没排进去的——标了 no 的也列在这里，方便回头判断要不要捡回来。",
+  checklistIntro:"包含所有候选地点，标了 no 的也列在这里，方便你回头判断要不要捡回来。",
   pgPrint:"导出 PDF", pgNav:"页面", pgNavHead:"A4 · 共 {n} 页", pgNavToc:"目录",
   pgHint:"A4 · 在打印窗口选「存储为 PDF」，并关掉页眉页脚",
   pgMd:"导出 Markdown",
@@ -3928,12 +3932,14 @@ function media(p){
 }
 
 
+/* no → maybe → yes, matching the deck's action row and docks: no lives on
+   the left everywhere, yes on the right. */
 function pickHTML(p){
   const c = p.choice;
   return `<div class="pick" data-id="${esc(p.id)}">
-    <button class="y" data-v="yes"   aria-pressed="${c==="yes"}">${T.yes}</button>
-    <button class="m" data-v="maybe" aria-pressed="${c==="maybe"}">${T.maybe}</button>
     <button class="n" data-v="no"    aria-pressed="${c==="no"}">${T.no}</button>
+    <button class="m" data-v="maybe" aria-pressed="${c==="maybe"}">${T.maybe}</button>
+    <button class="y" data-v="yes"   aria-pressed="${c==="yes"}">${T.yes}</button>
   </div>`;
 }
 
@@ -4153,10 +4159,9 @@ function layoutChips(){
    row. Now the same numbers hang on the filter buttons themselves — each
    count lives on the control that filters that bucket, no legend to
    cross-reference. */
-/* Order is the list's own, not the map's (which puts "unrated" third, ahead of
-   "no"): these four pills have read yes/maybe/no/none since they were a
-   readout, and turning them into buttons is no reason to shuffle them. */
-const CHOICES = ["yes","maybe","no","none"];
+/* no/maybe/yes, the same left-to-right as every choice control on the page
+   (cards' pick row, deck action row, deck docks, map filter); unrated tails. */
+const CHOICES = ["no","maybe","yes","none"];
 
 /* Built once, at boot, rather than on every count change. updateProgress()
    used to rewrite this innerHTML wholesale, which was free while these were
@@ -4396,7 +4401,13 @@ function openDetail(id, from){
     </div>`;
   dlgFrom(from);
   const dlg = $("#dlg");
-  dlg.showModal();
+  // Already-open happens legitimately: the deck's ←/→ browse swaps the
+  // content in place, and showModal() on an open dialog throws. The swap
+  // also destroys the focused node — focus falls to the inert body and
+  // Chrome stops delivering Esc to the dialog — so put it on the fresh
+  // title, which is also what a screen reader should announce next.
+  if(!dlg.open) dlg.showModal();
+  else{ const h = $("#dlg-inner h3"); if(h) h.focus(); }
   // The dialog element itself is the scroll container (sticky header/footer
   // position against it), and it survives across opens — without this, card
   // B opens at wherever card A was scrolled to. After showModal(), not
@@ -8083,6 +8094,7 @@ const DECK = (() => {
   const PILES = ["no", "maybe", "yes"];
 
   let queue = [];        // place ids only — PLACES is the truth, the DOM never is
+  let cur = -1;          // detail-browse cursor into queue; -1 = not browsing
   let hist = [];         // this session's undo stack: {id, choice}
   let openPile = null;   // which pile the browse overlay shows, or null
   let suppress = false;  // our own setChoice call is in flight; skip refresh()
@@ -8335,6 +8347,7 @@ const DECK = (() => {
       else if(cdy > TH_Y && Math.abs(cdx) < 60) commit("maybe", true);
       else if(cmoved < 8){   // a click, not a drag
         el.style.transform = ""; clearStamps();
+        cur = 0;   // the tapped card is the top one: ←/→ browse from here
         openDetail(el.dataset.dkId, el);
       }else{
         el.classList.add("dk-settle");
@@ -8568,26 +8581,69 @@ const DECK = (() => {
     const bar = $("#dk-actions");
     const mk = (cls, inner, kbd, title, small) =>
       `<span class="dk-act"><button type="button" class="${cls}${small ? " dk-sm" : ""}" title="${esc(title)}" aria-label="${esc(title)}">${inner}</button><kbd>${kbd}</kbd></span>`;
+    /* A/S/D mirror the buttons' left-to-right (and the swipe directions);
+       ←/→ are deliberately not rating keys anymore — they page through the
+       detail dialog, which is where most of a triage session is spent. */
     bar.innerHTML =
       mk("dk-b-undo", I_UNDO, "Z", T.deckUndo, true)
-      + mk("dk-b-no", MARK_BTN.no, "←", T.no)
-      + mk("dk-b-maybe", MARK_BTN.maybe, "↓", T.maybe)
-      + mk("dk-b-yes", MARK_BTN.yes, "→", T.yes)
+      + mk("dk-b-no", MARK_BTN.no, "A", T.no)
+      + mk("dk-b-maybe", MARK_BTN.maybe, "S", T.maybe)
+      + mk("dk-b-yes", MARK_BTN.yes, "D", T.yes)
       + mk("dk-b-info", I_INFO, "Enter", T.deckInfo, true);
     bar.querySelector(".dk-b-undo").onclick  = undo;
     bar.querySelector(".dk-b-no").onclick    = () => commit("no", false);
     bar.querySelector(".dk-b-maybe").onclick = () => commit("maybe", false);
     bar.querySelector(".dk-b-yes").onclick   = () => commit("yes", false);
-    bar.querySelector(".dk-b-info").onclick  = () => {
-      const id = queue[0];
-      if(id != null) openDetail(id, deckEl().querySelector('[data-depth="0"]'));
-    };
+    bar.querySelector(".dk-b-info").onclick  = () => showDetail(0);
+  }
+
+  /* ── detail browsing ──
+     Most places are unfamiliar — a triage session lives in the detail
+     dialog, so the dialog itself is navigable: ←/→ page through the queue
+     (cur), A/S/D rate the card being read and advance to the next one. */
+  function showDetail(i){
+    if(!queue.length) return;
+    cur = Math.max(0, Math.min(queue.length - 1, i));
+    openDetail(queue[cur], deckEl().querySelector('[data-depth="0"]'));
+  }
+
+  function browse(dir){
+    const dlg = $("#dlg");
+    // Not opened from the deck (or not open at all): start at the top card
+    // rather than moving a stale cursor.
+    showDetail(dlg && dlg.open && cur >= 0 ? cur + dir : 0);
+  }
+
+  function rateInDetail(choice){
+    const i = cur >= 0 ? Math.min(cur, queue.length - 1) : 0;
+    const id = queue[i];
+    if(id == null){ $("#dlg").close(); return; }
+    if(i === 0) commit(choice, false);   // the real top card: full commit path, flies behind the dialog
+    else{
+      // Deeper in the queue: commit() only rates the top card, so this is
+      // its bookkeeping minus the fly animation. Not setChoice() alone —
+      // with a choice filter on it skips DECK.refresh(), and the rated card
+      // would linger in the queue.
+      clearDone();
+      hist.push({ id, choice });
+      suppress = true;
+      try{ setChoice(id, choice); }finally{ suppress = false; }
+      queue.splice(i, 1);
+      render(); renderDocks(choice);
+      if(!queue.length) scheduleDone();
+    }
+    if(!queue.length){ $("#dlg").close(); return; }
+    showDetail(i);   // the card that slid into this slot is the natural next read
   }
 
   function onShow(){
     if(!booted){
       booted = true;
       buildActions();
+      // Whatever closes the detail dialog (Esc, ✕, backdrop) ends the browse:
+      // a later ←/→ must start from the top card, not a stale cursor.
+      const dlg = $("#dlg");
+      if(dlg) dlg.addEventListener("close", () => { cur = -1; });
       $$(".dk-dock").forEach(d => d.addEventListener("click", () => openPileView(d.dataset.pile)));
       $("#dk-pileview").addEventListener("click", e => { if(e.target === e.currentTarget) closePileView(); });
       /* Focus stays inside the open overlay: Tab wraps last→first (and
@@ -8613,30 +8669,39 @@ const DECK = (() => {
 
   /* Keyboard. Guards in order: view visible (null-safe for standalone, which
      removes the section) → the tab bar's own arrow handler wins → typing
-     surfaces win → native dialogs own their keys (their Esc closes them
-     first; a second Esc reaches us and closes the overlay) → IME composition
-     / repeats / modifier combos are never ours (plain Backspace is, and is
-     preventDefault()ed so it can't navigate the browser back). */
+     surfaces win → the reason dialog owns its keys (it holds an input) →
+     IME composition / repeats / modifier combos are never ours (plain
+     Backspace is, and is preventDefault()ed so it can't navigate the
+     browser back).
+     The detail dialog is NOT a full stop: A/S/D rate the card being read
+     and ←/→ page through the queue — that's the hands-free triage loop.
+     Everything else (Esc, Tab, Enter on a link) stays the dialog's. */
   document.addEventListener("keydown", e => {
     const v = dv();
     if(!v || v.hidden) return;
     if(e.target.closest && e.target.closest(".tab")) return;
     if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
     const dlg = $("#dlg"), rdlg = $("#rdlg");
-    if((dlg && dlg.open) || (rdlg && rdlg.open)) return;
+    if(rdlg && rdlg.open) return;
     if(e.isComposing || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if(openPile){
       if(e.key === "Escape"){ e.preventDefault(); closePileView(); }
-      return;   // arrows must not decide the deck card under the overlay
+      return;   // rating keys must not decide the deck card under the overlay
     }
-    const map = { ArrowRight:"yes", ArrowLeft:"no", ArrowDown:"maybe" };
-    if(map[e.key]){ e.preventDefault(); commit(map[e.key], false); }
-    else if(e.key === "z" || e.key === "Z" || e.key === "Backspace"){ e.preventDefault(); undo(); }
-    else if(e.key === "Enter"){
+    const detail = !!(dlg && dlg.open);
+    const rate = { a:"no", s:"maybe", d:"yes" }[e.key.toLowerCase()];
+    if(rate){ e.preventDefault(); detail ? rateInDetail(rate) : commit(rate, false); }
+    else if(e.key === "ArrowRight" || e.key === "ArrowLeft"){
       e.preventDefault();
-      const id = queue[0];
-      if(id != null) openDetail(id, deckEl().querySelector('[data-depth="0"]'));
+      browse(e.key === "ArrowRight" ? 1 : -1);
     }
+    // Esc is closed by hand, not left to the browser: once ←/→ or A/S/D
+    // swap the dialog's content in place, Chrome's close watcher stops
+    // responding to Esc (observed 138; fresh showModal()s are fine).
+    else if(detail && e.key === "Escape"){ e.preventDefault(); dlg.close(); }
+    else if(detail) return;   // the rest belongs to the open dialog
+    else if(e.key === "z" || e.key === "Z" || e.key === "Backspace"){ e.preventDefault(); undo(); }
+    else if(e.key === "Enter"){ e.preventDefault(); showDetail(0); }
   });
 
   return { onShow, refresh, pending, setReason };
