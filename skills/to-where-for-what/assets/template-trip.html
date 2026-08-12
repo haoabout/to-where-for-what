@@ -385,7 +385,9 @@ button{font:inherit;color:inherit;cursor:pointer}
   border-bottom:1px solid var(--canvas-line);
   color:var(--canvas-ink);
   /* Backstop for band-in's 25px slide (see below). Nothing overflows today —
-     measured at 375/620/900/1280 with every element frozen at full rightward
+     the desktop slide starts 25px inward (leftward, toward the page's centre)
+     and cannot reach an edge, so the binding case is the <=900 layout's
+     rightward slide: measured at 375/620/900 with every element frozen at full
      displacement, the closest any of them comes to the viewport edge is 12px,
      at 375 where .metas' pills wrap and run furthest right. That is the whole
      remaining margin: .top-in's 20px of inline padding, minus the 25px slide,
@@ -420,11 +422,16 @@ button{font:inherit;color:inherit;cursor:pointer}
    sizes to its own type, it grows to the height of the two rows next to it, so
    the two share a top and a bottom edge.
 
-   flex-wrap is the safety valve, not decoration: once .metas no longer fits
-   beside the title, the whole block drops to the next line, still aligned to
-   the right — a breakpoint that is computed rather than written as a media
-   query. Without wrap, .metas neither wraps nor shrinks and pushes the band
-   past the viewport (measured).
+   nowrap on desktop, deliberately: flex breaks lines on uncompressed widths,
+   so with wrap on a long destination never compressed — the whole .metas block
+   dropped below the title, the band grew to three rows, and .top-in's stretch
+   pulled the nav pill into a three-row-tall blob (measured at 1990 with the
+   stale badge on). On one line the same squeeze compresses .title instead,
+   which folds to two clamped lines (see .tname) while the facts hold their
+   place; the band tops out at two text rows and the nav grows only that far —
+   still an end-cap, never a blob. <=900 restores wrap: the nav has a
+   full-width row of its own there, a taller band deforms nothing, and
+   dropping the facts below the destination is the right move on a phone.
 
    row-reverse does three jobs as one mirror: it puts the source-first title at
    the far right, lays the facts to its left, and makes flex-start the right
@@ -433,13 +440,26 @@ button{font:inherit;color:inherit;cursor:pointer}
 .brand{
   --band-in-x:-25px;
   flex:1;min-width:0;display:flex;flex-direction:row-reverse;
-  align-items:stretch;gap:8px 10px;flex-wrap:wrap;
+  align-items:stretch;gap:8px 10px;
 }
-/* The title never shrinks: the meta block wraps first, and the title only
-   narrows through its own clamped type size. Reverse that priority and the
-   first thing a narrowing window squeezes is the largest type on the page. */
+/* On desktop the title is the compressible one: it gives way before the facts
+   do, folding to two lines and then an ellipsis (.tname) — the alternative,
+   measured, was the whole .metas block dropping below and dragging the nav
+   into the band's stretch (see .brand).
+   8em is the floor — roughly eight CJK characters, and an em tracks the
+   clamped font-size so the floor scales with the type. Below it the facts
+   start compressing through .mrow's wrap instead, so a wide fact block can
+   never erase the destination. min-width, not flex-basis: a short name still
+   sizes to itself and cedes every spare pixel.
+   Shrink factor 1000, not 1: flex distributes shrinkage by factor × width, and
+   at 1:1 the facts would start wrapping internally while the title still had a
+   line to give. The lopsided factor makes the title absorb effectively all
+   compression until its own floor; only then does .metas take over.
+   <=900 flips this back to flex:none — there the nav sits on its own row, a
+   taller band deforms nothing, and a narrowing window should squeeze the
+   footnotes before the page's largest type. */
 .title{
-  margin:0;max-width:100%;flex:none;
+  margin:0;max-width:100%;flex:0 1000 auto;min-width:8em;
   background:var(--pill-name);border-radius:999px;
   padding:6px 22px;font:900 clamp(22px,2.6vw,30px)/1.2 var(--sans);
   letter-spacing:var(--tracking);overflow-wrap:anywhere;
@@ -462,8 +482,11 @@ button{font:inherit;color:inherit;cursor:pointer}
    meaning — when above, who and how hard below — so it stays two rows even
    when there is width to spare. Its rows and their contents align from the
    destination outwards, mirroring the old left-edge alignment.
-   flex:0 1 auto sizes it to content; when it genuinely cannot fit, .brand's
-   wrap drops the whole block below the title. */
+   flex:0 1 auto sizes it to content. On desktop its shrink matters only after
+   .title hits its 8em floor (see the lopsided shrink factors there); then
+   .mrow's wrap refolds the pills onto more rows rather than clipping them.
+   <=900, .brand wraps again and the whole block drops below the title as
+   before. */
 .metas{
   flex:0 1 auto;min-width:0;
   display:flex;flex-direction:column;justify-content:center;align-items:flex-end;gap:6px;
@@ -571,7 +594,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* First breakpoint: undo the desktop mirror, then let navigation drop below.
    The destination and facts return to their semantic/source order on the first
    row; the nav returns after them (full width, three equal segments, better for
-   a thumb). The entrance direction returns with the layout too. */
+   a thumb). The entrance direction returns with the layout too.
+   Wrap and the never-shrinking title also return here: with the nav on its own
+   row a taller band deforms nothing, so the facts drop below the destination
+   before the page's largest type gives up a line. */
 @media (max-width:900px){
   /* Block padding tightens, inline padding does not. main keeps its 20px
      inline padding at every width, so dropping this to 14 put the header on
@@ -581,7 +607,8 @@ button{font:inherit;color:inherit;cursor:pointer}
      visibly 12px wider than the cards under it, on the page's most-scanned
      vertical edge. */
   .top-in{flex-wrap:wrap;gap:8px;padding:9px 20px}
-  .brand{--band-in-x:25px;flex-basis:100%;flex-direction:row}
+  .brand{--band-in-x:25px;flex-basis:100%;flex-direction:row;flex-wrap:wrap}
+  .title{flex:none;min-width:0}
   .metas{align-items:flex-start}
   .mrow{flex-direction:row}
   .navwrap{order:0;width:100%}
