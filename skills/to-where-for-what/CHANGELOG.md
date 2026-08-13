@@ -23,6 +23,65 @@ Bump rules:
 
 ---
 
+## 1.8.2 — 2026-08-14
+
+Data-chain hardening from the 2026-08 repository review (its P1-1, P1-3,
+P1-4, P2-1): the page's own edits could silently miss the disk, the save
+endpoint trusted anyone, and the validator could die on the very input it
+exists to reject.
+
+### Fixed
+
+- **`prep.checked` now survives localhost autosave.** Ticking "I confirmed
+  the verify items" wrote localStorage and fired autosave, but the patch
+  never carried `prep` — the page said "saved" while `places.json` stayed
+  stale, and localStorage masked the loss on the same browser. The wire
+  `choices` tuple grew a 4th slot (mirroring the localStorage shape) and the
+  server merges it with the page's own delete-when-false rule. A 3-wide
+  tuple from a page built before 1.8.2 leaves `prep` untouched rather than
+  clearing it.
+- **The validator no longer crashes on malformed structure.** `trip` as an
+  array died with an `AttributeError` before reporting anything; unhashable
+  values in enum checks and ids raised `TypeError`. Containers are now
+  type-checked before their fields are read: a wrong shape is a P0 finding,
+  the rest of the document still gets checked, and any parseable JSON exits
+  through the normal report path (new `check_document()` entry point).
+- **`theme_hue` is a known trip field.** It's been in data-schema.md and
+  required by Stage A since 1.6.0 but never entered `KNOWN_TRIP_FIELDS`, so
+  every legal trip was flagged "fields outside the contract". Now accepted
+  and validated as an integer 0–359 (violations are P1 — build.py falls
+  back to the default palette rather than failing).
+
+### Added
+
+- **The save endpoint now authenticates.** Binding to 127.0.0.1 never
+  stopped other websites in the same browser from firing blind cross-origin
+  POSTs at localhost. Every `--serve` mints a per-launch token
+  (`.server.token`, deleted on stop), build injects it into the page, and
+  the page sends it in the patch body — sendBeacon can't set headers, and a
+  query string could leak through logs or Referer. Wrong or missing token →
+  403 and the disk is untouched; Origin allowlist and Content-Type checks
+  ride along as depth; dotfiles (the token file included) are no longer
+  served by the static half of the server.
+- **`dev/test_server.py`** — black-box tests that build a throwaway trip and
+  talk to a real `--serve` process over HTTP: prep round-trip, all the
+  rejection paths, dotfile 404, stop cleanup. The server code lives in a
+  string literal and can't be imported; now it's tested as what it is.
+- Git tags exist again from this release on (`v1.8.1`, `v1.8.2`) so the
+  updating.md flow can fetch the exact installed version as a merge base.
+
+### Notes for updaters
+
+- `places.json` schema unchanged — existing trips validate as before.
+- A `trip.html` built before 1.8.2 has no token constant: it can still be
+  viewed, but saving through a new server returns 403 until the page is
+  rebuilt (`--serve` rebuilds automatically, so in practice: restart the
+  server, then reload the tab).
+- A browser tab kept open across a server restart holds the old token;
+  saves fail with "stale page — reload it" until the tab is reloaded.
+
+---
+
 ## 1.8.1 — 2026-08-13
 
 ### Added
