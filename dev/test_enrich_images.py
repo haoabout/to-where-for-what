@@ -218,6 +218,10 @@ def case_get_not_head(tmp: Path) -> None:
         enrich.urllib.request.urlopen = old
     check("image verification uses GET, never HEAD",
           res["ok"] and methods == ["GET"], f"methods={methods} res={res}")
+    # AVIF 回归:曼谷实测 WordPress 官网以 image/avif 提供主图,不得误拒。
+    avif = b"\x00\x00\x00 ftypavif" + b"\x00" * 24
+    check("AVIF magic bytes recognized as an image",
+          enrich.sniff_image(avif) == "avif")
 
 
 def case_commons_subcat(tmp: Path) -> None:

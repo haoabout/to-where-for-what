@@ -298,6 +298,12 @@ def sniff_image(head: bytes) -> str | None:
         return "gif"
     if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
         return "webp"
+    # ISO-BMFF (ftyp box): AVIF/HEIC. Measured on the Bangkok run — a
+    # WordPress site served its hero photos as image/avif and the checker
+    # rejected all four as "not-image", a pure false negative.
+    if head[4:8] == b"ftyp" and head[8:12] in (b"avif", b"avis", b"heic",
+                                               b"heix", b"mif1"):
+        return "avif"
     return None
 
 
