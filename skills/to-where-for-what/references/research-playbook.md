@@ -284,22 +284,33 @@ preventing "arrived to find it under renovation".
 
 ### Images: let the script's chain run first, then fill gaps by hand
 
-`enrich.py --images` tries three sources in order and stops at the first hit:
+`enrich.py --images` walks the sources below and stops at the first hit.
+Composite display names (「梅田蓝天大厦 · 空中庭园展望台」) are retried as
+variants — stripped of parentheticals, split on ·. Places whose `category`
+is `event` try their official page FIRST: the venue photo every other source
+would find is not the event.
 
-1. **Wikipedia lead image** — most representative, rarely mislabeled
-2. **Wikidata P18** — catches items with no Wikipedia article (small
+1. **Wikipedia lead image by name** — most representative, rarely mislabeled
+2. **Wikidata P18 by name** — catches items with no Wikipedia article (small
    galleries, markets); only accepted when the entity's coordinate falls
    inside the trip bbox, so same-name entities elsewhere can't sneak in
-3. **Openverse keyword search** — aggregated CC photos (Flickr etc.), no API
-   key; highest mislabel risk, hence last
+3. **Nearest Wikipedia article by coordinate** (geosearch, 150m) — names
+   that match no article title but whose subject is right there on the map
+4. **Commons photos shot at the coordinate** (geosearch, 120m) — streetscapes
+   (arcades, alleys, piers) no article covers but photographers have shot
+5. **The place's own official page** (`sources[]` → og:image) — routinely the
+   only usable source for pop-up events and small shops
+6. **Openverse keyword search** — aggregated CC photos (Flickr etc.), no API
+   key; local-language query first, then English; highest mislabel risk,
+   hence last
 
-When the whole chain comes up empty — typical for small venues — **fill
-`images` manually with a direct link from an official page**: the venue's own
-site or official social account (og:image, a press-kit photo). Two conditions:
-the URL actually loads (fetch it, don't assume), and the photo shows *this*
-place. This is a personal-use tool, so the licensing posture is pragmatic —
-but keep `credit` honest about where the image came from. Truly nothing
-anywhere? Leave it empty; images are optional, wrong images are not.
+When even that chain comes up empty, **fill `images` manually with a direct
+link from an official page**: the venue's own site or official social account
+(a press-kit photo, a post). Two conditions: the URL actually loads (fetch
+it, don't assume), and the photo shows *this* place. This is a personal-use
+tool, so the licensing posture is pragmatic — but keep `credit` honest about
+where the image came from. Truly nothing anywhere? Leave it empty; images
+are optional, wrong images are not.
 
 ### Wikimedia thumbnail URLs specifically: API only, never hand-assembled
 
@@ -338,10 +349,13 @@ eyes at all. Per source:
 
 | Source | Text-only rule |
 |---|---|
-| Wikipedia lead image | Trust as-is — lead images are rarely mislabeled |
+| Wikipedia lead image (by name) | Trust as-is — lead images are rarely mislabeled |
 | Wikidata P18 | Keep only if the entity label / filename relates to the place name; otherwise drop |
+| Wikipedia geosearch (`wiki-geo`) | Keep only if the found article's title relates to the place name — the nearest article can be a neighbor |
+| Commons geosearch (`commons-geo`) | Keep only when the filename / description relates to the place or its street; otherwise drop |
+| Official og:image (`official`) | Confirm the URL loads; drop if the filename screams logo/banner (`logo`, `ogp`, `banner`) |
 | Openverse | Strictest: keep only when title / tags / filename contain the place name; otherwise leave empty |
-| Official-site direct link | Confirm the URL loads; a venue's own site doesn't misphotograph itself |
+| Official-site direct link (manual) | Confirm the URL loads; a venue's own site doesn't misphotograph itself |
 
 Then **tell the user at delivery, explicitly**: the model in use has no vision,
 so images passed text checks only, not visual review — and any photo that looks

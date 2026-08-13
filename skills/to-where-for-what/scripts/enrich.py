@@ -3,7 +3,7 @@
 
 Usage:
     python3 enrich.py <places.json> --coords          # fill coordinates (Nominatim)
-    python3 enrich.py <places.json> --images          # fill images (Wikipedia → Wikidata → Openverse)
+    python3 enrich.py <places.json> --images          # fill images (name → geo → official og:image → Openverse)
     python3 enrich.py <places.json> --coords --images
     python3 enrich.py <places.json> --coords --dry-run
 
@@ -252,6 +252,120 @@ def wikidata_image(name: str, lang: str, bbox) -> str | None:
     return None
 
 
+def name_variants(name: str | None) -> list[str]:
+    """Query variants for a display name that is often not an article title.
+    「梅田蓝天大厦 · 空中庭园展望台」 and 「道顿堀（固力果招牌）」 both have
+    perfectly good Wikipedia articles — under 梅田スカイビル and 道頓堀.
+    Measured on the Osaka trip, composite names were the single biggest
+    class of misses. Order: the name itself, parentheticals stripped, then
+    each segment of a ·-compound."""
+    if not name:
+        return []
+    out = [name.strip()]
+    bare = re.sub(r"[（(][^（）()]*[）)]", "", name).strip(" ·・-—")
+    if bare:
+        out.append(bare)
+    for seg in re.split(r"\s*[·・]\s*", bare or name):
+        seg = seg.strip()
+        if seg:
+            out.append(seg)
+    seen: set[str] = set()
+    res = []
+    for n in out:
+        if len(n) >= 2 and n not in seen:
+            seen.add(n)
+            res.append(n)
+    return res[:3]
+
+
+def wiki_geo_image(lat: float, lon: float, lang: str, radius: int = 150) -> str | None:
+    """Nearest Wikipedia article within radius (m) that has a lead image.
+    Sidesteps naming entirely — the coordinate is already filled by --coords,
+    and geosearch results come back distance-sorted. The nearest article can
+    still be a neighbor rather than the place itself, so like every non-name
+    source this feeds the verification pass, not the page directly."""
+    q = {"action": "query", "list": "geosearch", "gscoord": f"{lat}|{lon}",
+         "gsradius": str(radius), "gslimit": "5", "format": "json"}
+    try:
+        hits = get_json(f"https://{lang}.wikipedia.org/w/api.php?"
+                        + urllib.parse.urlencode(q)).get("query", {}).get("geosearch", [])
+    except Exception:  # noqa: BLE001
+        return None
+    for h in hits:
+        time.sleep(0.35)
+        fn = wiki_lead_image(h.get("title", ""), lang)
+        if fn:
+            return fn
+    return None
+
+
+def commons_geo_image(lat: float, lon: float, radius: int = 120) -> dict | None:
+    """Geotagged Commons photos taken near the point — the fallback for
+    streetscapes (shopping arcades, alleys, slopes, ferry piers) that no
+    article covers but plenty of photographers have shot. Keyword-free, so
+    the failure mode shifts from "wrong name" to "wrong angle"; the first
+    distance-sorted raster photo wins and the verification pass judges it."""
+    q = {"action": "query", "generator": "geosearch",
+         "ggscoord": f"{lat}|{lon}", "ggsradius": str(radius),
+         "ggslimit": "12", "ggsnamespace": "6",
+         "prop": "imageinfo", "iiprop": "url|mime|extmetadata",
+         "iiurlwidth": "960", "format": "json"}
+    try:
+        pages = get_json(COMMONS_API + "?" + urllib.parse.urlencode(q)).get("query", {}).get("pages", {})
+    except Exception:  # noqa: BLE001
+        return None
+    for _, pg in sorted(pages.items(), key=lambda kv: kv[1].get("index", 999)):
+        ii = (pg.get("imageinfo") or [{}])[0]
+        if ii.get("mime") not in ("image/jpeg", "image/png") or not ii.get("thumburl"):
+            continue
+        em = ii.get("extmetadata", {})
+        artist = re.sub(r"<[^>]+>", "", (em.get("Artist", {}) or {}).get("value", "")).strip()
+        lic = (em.get("LicenseShortName", {}) or {}).get("value", "").strip()
+        return {"url": ii["thumburl"],
+                "credit": " / ".join(x for x in (artist[:60], "Wikimedia Commons", lic) if x),
+                "source_url": ii.get("descriptionurl", "")}
+    return None
+
+
+def get_html(url: str, timeout: int = 15, cap: int = 400_000) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read(cap).decode("utf-8", "replace")
+
+
+_OG_RE = [
+    re.compile(r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)', re.I),
+    re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image(?::secure_url)?["\']', re.I),
+    re.compile(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', re.I),
+]
+
+
+def official_og_image(p: dict) -> dict | None:
+    """og:image from the place's own official pages (sources[]). For pop-up
+    events and small shops this is routinely the only source that shows the
+    right thing, and the playbook already blesses the practice — this only
+    automates the finding; og:image can be a logo or a campaign banner, so
+    the verification pass still judges it like every non-Wikipedia source."""
+    for s in (p.get("sources") or [])[:3]:
+        u = (s or {}).get("url") or ""
+        if not u.startswith("http"):
+            continue
+        try:
+            html = get_html(u)
+        except Exception:  # noqa: BLE001
+            continue
+        time.sleep(0.35)
+        for rx in _OG_RE:
+            m = rx.search(html)
+            if m:
+                img = urllib.parse.urljoin(u, m.group(1).strip())
+                if img.startswith("http"):
+                    return {"url": img,
+                            "credit": urllib.parse.urlparse(u).netloc,
+                            "source_url": u}
+    return None
+
+
 def openverse_image(query: str) -> dict | None:
     """Openverse (api.openverse.org) aggregates openly licensed photos from
     Flickr and friends; anonymous access, no key. Last resort in the chain:
@@ -285,54 +399,100 @@ def fill_images(doc: dict, dry: bool) -> int:
         print("Images: all present")
         return 0
 
-    print(f"Images: {len(todo)} to fill (Wikipedia lead → Wikidata P18 → Openverse)")
+    print(f"Images: {len(todo)} to fill "
+          f"(name: Wikipedia → Wikidata · geo: Wikipedia → Commons · official og:image · Openverse)")
     ok = 0
     for p in todo:
         found, how = None, ""
-        # 1) Wikipedia lead image — most representative, rarely mislabeled
-        for lang in langs:
-            name = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
-            if not name:
-                continue
-            fn = wiki_lead_image(name, lang)
-            time.sleep(0.35)
-            if fn:
-                found = commons_thumb(fn)
-                time.sleep(0.35)
-                if found:
-                    how = "wikipedia"
-                    break
-        # 2) Wikidata P18 — items without an article; bbox-checked via P625
+        coord = p.get("coord") if isinstance(p.get("coord"), dict) else {}
+        lat, lon = coord.get("lat"), coord.get("lon")
+        has_geo = isinstance(lat, (int, float)) and isinstance(lon, (int, float))
+        # Pop-up events jump straight to the organizer's page: the venue
+        # photo that name/geo search would find is not the event, and the
+        # og:image (poster, key visual) is.
+        event = p.get("category") == "event"
+        if event:
+            found = official_og_image(p)
+            if found:
+                how = "official"
+        # 1) Wikipedia lead image by name — most representative, rarely
+        #    mislabeled. Composite display names go in as variants.
         if not found:
             for lang in langs:
-                name = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
-                if not name:
-                    continue
-                fn = wikidata_image(name, lang, bbox)
+                base = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
+                for nm in name_variants(base):
+                    fn = wiki_lead_image(nm, lang)
+                    time.sleep(0.35)
+                    if fn:
+                        found = commons_thumb(fn)
+                        time.sleep(0.35)
+                        if found:
+                            how = "wikipedia"
+                            break
+                if found:
+                    break
+        # 2) Wikidata P18 by name — items without an article; bbox-checked via P625
+        if not found:
+            for lang in langs:
+                base = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
+                for nm in name_variants(base):
+                    fn = wikidata_image(nm, lang, bbox)
+                    time.sleep(0.35)
+                    if fn:
+                        found = commons_thumb(fn)
+                        time.sleep(0.35)
+                        if found:
+                            how = "wikidata"
+                            break
+                if found:
+                    break
+        # 3) Geo: nearest Wikipedia article with a lead image — names that
+        #    match no title (or have no article in our languages) but whose
+        #    subject is right there on the map.
+        if not found and has_geo:
+            for lang in langs:
+                fn = wiki_geo_image(lat, lon, lang)
                 time.sleep(0.35)
                 if fn:
                     found = commons_thumb(fn)
                     time.sleep(0.35)
                     if found:
-                        how = "wikidata"
+                        how = "wiki-geo"
                         break
-        # 3) Openverse keyword search — highest mislabel risk, hence last
+        # 4) Geo: Commons photos shot at the spot — streetscapes with no
+        #    article anywhere.
+        if not found and has_geo:
+            found = commons_geo_image(lat, lon)
+            time.sleep(0.35)
+            if found:
+                how = "commons-geo"
+        # 5) The place's own official page (non-events got here last).
+        if not found and not event:
+            found = official_og_image(p)
+            if found:
+                how = "official"
+        # 6) Openverse keyword search — highest mislabel risk, hence last.
+        #    Local-language first: Japanese shop names barely exist in English.
         if not found:
-            name = p.get("name_en") or p.get("name_local") or p.get("name")
-            city = trip.get("destination_en") or trip.get("destination_local") or ""
-            if name:
-                found = openverse_image(f"{name} {city}".strip())
+            tries = []
+            if p.get("name_local"):
+                tries.append(f"{p['name_local']} {trip.get('destination_local') or ''}".strip())
+            if p.get("name_en"):
+                tries.append(f"{p['name_en']} {trip.get('destination_en') or ''}".strip())
+            for q in tries:
+                found = openverse_image(q)
                 time.sleep(0.35)
                 if found:
                     how = "openverse"
+                    break
         if found:
             if not dry:
                 p["images"] = [found]
             ok += 1
             print(f"  ✓ {p.get('name'):<22} [{how}] {found['url'].rsplit('/', 1)[-1][:40]}")
         else:
-            print(f"  – {p.get('name'):<22} nothing in any source; use a direct image link "
-                  f"from an official page, or leave empty (images are optional)")
+            print(f"  – {p.get('name'):<22} nothing in any source (official og:image included); "
+                  f"hand-pick from an official page, or leave empty (images are optional)")
     return ok
 
 
