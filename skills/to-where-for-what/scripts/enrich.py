@@ -3,7 +3,9 @@
 
 Usage:
     python3 enrich.py <places.json> --coords          # fill coordinates (Nominatim)
-    python3 enrich.py <places.json> --images          # fill images (name → geo → official og:image → Openverse)
+    python3 enrich.py <places.json> --images          # image candidate pipeline → image-audit.json
+    python3 enrich.py <places.json> --images --recheck    # re-collect even for places with live images
+    python3 enrich.py <places.json> --apply-image-review <images-patch.json>
     python3 enrich.py <places.json> --coords --images
     python3 enrich.py <places.json> --coords --dry-run
 
@@ -183,6 +185,140 @@ def fill_coords(doc: dict, dry: bool) -> int:
 
 
 # ------------------------------------------------------------------ images
+#
+# The image flow is a candidate pipeline, not a first-hit chain: each place
+# collects up to MAX_CANDIDATES verified, deduplicated candidates across the
+# source families below, each graded by identity confidence:
+#
+#   high   — exact-identity: Wikipedia exact-title/redirect lead image, or a
+#            Wikidata P18 whose entity matches both name and bbox
+#   medium — Wikipedia search hits, official-site og/meta/body images,
+#            Commons category members
+#   low    — pure geo hits, Openverse, anything with weak name evidence
+#
+# Only `high` may be provisionally written to places.json, and only for
+# places that had no image at all. Everything else — including every image
+# that already sits in places.json ("existing" candidates) — waits for the
+# visual review pass (image-agent-briefing.md), whose verdicts come back via
+# --apply-image-review. Every candidate and every failure is recorded in
+# image-audit.json next to places.json: metadata and URLs only, never bytes.
+
+MAX_CANDIDATES = 3
+AUDIT_NAME = "image-audit.json"
+
+# --- network layer: one choke point for the whole image pipeline.
+# Per-domain throttling replaces the scattered time.sleep(0.35) calls; a
+# one-run cache means a URL is fetched once no matter how many source
+# families surface it; 429/5xx get 3 retries honoring Retry-After (else
+# 1/2/4s). Other HTTP errors return a result instead of raising, so the
+# caller can record *why* a candidate failed instead of silently eating it.
+
+_HTTP_CACHE: dict[str, dict] = {}
+_DOMAIN_LAST: dict[str, float] = {}
+DOMAIN_INTERVAL = 0.35
+RETRY_HTTP = {429, 500, 502, 503, 504}
+
+
+def _throttle(url: str) -> None:
+    host = urllib.parse.urlparse(url).netloc
+    dt = time.monotonic() - _DOMAIN_LAST.get(host, 0.0)
+    if dt < DOMAIN_INTERVAL:
+        time.sleep(DOMAIN_INTERVAL - dt)
+    _DOMAIN_LAST[host] = time.monotonic()
+
+
+def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
+             timeout: int = 20) -> dict:
+    """Streaming GET, first `cap` bytes only. Never HEAD — several official
+    sites (measured) 404 on HEAD while the GET serves the image fine.
+    Returns {"status", "body", "ctype", "error"}; "error" is set on network
+    failure after retries, "status" on any HTTP response including 4xx."""
+    cached = _HTTP_CACHE.get(url)
+    if cached is not None:
+        return cached
+    last_err = None
+    for attempt in range(4):                     # 1 try + 3 retries
+        _throttle(url)
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
+        retry_after = None
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                res = {"status": r.status, "body": r.read(cap),
+                       "ctype": (r.headers.get("Content-Type") or "").lower(),
+                       "error": None}
+                _HTTP_CACHE[url] = res
+                return res
+        except urllib.error.HTTPError as e:
+            if e.code not in RETRY_HTTP:
+                res = {"status": e.code, "body": b"", "ctype": "", "error": None}
+                _HTTP_CACHE[url] = res
+                return res
+            last_err = f"http:{e.code}"
+            retry_after = (e.headers or {}).get("Retry-After")
+        except Exception as e:  # noqa: BLE001  timeouts, DNS, resets
+            last_err = type(e).__name__
+        if attempt < 3:
+            try:
+                wait = max(0.0, float(retry_after))
+            except (TypeError, ValueError):
+                wait = float(2 ** attempt)       # 1s, 2s, 4s
+            time.sleep(wait)
+    res = {"status": None, "body": b"", "ctype": "", "error": last_err}
+    _HTTP_CACHE[url] = res
+    return res
+
+
+def _json(url: str) -> dict | None:
+    r = http_get(url, accept="application/json")
+    if r["error"] or not r["status"] or not 200 <= r["status"] < 300:
+        return None
+    try:
+        return json.loads(r["body"].decode("utf-8", "replace"))
+    except ValueError:
+        return None
+
+
+def sniff_image(head: bytes) -> str | None:
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def check_image_url(url: str) -> dict:
+    """Verify a candidate actually is a live image: real GET (first 64KB),
+    2xx, an image MIME, and JPEG/PNG/WebP/GIF magic bytes. og:image URLs
+    routinely 404 (theCOMMONS served a dead share.webp) and some CDNs return
+    an HTML error page with 200 — the magic-byte check catches both."""
+    r = http_get(url, accept="image/*", cap=65_536)
+    if r["error"]:
+        return {"ok": False, "reason": f"fetch-failed:{r['error']}"}
+    if not 200 <= (r["status"] or 0) < 300:
+        return {"ok": False, "reason": f"http:{r['status']}"}
+    fmt = sniff_image(r["body"])
+    if not fmt:
+        kind = "html" if r["body"].lstrip()[:1] in (b"<",) else "not-image"
+        return {"ok": False, "reason": f"{kind}:{r['ctype'][:40]}"}
+    if r["ctype"] and not (r["ctype"].startswith("image/")
+                           or "octet-stream" in r["ctype"]):
+        return {"ok": False, "reason": f"mime:{r['ctype'][:40]}"}
+    return {"ok": True, "reason": "", "format": fmt}
+
+
+# Filename features that mark a URL as site furniture rather than a photo of
+# the place. Checked on the URL path only — never a reason to stop scanning a
+# page, just to skip that one URL.
+NEG_IMG_RE = re.compile(r"(logo|icon|share|ogp|sprite|avatar|favicon|placeholder)", re.I)
+
+
+def looks_negative(url: str) -> bool:
+    return bool(NEG_IMG_RE.search(urllib.parse.urlparse(url).path.rsplit("/", 1)[-1]))
+
 
 def commons_thumb(title: str, width: int = 960) -> dict | None:
     """Fetch a thumbnail by File: title. Uses the API's iiurlwidth, which
@@ -190,10 +326,10 @@ def commons_thumb(title: str, width: int = 960) -> dict | None:
     q = {"action": "query", "titles": f"File:{title}", "prop": "imageinfo",
          "iiprop": "url|extmetadata", "iiurlwidth": str(width),
          "format": "json", "formatversion": "2"}
+    d = _json(COMMONS_API + "?" + urllib.parse.urlencode(q))
     try:
-        d = get_json(COMMONS_API + "?" + urllib.parse.urlencode(q))
         ii = (d["query"]["pages"][0].get("imageinfo") or [{}])[0]
-    except Exception:  # noqa: BLE001
+    except (TypeError, KeyError, IndexError):
         return None
     if not ii.get("thumburl"):
         return None
@@ -205,51 +341,82 @@ def commons_thumb(title: str, width: int = 960) -> dict | None:
             "source_url": ii.get("descriptionurl", "")}
 
 
-def wiki_lead_image(title: str, lang: str) -> str | None:
-    """Get the filename of a Wikipedia article's lead image. The lead image is
-    usually the most representative one and rarely mislabeled."""
+def wiki_lead_image(title: str, lang: str) -> tuple[str, str] | None:
+    """Lead-image filename + canonical article title for an exact title.
+    The lead image is usually the most representative one and rarely
+    mislabeled. redirects=1 matters: 「大邮政大楼」-style display names reach
+    their article only via a redirect, which the plain query misses."""
     q = {"action": "query", "titles": title, "prop": "pageimages",
-         "piprop": "name", "format": "json", "formatversion": "2"}
+         "piprop": "name", "redirects": "1",
+         "format": "json", "formatversion": "2"}
+    d = _json(f"https://{lang}.wikipedia.org/w/api.php?" + urllib.parse.urlencode(q))
     try:
-        d = get_json(f"https://{lang}.wikipedia.org/w/api.php?" + urllib.parse.urlencode(q))
-        return d["query"]["pages"][0].get("pageimage")
-    except Exception:  # noqa: BLE001
+        pg = d["query"]["pages"][0]
+    except (TypeError, KeyError, IndexError):
         return None
+    fn = pg.get("pageimage")
+    return (fn, pg.get("title") or title) if fn else None
 
 
-def wikidata_image(name: str, lang: str, bbox) -> str | None:
-    """Search Wikidata by name and return the entity's P18 image filename.
-    Catches places notable enough for a Wikidata item but with no Wikipedia
-    article in our languages (small galleries, markets, brand flagships).
-    Same-name entities elsewhere in the world are common, so a candidate is
-    accepted only when its P625 coordinate falls inside the trip bbox — an
-    entity without P625 is rejected rather than trusted."""
+def wiki_search_images(name: str, lang: str, limit: int = 3) -> list[tuple[str, str]]:
+    """Full-text search hits and their lead images — (filename, title) pairs.
+    A search hit is *not* an exact-identity match (searching a gallery name
+    can surface the district's article), so these grade medium, never high."""
+    q = {"action": "query", "list": "search", "srsearch": name,
+         "srlimit": str(limit), "format": "json", "formatversion": "2"}
+    d = _json(f"https://{lang}.wikipedia.org/w/api.php?" + urllib.parse.urlencode(q))
+    out = []
+    for h in ((d or {}).get("query", {}).get("search") or []):
+        title = h.get("title") or ""
+        hit = wiki_lead_image(title, lang)
+        if hit:
+            out.append(hit)
+    return out
+
+
+def wikidata_entities(name: str, lang: str, bbox) -> list[dict]:
+    """Search Wikidata by name; return entities with their P18/P373 claims,
+    label, and whether their P625 coordinate falls inside the trip bbox.
+    Same-name entities elsewhere in the world are common, so a candidate
+    without P625, or with P625 outside the bbox, is rejected rather than
+    trusted — that rule predates this pipeline and stays."""
     api = "https://www.wikidata.org/w/api.php?"
     q = {"action": "wbsearchentities", "search": name, "language": lang,
          "type": "item", "limit": "5", "format": "json"}
-    try:
-        ids = [h["id"] for h in get_json(api + urllib.parse.urlencode(q)).get("search", [])]
-    except Exception:  # noqa: BLE001
-        return None
+    d = _json(api + urllib.parse.urlencode(q))
+    ids = [h["id"] for h in ((d or {}).get("search") or [])]
     if not ids:
-        return None
-    time.sleep(0.35)
-    try:
-        q2 = {"action": "wbgetentities", "ids": "|".join(ids),
-              "props": "claims", "format": "json"}
-        ents = get_json(api + urllib.parse.urlencode(q2)).get("entities", {})
-    except Exception:  # noqa: BLE001
-        return None
+        return []
+    q2 = {"action": "wbgetentities", "ids": "|".join(ids),
+          "props": "claims|labels", "format": "json"}
+    ents = (_json(api + urllib.parse.urlencode(q2)) or {}).get("entities", {})
+    out = []
     for eid in ids:                      # search order = relevance order
-        claims = (ents.get(eid) or {}).get("claims", {})
+        ent = ents.get(eid) or {}
+        claims = ent.get("claims", {})
         try:
             pos = claims["P625"][0]["mainsnak"]["datavalue"]["value"]
             if bbox and not in_bbox(pos["longitude"], pos["latitude"], bbox):
                 continue
-            return claims["P18"][0]["mainsnak"]["datavalue"]["value"]
         except (KeyError, IndexError, TypeError):
-            continue
-    return None
+            continue                     # no coordinate → cannot vouch for identity
+        rec = {"id": eid, "label": "", "p18": None, "p373": None}
+        labels = ent.get("labels") or {}
+        for lg in (lang, "en"):
+            if labels.get(lg):
+                rec["label"] = labels[lg].get("value", "")
+                break
+        try:
+            rec["p18"] = claims["P18"][0]["mainsnak"]["datavalue"]["value"]
+        except (KeyError, IndexError, TypeError):
+            pass
+        try:
+            rec["p373"] = claims["P373"][0]["mainsnak"]["datavalue"]["value"]
+        except (KeyError, IndexError, TypeError):
+            pass
+        if rec["p18"] or rec["p373"]:
+            out.append(rec)
+    return out
 
 
 def name_variants(name: str | None) -> list[str]:
@@ -257,15 +424,21 @@ def name_variants(name: str | None) -> list[str]:
     「梅田蓝天大厦 · 空中庭园展望台」 and 「道顿堀（固力果招牌）」 both have
     perfectly good Wikipedia articles — under 梅田スカイビル and 道頓堀.
     Measured on the Osaka trip, composite names were the single biggest
-    class of misses. Order: the name itself, parentheticals stripped, then
-    each segment of a ·-compound."""
+    class of misses; Bangkok added the 与/&/and family (「大邮政大楼与 TCDC
+    曼谷」→ General Post Office). Order: the name itself, parentheticals
+    stripped, then each segment of the compound."""
     if not name:
         return []
     out = [name.strip()]
     bare = re.sub(r"[（(][^（）()]*[）)]", "", name).strip(" ·・-—")
     if bare:
         out.append(bare)
-    for seg in re.split(r"\s*[·・]\s*", bare or name):
+    # Compound connectors: ·・/& always split; and/และ/与/和 only as spaced
+    # words or between CJK runs — 和 is too common inside proper names
+    # (昭和, 平和) to split on unconditionally, and the length-≥2 filter
+    # below drops the fragments such a split would produce.
+    parts = re.split(r"\s*[·・/&]\s*|\s+(?:and|และ)\s+|\s*[与和]\s+|\s+[与和]\s*", bare or name)
+    for seg in parts:
         seg = seg.strip()
         if seg:
             out.append(seg)
@@ -275,45 +448,38 @@ def name_variants(name: str | None) -> list[str]:
         if len(n) >= 2 and n not in seen:
             seen.add(n)
             res.append(n)
-    return res[:3]
+    return res[:4]
 
 
-def wiki_geo_image(lat: float, lon: float, lang: str, radius: int = 150) -> str | None:
-    """Nearest Wikipedia article within radius (m) that has a lead image.
-    Sidesteps naming entirely — the coordinate is already filled by --coords,
-    and geosearch results come back distance-sorted. The nearest article can
-    still be a neighbor rather than the place itself, so like every non-name
-    source this feeds the verification pass, not the page directly."""
+def wiki_geo_hits(lat: float, lon: float, lang: str, radius: int = 150,
+                  limit: int = 5) -> list[dict]:
+    """Wikipedia articles near the coordinate — (title, dist) pairs, distance
+    sorted. The nearest article can be a neighbor rather than the place
+    itself (measured in Bangkok: the Old Customs House won on distance for a
+    place 180m off), so distance alone never decides anything — the caller
+    grades each hit by whether its title matches the place's names."""
     q = {"action": "query", "list": "geosearch", "gscoord": f"{lat}|{lon}",
-         "gsradius": str(radius), "gslimit": "5", "format": "json"}
-    try:
-        hits = get_json(f"https://{lang}.wikipedia.org/w/api.php?"
-                        + urllib.parse.urlencode(q)).get("query", {}).get("geosearch", [])
-    except Exception:  # noqa: BLE001
-        return None
-    for h in hits:
-        time.sleep(0.35)
-        fn = wiki_lead_image(h.get("title", ""), lang)
-        if fn:
-            return fn
-    return None
+         "gsradius": str(radius), "gslimit": str(limit), "format": "json"}
+    d = _json(f"https://{lang}.wikipedia.org/w/api.php?" + urllib.parse.urlencode(q))
+    return [{"title": h.get("title", ""), "dist": h.get("dist")}
+            for h in ((d or {}).get("query", {}).get("geosearch") or [])]
 
 
-def commons_geo_image(lat: float, lon: float, radius: int = 120) -> dict | None:
+def commons_geo_images(lat: float, lon: float, radius: int = 120,
+                       limit: int = 3) -> list[dict]:
     """Geotagged Commons photos taken near the point — the fallback for
     streetscapes (shopping arcades, alleys, slopes, ferry piers) that no
     article covers but plenty of photographers have shot. Keyword-free, so
-    the failure mode shifts from "wrong name" to "wrong angle"; the first
-    distance-sorted raster photo wins and the verification pass judges it."""
+    the failure mode shifts from "wrong name" to "wrong angle"; every hit is
+    a low-confidence candidate for the visual pass, never an auto-write."""
     q = {"action": "query", "generator": "geosearch",
          "ggscoord": f"{lat}|{lon}", "ggsradius": str(radius),
          "ggslimit": "12", "ggsnamespace": "6",
          "prop": "imageinfo", "iiprop": "url|mime|extmetadata",
          "iiurlwidth": "960", "format": "json"}
-    try:
-        pages = get_json(COMMONS_API + "?" + urllib.parse.urlencode(q)).get("query", {}).get("pages", {})
-    except Exception:  # noqa: BLE001
-        return None
+    d = _json(COMMONS_API + "?" + urllib.parse.urlencode(q))
+    pages = (d or {}).get("query", {}).get("pages", {})
+    out = []
     for _, pg in sorted(pages.items(), key=lambda kv: kv[1].get("index", 999)):
         ii = (pg.get("imageinfo") or [{}])[0]
         if ii.get("mime") not in ("image/jpeg", "image/png") or not ii.get("thumburl"):
@@ -321,62 +487,165 @@ def commons_geo_image(lat: float, lon: float, radius: int = 120) -> dict | None:
         em = ii.get("extmetadata", {})
         artist = re.sub(r"<[^>]+>", "", (em.get("Artist", {}) or {}).get("value", "")).strip()
         lic = (em.get("LicenseShortName", {}) or {}).get("value", "").strip()
-        return {"url": ii["thumburl"],
-                "credit": " / ".join(x for x in (artist[:60], "Wikimedia Commons", lic) if x),
-                "source_url": ii.get("descriptionurl", "")}
-    return None
+        out.append({"url": ii["thumburl"],
+                    "credit": " / ".join(x for x in (artist[:60], "Wikimedia Commons", lic) if x),
+                    "source_url": ii.get("descriptionurl", ""),
+                    "title": pg.get("title", "")})
+        if len(out) >= limit:
+            break
+    return out
 
 
-def get_html(url: str, timeout: int = 15, cap: int = 400_000) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/html"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read(cap).decode("utf-8", "replace")
+def get_html(url: str, cap: int = 800_000) -> str | None:
+    """Capped at 800KB (was 400KB): body-image extraction needs to see past
+    the header scripts that dominate heavy official sites."""
+    r = http_get(url, accept="text/html", cap=cap)
+    if r["error"] or not r["status"] or not 200 <= r["status"] < 300:
+        return None
+    return r["body"].decode("utf-8", "replace")
 
 
-_OG_RE = [
+_META_RE = [
     re.compile(r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)', re.I),
     re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image(?::secure_url)?["\']', re.I),
-    re.compile(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)', re.I),
+    re.compile(r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)', re.I),
+    re.compile(r'itemprop=["\']image["\'][^>]+(?:content|src)=["\']([^"\']+)', re.I),
 ]
+_JSONLD_RE = re.compile(
+    r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>', re.I | re.S)
+_IMG_SRC_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.I)
+_SRCSET_RE = re.compile(r'<(?:img|source)[^>]+srcset=["\']([^"\']+)["\']', re.I)
 
 
-def official_og_image(p: dict) -> dict | None:
-    """og:image from the place's own official pages (sources[]). For pop-up
-    events and small shops this is routinely the only source that shows the
-    right thing, and the playbook already blesses the practice — this only
-    automates the finding; og:image can be a logo or a campaign banner, so
-    the verification pass still judges it like every non-Wikipedia source."""
+def _jsonld_images(html: str) -> list[str]:
+    out = []
+    for m in _JSONLD_RE.finditer(html):
+        try:
+            data = json.loads(m.group(1).strip())
+        except ValueError:
+            continue
+        stack = [data]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, dict):
+                img = node.get("image")
+                if isinstance(img, str):
+                    out.append(img)
+                elif isinstance(img, dict) and isinstance(img.get("url"), str):
+                    out.append(img["url"])
+                elif isinstance(img, list):
+                    out.extend(x for x in img if isinstance(x, str))
+                stack.extend(node.values())
+            elif isinstance(node, list):
+                stack.extend(node)
+    return out
+
+
+def _srcset_best(srcset: str) -> str | None:
+    """Largest URL out of a srcset attribute (by the numeric descriptor)."""
+    best, best_w = None, -1.0
+    for part in srcset.split(","):
+        bits = part.strip().split()
+        if not bits:
+            continue
+        w = 0.0
+        if len(bits) > 1:
+            m = re.match(r"([\d.]+)", bits[1])
+            if m:
+                w = float(m.group(1))
+        if w > best_w:
+            best, best_w = bits[0], w
+    return best
+
+
+def official_page_images(p: dict) -> tuple[list[dict], list[dict]]:
+    """Two lists from the place's own official pages (sources[]):
+    (meta_images, body_images). Meta = og:image / twitter:image / JSON-LD /
+    itemprop; body = <img src> and the largest srcset entry. For pop-up
+    events and small shops the official page is routinely the only source
+    that shows the right thing — but an og:image can just as well be a logo,
+    a campaign banner, or a news photo of an event at the venue (measured:
+    Siam Paragon), so nothing from here is exact-identity: it all grades
+    medium and waits for the visual pass. Filename furniture (logo/share/…)
+    is skipped per URL, never a reason to stop scanning the page."""
+    meta, body = [], []
+    seen: set[str] = set()
+
+    def add(bucket: list, raw: str, page: str) -> None:
+        img = urllib.parse.urljoin(page, raw.strip())
+        if not img.startswith("http") or img in seen or looks_negative(img):
+            return
+        seen.add(img)
+        bucket.append({"url": img,
+                       "credit": urllib.parse.urlparse(page).netloc,
+                       "source_url": page})
+
     for s in (p.get("sources") or [])[:3]:
         u = (s or {}).get("url") or ""
         if not u.startswith("http"):
             continue
-        try:
-            html = get_html(u)
-        except Exception:  # noqa: BLE001
+        html = get_html(u)
+        if not html:
             continue
-        time.sleep(0.35)
-        for rx in _OG_RE:
-            m = rx.search(html)
-            if m:
-                img = urllib.parse.urljoin(u, m.group(1).strip())
-                if img.startswith("http"):
-                    return {"url": img,
-                            "credit": urllib.parse.urlparse(u).netloc,
-                            "source_url": u}
-    return None
+        for rx in _META_RE:
+            for m in rx.finditer(html):
+                add(meta, m.group(1), u)
+        for raw in _jsonld_images(html):
+            add(meta, raw, u)
+        for m in _SRCSET_RE.finditer(html):
+            best = _srcset_best(m.group(1))
+            if best:
+                add(body, best, u)
+        for m in _IMG_SRC_RE.finditer(html):
+            add(body, m.group(1), u)
+    return meta, body
 
 
-def openverse_image(query: str) -> dict | None:
+def commons_category_files(cat: str, limit: int = 4, descend: bool = True) -> list[dict]:
+    """Image files in a Commons category (from Wikidata P373); when the
+    category holds only subcategories, descend exactly one level. The first
+    file in a category can be anything (the Category:Osaka Castle lesson),
+    so members grade medium at best and face the visual pass."""
+    q = {"action": "query", "list": "categorymembers",
+         "cmtitle": f"Category:{cat}", "cmtype": "file|subcat",
+         "cmlimit": "20", "format": "json", "formatversion": "2"}
+    d = _json(COMMONS_API + "?" + urllib.parse.urlencode(q))
+    members = ((d or {}).get("query", {}).get("categorymembers") or [])
+    files, subcats = [], []
+    for m in members:
+        title = m.get("title", "")
+        if title.startswith("File:"):
+            files.append(title[5:])
+        elif title.startswith("Category:"):
+            subcats.append(title[9:])
+    out = []
+    for fn in files:
+        if not re.search(r"\.(jpe?g|png|webp)$", fn, re.I):
+            continue
+        thumb = commons_thumb(fn)
+        if thumb:
+            thumb["title"] = fn
+            out.append(thumb)
+        if len(out) >= limit:
+            return out
+    if not out and descend:
+        for sub in subcats[:2]:
+            out = commons_category_files(sub, limit=limit, descend=False)
+            if out:
+                break
+    return out
+
+
+def openverse_images(query: str, limit: int = 2) -> list[dict]:
     """Openverse (api.openverse.org) aggregates openly licensed photos from
     Flickr and friends; anonymous access, no key. Last resort in the chain:
     keyword search mislabels far more often than a Wikipedia lead image, so
-    anything from here needs the same eyeballing as a category fetch."""
+    everything from here is a low-confidence candidate — it can fill a gap
+    for the visual pass but never outranks an official or Wikipedia hit."""
     q = {"q": query, "page_size": "3"}
-    try:
-        d = get_json("https://api.openverse.org/v1/images/?" + urllib.parse.urlencode(q))
-    except Exception:  # noqa: BLE001
-        return None
-    for r in d.get("results") or []:
+    d = _json("https://api.openverse.org/v1/images/?" + urllib.parse.urlencode(q))
+    out = []
+    for r in ((d or {}).get("results") or []):
         # thumbnail is Openverse's own proxy (~600px, stable); the original
         # url can be a 20MB TIFF on someone's homepage
         url = r.get("thumbnail") or r.get("url")
@@ -385,115 +654,391 @@ def openverse_image(query: str) -> dict | None:
         credit = " / ".join(x for x in ((r.get("creator") or "")[:60],
                                         r.get("source") or "Openverse",
                                         (r.get("license") or "").upper()) if x)
-        return {"url": url, "credit": credit,
-                "source_url": r.get("foreign_landing_url", "")}
-    return None
+        out.append({"url": url, "credit": credit,
+                    "source_url": r.get("foreign_landing_url", ""),
+                    "title": r.get("title", "")})
+        if len(out) >= limit:
+            break
+    return out
 
 
-def fill_images(doc: dict, dry: bool) -> int:
+def _cand(url: str, source: str, confidence: str, *, credit: str = "",
+          source_url: str = "", title: str = "", dist=None) -> dict:
+    return {"url": url, "source": source, "confidence": confidence,
+            "credit": credit, "source_url": source_url,
+            "matched_title": title, "distance_m": dist,
+            "check": None, "verdict": None}
+
+
+def _name_pool(p: dict) -> list[str]:
+    return [n for n in (p.get("name"), p.get("name_local"), p.get("name_en")) if n]
+
+
+def _query_names(p: dict, lang: str) -> list[str]:
+    """Name variants to query in a given language — every name field
+    contributes, deduplicated, local-language-appropriate one first."""
+    if lang == "en":
+        bases = [p.get("name_en"), p.get("name_local"), p.get("name")]
+    else:
+        bases = [p.get("name_local"), p.get("name"), p.get("name_en")]
+    out, seen = [], set()
+    for b in bases:
+        for v in name_variants(b):
+            if v not in seen:
+                seen.add(v)
+                out.append(v)
+    return out[:6]
+
+
+def iter_candidates(p: dict, trip: dict, bbox, langs: list[str]):
+    """Yield raw candidates family by family, in trust-then-cost order.
+    Events put the official page first: the venue photo every other source
+    would find is not the event, and the key visual on the organizer's page
+    is — an exhibition must never be represented by the building's facade."""
+    names = _name_pool(p)
+    coord = p.get("coord") if isinstance(p.get("coord"), dict) else {}
+    lat, lon = coord.get("lat"), coord.get("lon")
+    has_geo = isinstance(lat, (int, float)) and isinstance(lon, (int, float))
+    event = p.get("category") == "event"
+
+    def official():
+        meta, body = official_page_images(p)
+        for c in meta[:3]:
+            yield _cand(c["url"], "official-meta", "medium",
+                        credit=c["credit"], source_url=c["source_url"])
+        for c in body[:4]:
+            yield _cand(c["url"], "official-body", "medium",
+                        credit=c["credit"], source_url=c["source_url"])
+
+    def wikipedia_exact():
+        # Exact title (following redirects) — the only Wikipedia form that
+        # counts as identity. Lead images are rarely mislabeled.
+        for lang in langs:
+            for nm in _query_names(p, lang):
+                hit = wiki_lead_image(nm, lang)
+                if hit:
+                    fn, title = hit
+                    thumb = commons_thumb(fn)
+                    if thumb:
+                        yield _cand(thumb["url"], "wikipedia", "high",
+                                    credit=thumb["credit"],
+                                    source_url=thumb["source_url"], title=title)
+
+    def wikidata():
+        # P18 with the entity's coordinate inside the bbox; high only when
+        # the entity's label also matches a name — coordinate alone can be a
+        # neighbor.
+        for lang in langs:
+            for nm in _query_names(p, lang)[:3]:
+                for ent in wikidata_entities(nm, lang, bbox):
+                    if not ent["p18"]:
+                        continue
+                    thumb = commons_thumb(ent["p18"])
+                    if thumb:
+                        conf = "high" if name_matches(names, ent["label"] or nm) else "low"
+                        yield _cand(thumb["url"], "wikidata", conf,
+                                    credit=thumb["credit"],
+                                    source_url=thumb["source_url"],
+                                    title=ent["label"])
+
+    def wiki_search():
+        for lang in langs:
+            for nm in _query_names(p, lang)[:2]:
+                for fn, title in wiki_search_images(nm, lang, limit=2):
+                    thumb = commons_thumb(fn)
+                    if thumb:
+                        conf = "medium" if name_matches(names, title) else "low"
+                        yield _cand(thumb["url"], "wiki-search", conf,
+                                    credit=thumb["credit"],
+                                    source_url=thumb["source_url"], title=title)
+
+    def commons_cat():
+        for lang in langs:
+            for nm in _query_names(p, lang)[:2]:
+                for ent in wikidata_entities(nm, lang, bbox):
+                    if not ent["p373"]:
+                        continue
+                    for c in commons_category_files(ent["p373"]):
+                        yield _cand(c["url"], "commons-category", "medium",
+                                    credit=c["credit"],
+                                    source_url=c["source_url"],
+                                    title=c.get("title", ""))
+                    return
+
+    def geo():
+        # Distance never decides identity: a geosearch hit whose title
+        # doesn't match the place's names stays low no matter how close.
+        if not has_geo:
+            return
+        for lang in langs:
+            for h in wiki_geo_hits(lat, lon, lang):
+                hit = wiki_lead_image(h["title"], lang)
+                if not hit:
+                    continue
+                fn, title = hit
+                thumb = commons_thumb(fn)
+                if thumb:
+                    conf = "medium" if name_matches(names, title) else "low"
+                    yield _cand(thumb["url"], "wiki-geo", conf,
+                                credit=thumb["credit"],
+                                source_url=thumb["source_url"],
+                                title=title, dist=h.get("dist"))
+        for c in commons_geo_images(lat, lon):
+            yield _cand(c["url"], "commons-geo", "low", credit=c["credit"],
+                        source_url=c["source_url"], title=c.get("title", ""))
+
+    def openverse():
+        tries = []
+        if p.get("name_local"):
+            tries.append(f"{p['name_local']} {trip.get('destination_local') or ''}".strip())
+        if p.get("name_en"):
+            tries.append(f"{p['name_en']} {trip.get('destination_en') or ''}".strip())
+        for q in tries:
+            for c in openverse_images(q):
+                yield _cand(c["url"], "openverse", "low", credit=c["credit"],
+                            source_url=c["source_url"], title=c.get("title", ""))
+
+    families = [wikipedia_exact, wikidata, official, commons_cat, geo, openverse]
+    if event:
+        families = [official, wikipedia_exact, wikidata, commons_cat, geo, openverse]
+    families.insert(2 if not event else 3, wiki_search)
+    for fam in families:
+        yield from fam()
+
+
+def collect_candidates(p: dict, trip: dict, bbox, langs: list[str],
+                       existing: list[dict]) -> list[dict]:
+    """Assemble up to MAX_CANDIDATES verified candidates. Existing images
+    enter first as `existing` candidates and count toward the cap; failed
+    checks are kept in the list (for the audit) but don't count."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    kept = 0
+    for img in existing:
+        url = (img or {}).get("url") or ""
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        c = _cand(url, "existing", "existing",
+                  credit=img.get("credit", ""), source_url=img.get("source_url", ""))
+        c["check"] = check_image_url(url)
+        out.append(c)
+        if c["check"]["ok"]:
+            kept += 1
+    if kept >= MAX_CANDIDATES:
+        return out
+    for c in iter_candidates(p, trip, bbox, langs):
+        if c["url"] in seen:
+            continue
+        seen.add(c["url"])
+        c["check"] = check_image_url(c["url"])
+        out.append(c)
+        if c["check"]["ok"]:
+            kept += 1
+            if kept >= MAX_CANDIDATES:
+                break
+    return out
+
+
+# --------------------------------------------------------------- image audit
+
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
+def load_audit(trip_dir: Path) -> dict:
+    path = trip_dir / AUDIT_NAME
+    if path.exists():
+        try:
+            d = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(d, dict) and d.get("schema_version") == 1:
+                return d
+        except ValueError:
+            pass
+    return {"schema_version": 1, "generated": "", "places": {}}
+
+
+def save_audit(trip_dir: Path, audit: dict) -> None:
+    audit["generated"] = _now_iso()
+    _atomic_write_json(trip_dir / AUDIT_NAME, audit)
+
+
+def _atomic_write_json(path: Path, doc: dict) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
+    """Candidate pipeline. Writes places.json only for places that had no
+    image and produced a verified `high` candidate; every place touched gets
+    an image-audit.json record for the visual review pass. Incremental by
+    default: places whose existing image still verifies are left alone
+    (recorded, not re-collected) unless --recheck."""
     trip = doc.get("trip", {})
     bbox = trip.get("bbox")
     langs = [l for l in (trip.get("local_language"), "en") if l]
-    todo = [p for p in doc["places"] if not p.get("images")]
-    if not todo:
-        print("Images: all present")
-        return 0
+    trip_dir = Path(path).resolve().parent
+    audit = load_audit(trip_dir)
 
-    print(f"Images: {len(todo)} to fill "
-          f"(name: Wikipedia → Wikidata · geo: Wikipedia → Commons · official og:image · Openverse)")
-    ok = 0
-    for p in todo:
-        found, how = None, ""
-        coord = p.get("coord") if isinstance(p.get("coord"), dict) else {}
-        lat, lon = coord.get("lat"), coord.get("lon")
-        has_geo = isinstance(lat, (int, float)) and isinstance(lon, (int, float))
-        # Pop-up events jump straight to the organizer's page: the venue
-        # photo that name/geo search would find is not the event, and the
-        # og:image (poster, key visual) is.
-        event = p.get("category") == "event"
-        if event:
-            found = official_og_image(p)
-            if found:
-                how = "official"
-        # 1) Wikipedia lead image by name — most representative, rarely
-        #    mislabeled. Composite display names go in as variants.
-        if not found:
-            for lang in langs:
-                base = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
-                for nm in name_variants(base):
-                    fn = wiki_lead_image(nm, lang)
-                    time.sleep(0.35)
-                    if fn:
-                        found = commons_thumb(fn)
-                        time.sleep(0.35)
-                        if found:
-                            how = "wikipedia"
-                            break
-                if found:
-                    break
-        # 2) Wikidata P18 by name — items without an article; bbox-checked via P625
-        if not found:
-            for lang in langs:
-                base = p.get("name_local") if lang != "en" else (p.get("name_en") or p.get("name_local"))
-                for nm in name_variants(base):
-                    fn = wikidata_image(nm, lang, bbox)
-                    time.sleep(0.35)
-                    if fn:
-                        found = commons_thumb(fn)
-                        time.sleep(0.35)
-                        if found:
-                            how = "wikidata"
-                            break
-                if found:
-                    break
-        # 3) Geo: nearest Wikipedia article with a lead image — names that
-        #    match no title (or have no article in our languages) but whose
-        #    subject is right there on the map.
-        if not found and has_geo:
-            for lang in langs:
-                fn = wiki_geo_image(lat, lon, lang)
-                time.sleep(0.35)
-                if fn:
-                    found = commons_thumb(fn)
-                    time.sleep(0.35)
-                    if found:
-                        how = "wiki-geo"
-                        break
-        # 4) Geo: Commons photos shot at the spot — streetscapes with no
-        #    article anywhere.
-        if not found and has_geo:
-            found = commons_geo_image(lat, lon)
-            time.sleep(0.35)
-            if found:
-                how = "commons-geo"
-        # 5) The place's own official page (non-events got here last).
-        if not found and not event:
-            found = official_og_image(p)
-            if found:
-                how = "official"
-        # 6) Openverse keyword search — highest mislabel risk, hence last.
-        #    Local-language first: Japanese shop names barely exist in English.
-        if not found:
-            tries = []
-            if p.get("name_local"):
-                tries.append(f"{p['name_local']} {trip.get('destination_local') or ''}".strip())
-            if p.get("name_en"):
-                tries.append(f"{p['name_en']} {trip.get('destination_en') or ''}".strip())
-            for q in tries:
-                found = openverse_image(q)
-                time.sleep(0.35)
-                if found:
-                    how = "openverse"
-                    break
-        if found:
-            if not dry:
-                p["images"] = [found]
-            ok += 1
-            print(f"  ✓ {p.get('name'):<22} [{how}] {found['url'].rsplit('/', 1)[-1][:40]}")
-        else:
-            print(f"  – {p.get('name'):<22} nothing in any source (official og:image included); "
-                  f"hand-pick from an official page, or leave empty (images are optional)")
-    return ok
+    n_missing = sum(1 for p in doc["places"] if not p.get("images"))
+    print(f"Images: candidate pipeline (max {MAX_CANDIDATES}/place; "
+          f"{n_missing} place(s) without images"
+          f"{', full recheck' if recheck else ''})")
+
+    wrote = 0
+    for p in doc["places"]:
+        pid = p.get("id") or p.get("name") or "?"
+        existing = [i for i in (p.get("images") or []) if isinstance(i, dict)]
+        # Verify what's already on the page — a dead URL is an audit-worthy
+        # failure, not a silent skip.
+        existing_checked = []
+        broken = False
+        for img in existing:
+            url = img.get("url") or ""
+            c = _cand(url, "existing", "existing",
+                      credit=img.get("credit", ""),
+                      source_url=img.get("source_url", ""))
+            c["check"] = check_image_url(url) if url else {"ok": False, "reason": "empty-url"}
+            existing_checked.append(c)
+            if not c["check"]["ok"]:
+                broken = True
+
+        needs_collect = recheck or not existing or broken
+        if not needs_collect:
+            audit["places"][pid] = {"name": p.get("name", ""),
+                                    "checked": _now_iso(),
+                                    "written": None,
+                                    "candidates": existing_checked}
+            continue
+
+        cands = collect_candidates(p, trip, bbox, langs, existing)
+        written = None
+        if not existing and not dry:
+            best = next((c for c in cands
+                         if c["confidence"] == "high" and c["check"]["ok"]), None)
+            if best:
+                p["images"] = [{"url": best["url"], "credit": best["credit"],
+                                "source_url": best["source_url"]}]
+                written = best["url"]
+                wrote += 1
+        audit["places"][pid] = {"name": p.get("name", ""),
+                                "checked": _now_iso(),
+                                "written": written,
+                                "candidates": cands}
+
+        ok_n = sum(1 for c in cands if (c["check"] or {}).get("ok"))
+        bad_n = len(cands) - ok_n
+        tag = ("✓ high→written" if written
+               else ("existing broken" if broken and existing else "awaiting review"))
+        print(f"  {p.get('name'):<24} {ok_n} candidate(s), {bad_n} failed  [{tag}]")
+        for c in cands:
+            chk = c["check"] or {}
+            mark = "·" if chk.get("ok") else "✗"
+            print(f"      {mark} [{c['source']}/{c['confidence']}] "
+                  f"{c['url'].rsplit('/', 1)[-1][:48]}"
+                  f"{'' if chk.get('ok') else '  (' + chk.get('reason', '?') + ')'}")
+
+    if not dry:
+        save_audit(trip_dir, audit)
+        print(f"  audit → {trip_dir / AUDIT_NAME}")
+    return wrote
+
+
+# ------------------------------------------------------- apply image review
+
+def apply_image_review(path: str, patch_path: str) -> int:
+    """Merge the review agent's images-patch.json (patches + reviews) into
+    places.json and write verdicts back to image-audit.json. All-or-nothing:
+    any validation error leaves every official file untouched."""
+    with open(path, encoding="utf-8") as f:
+        doc = json.load(f)
+    try:
+        with open(patch_path, encoding="utf-8") as f:
+            patch = json.load(f)
+    except (OSError, ValueError) as e:
+        print(f"✗ cannot read patch: {e}", file=sys.stderr)
+        return 1
+
+    by_id = {p.get("id"): p for p in doc.get("places", []) if p.get("id")}
+    errors: list[str] = []
+    patches = patch.get("patches")
+    reviews = patch.get("reviews") or []
+    if not isinstance(patches, list):
+        errors.append('top level must have "patches": [...]')
+        patches = []
+    if not isinstance(reviews, list):
+        errors.append('"reviews" must be a list when present')
+        reviews = []
+
+    for i, entry in enumerate(patches):
+        where = f"patches[{i}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{where}: not an object")
+            continue
+        pid = entry.get("id")
+        if pid not in by_id:
+            errors.append(f"{where}: unknown place id {pid!r}")
+        imgs = entry.get("images")
+        if not isinstance(imgs, list):
+            errors.append(f"{where}: \"images\" must be a list (empty = stays imageless)")
+            continue
+        for j, img in enumerate(imgs):
+            w = f"{where}.images[{j}]"
+            if not isinstance(img, dict):
+                errors.append(f"{w}: not an object")
+                continue
+            url = img.get("url")
+            if not (isinstance(url, str) and url.startswith("http")):
+                errors.append(f"{w}: url missing or not http(s)")
+            if not (isinstance(img.get("credit"), str) and img["credit"].strip()):
+                errors.append(f"{w}: credit missing — every image needs an honest credit")
+    for i, rv in enumerate(reviews):
+        if not isinstance(rv, dict) or rv.get("id") not in by_id:
+            errors.append(f"reviews[{i}]: missing or unknown place id")
+
+    if errors:
+        print(f"✗ review patch rejected, nothing written ({len(errors)} error(s)):",
+              file=sys.stderr)
+        for e in errors:
+            print(f"    - {e}", file=sys.stderr)
+        return 1
+
+    for entry in patches:
+        place = by_id[entry["id"]]
+        place["images"] = [{"url": img["url"], "credit": img["credit"],
+                            "source_url": img.get("source_url", "")}
+                           for img in entry["images"]]
+
+    trip_dir = Path(path).resolve().parent
+    audit = load_audit(trip_dir)
+    for rv in reviews:
+        rec = audit["places"].setdefault(
+            rv["id"], {"name": by_id[rv["id"]].get("name", ""),
+                       "checked": _now_iso(), "written": None, "candidates": []})
+        cand_by_url = {c.get("url"): c for c in rec.get("candidates", [])}
+        for url in (rv.get("accepted") or []):
+            c = cand_by_url.get(url)
+            if c:
+                c["verdict"] = "accepted"
+        for rej in (rv.get("rejected") or []):
+            if not isinstance(rej, dict):
+                continue
+            c = cand_by_url.get(rej.get("url"))
+            if c:
+                c["verdict"] = "rejected"
+                c["verdict_reason"] = rej.get("reason", "")
+        rec["review"] = {"at": _now_iso(),
+                         "accepted": rv.get("accepted") or [],
+                         "rejected": rv.get("rejected") or [],
+                         "note": rv.get("note", ""),
+                         "searched": rv.get("searched") or []}
+
+    _atomic_write_json(Path(path), doc)
+    save_audit(trip_dir, audit)
+    print(f"✓ applied {len(patches)} patch(es), {len(reviews)} review record(s); "
+          f"audit updated → {trip_dir / AUDIT_NAME}")
+    return 0
 
 
 # ------------------------------------------------------------------ rail transit
@@ -707,8 +1252,17 @@ def main() -> int:
     ap.add_argument("--images", action="store_true")
     ap.add_argument("--transit", action="store_true",
                     help="fetch rail lines and stations into transit.geojson next to the input")
+    ap.add_argument("--recheck", action="store_true",
+                    help="with --images: re-collect candidates even for places whose images verify")
+    ap.add_argument("--apply-image-review", metavar="PATCH",
+                    help="merge a reviewed images-patch.json into places.json and the audit")
     ap.add_argument("--dry-run", action="store_true", help="report only, write nothing")
     args = ap.parse_args()
+
+    if args.apply_image_review:
+        if args.coords or args.images or args.transit:
+            ap.error("--apply-image-review runs alone")
+        return apply_image_review(args.path, args.apply_image_review)
 
     if not (args.coords or args.images or args.transit):
         ap.error("specify at least one of --coords / --images / --transit")
@@ -720,7 +1274,7 @@ def main() -> int:
     if args.coords:
         n += fill_coords(doc, args.dry_run)
     if args.images:
-        n += fill_images(doc, args.dry_run)
+        n += fill_images(doc, args.path, args.dry_run, args.recheck)
 
     if args.transit:
         out = Path(args.path).with_name("transit.geojson")
