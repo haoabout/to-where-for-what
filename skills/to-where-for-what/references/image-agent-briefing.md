@@ -23,11 +23,15 @@ Before spawning, the main conversation:
    the script runs.
 2. **Substitutes absolute paths** for `<ABS_SKILL_ROOT>` and
    `<ABS_TRIP_DIR>` — the subagent's working directory may differ.
-3. **Picks the model**: one tier below the main conversation's (SKILL.md,
-   "Subagent model tier"), and it **must be vision-capable** — one tier
-   down normally still sees images. A text-only agent must downgrade to the
-   playbook's per-source text rules — and its report must say so, so
-   delivery can disclose it.
+3. **Picks the model**: default **Sonnet**, not the usual one-tier-below
+   rule — the job is a yes/no visual judgment over pre-collected
+   candidates, and measured on Bangkok (41 places, 70 candidates) a
+   top-tier model spent 20+ minutes on the download-look-record loop that
+   a smaller one handles as well. Escalate a tier only when the trip is
+   dense with hard identity calls (look-alike branches, event key visuals).
+   Whatever the tier, it **must be vision-capable**. A text-only agent must
+   downgrade to the playbook's per-source text rules — and its report must
+   say so, so delivery can disclose it.
 
 After the agent returns:
 

@@ -61,7 +61,17 @@ Bump rules:
 
 `places.json` schema unchanged — no `schema_version` bump; existing trips
 keep working. The A3 image subagent now judges pre-collected candidates
-(briefing rewritten) instead of searching from scratch.
+(briefing rewritten) instead of searching from scratch, and defaults to
+**Sonnet** — the visual pass is a yes/no judgment loop, measured no better
+on a bigger model, just slower.
+
+Refinements landed during the Bangkok live run, same release: network
+retries are asymmetric (429/5xx get 3, connection timeouts get 1 — dead
+domains were stretching a run past 20 minutes), low-confidence candidates
+no longer crowd higher families out of the cap, a Wikipedia exact-title hit
+needs corroboration (title match or in-bbox article coordinate) before it
+counts as `high` ("Speakerbox" → "Loudspeaker enclosure" lesson), and the
+image checker recognizes AVIF/HEIC.
 
 ---
 
