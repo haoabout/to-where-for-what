@@ -228,16 +228,24 @@ def _throttle(url: str) -> None:
 
 
 def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
-             timeout: int = 20) -> dict:
+             timeout: int = 12) -> dict:
     """Streaming GET, first `cap` bytes only. Never HEAD — several official
     sites (measured) 404 on HEAD while the GET serves the image fine.
     Returns {"status", "body", "ctype", "error"}; "error" is set on network
-    failure after retries, "status" on any HTTP response including 4xx."""
+    failure after retries, "status" on any HTTP response including 4xx.
+
+    Retry policy is asymmetric on purpose: 429/5xx are cheap, fast responses
+    worth 3 retries (honoring Retry-After, else 1/2/4s) — but a connection
+    timeout already cost `timeout` seconds, so network errors get exactly
+    one retry. Measured on the Bangkok run: 3 retries × 20s timeouts on a
+    handful of dead official domains stretched one --images pass past 20
+    minutes."""
     cached = _HTTP_CACHE.get(url)
     if cached is not None:
         return cached
     last_err = None
-    for attempt in range(4):                     # 1 try + 3 retries
+    net_fails = 0
+    for attempt in range(4):                     # 1 try + up to 3 retries
         _throttle(url)
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
         retry_after = None
@@ -257,6 +265,9 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
             retry_after = (e.headers or {}).get("Retry-After")
         except Exception as e:  # noqa: BLE001  timeouts, DNS, resets
             last_err = type(e).__name__
+            net_fails += 1
+            if net_fails >= 2:
+                break
         if attempt < 3:
             try:
                 wait = max(0.0, float(retry_after))
@@ -919,6 +930,7 @@ def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
                                     "candidates": existing_checked}
             continue
 
+        print(f"  → {p.get('name')} …", flush=True)
         cands = collect_candidates(p, trip, bbox, langs, existing)
         written = None
         if not existing and not dry:
@@ -1265,6 +1277,11 @@ def main() -> int:
                     help="merge a reviewed images-patch.json into places.json and the audit")
     ap.add_argument("--dry-run", action="store_true", help="report only, write nothing")
     args = ap.parse_args()
+
+    # Line-buffer stdout even when redirected to a file — an --images run
+    # takes minutes, and block buffering makes it look hung until the end.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
 
     if args.apply_image_review:
         if args.coords or args.images or args.transit:
