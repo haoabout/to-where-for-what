@@ -66,6 +66,7 @@ KNOWN_TRIP_FIELDS = {
     "destination", "destination_local", "destination_en", "country", "bbox",
     "timezone", "output_language", "local_language", "dates", "days", "party",
     "pace", "bases", "generated_at", "verified_at", "note", "retro",
+    "theme_hue",
 }
 
 # Required, and must not be an empty string
@@ -207,6 +208,15 @@ def check_top_level(doc, rep: Report) -> None:
     unknown_trip = set(trip) - KNOWN_TRIP_FIELDS
     if unknown_trip:
         rep.add("P2", "trip", f"fields outside the contract: {sorted(unknown_trip)}")
+
+    # Optional trip colour (data-schema.md "Picking theme_hue"). Not a P0:
+    # build.py falls back to the default palette on a non-number and silently
+    # wraps out-of-range values %360 — the page renders, just not as intended.
+    hue = trip.get("theme_hue")
+    if hue is not None and (isinstance(hue, bool) or not isinstance(hue, int)
+                            or not 0 <= hue <= 359):
+        rep.add("P1", "trip", f"theme_hue must be an integer 0–359, got {hue!r} — "
+                              f"build.py will fall back to the default palette or wrap the hue silently")
 
     cats = doc.get("categories")
     if cats is not None and not isinstance(cats, list):

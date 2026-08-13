@@ -27,6 +27,10 @@ def base_doc() -> dict:
             "days": 2, "party": "情侣 2 人", "pace": "中等",
             "generated_at": str(validate.date.today()),
             "verified_at": str(validate.date.today()),
+            # In the fixture on purpose: theme_hue once drifted out of
+            # KNOWN_TRIP_FIELDS and every legal trip got flagged. The baseline
+            # check ("zero unexpected findings") now guards against a repeat.
+            "theme_hue": 334,
         },
         "categories": [
             {"id": "museum", "label": "博物馆", "min": 1, "max": 8},
@@ -192,6 +196,18 @@ def main() -> int:
     case("verified_at is stale",
          lambda d: d["trip"].update(verified_at=str(validate.date.today() - validate.timedelta(days=45))),
          "P1", "is 45 days old")
+
+    print("\ntheme_hue · a legal trip field, validated 0–359")
+    case("legal theme_hue is not flagged as outside the contract",
+         lambda d: d["trip"].update(theme_hue=128), "P2", "!fields outside the contract")
+    case("theme_hue out of range",
+         lambda d: d["trip"].update(theme_hue=400), "P1", "theme_hue must be an integer 0–359")
+    case("theme_hue as a string",
+         lambda d: d["trip"].update(theme_hue="pink"), "P1", "theme_hue must be an integer 0–359")
+    case("theme_hue as a boolean (bool is an int subtype — still wrong)",
+         lambda d: d["trip"].update(theme_hue=True), "P1", "theme_hue must be an integer 0–359")
+    case("absent theme_hue stays legal (the page keeps its default palette)",
+         lambda d: d["trip"].pop("theme_hue"), "P1", "!theme_hue")
 
     print("\nP2 · should note")
     case("missing photo_note",
