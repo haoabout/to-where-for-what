@@ -278,6 +278,45 @@ def main() -> int:
     case("itinerary is not an array",
          lambda d: d.update(itinerary={"n": 1}), "P0", "must be an array")
 
+    print("\nprep / booked · pre-departure checklist state")
+    case("valid prep.checked on a place produces no P0",
+         lambda d: d["places"][1].update(prep={"checked": True}), "P0", "")
+    case("prep is not an object",
+         lambda d: d["places"][1].update(prep="checked"), "P0", "prep must be an object")
+    case("prep.checked is not a boolean",
+         lambda d: d["places"][1].update(prep={"checked": "yes"}),
+         "P0", "prep.checked must be a boolean")
+    case("unknown key inside prep is noted, not rejected",
+         lambda d: d["places"][1].update(prep={"booked": True}),
+         "P2", "prep has fields outside the contract")
+    case("valid booked on an itinerary entry produces no P0",
+         lambda d: (with_itinerary(d),
+                    d["itinerary"][0]["places"][0].update(booked=True)), "P0", "")
+    case("booked is not a boolean",
+         lambda d: (with_itinerary(d),
+                    d["itinerary"][0]["places"][0].update(booked="yes")),
+         "P0", "booked must be a boolean")
+
+    # The nudge window compares against the real today, so these cases build
+    # their dates relative to it; os-001 has no closure days, keeping the
+    # weekday of "today + n" from mattering.
+    def nudge(d, days_out, booked=None):
+        start = validate.date.today() + validate.timedelta(days=days_out)
+        d["trip"]["dates"] = {"start": str(start),
+                              "end": str(start + validate.timedelta(days=1))}
+        d["places"][0].update(booking="required",
+                              booking_url="https://example.org/book")
+        ent = {"id": "os-001"}
+        if booked is not None:
+            ent["booked"] = booked
+        d["itinerary"] = [{"n": 1, "date": str(start), "places": [ent]}]
+    case("booking-required visit unbooked within 14 days of departure",
+         lambda d: nudge(d, 7), "P1", "aren't marked booked")
+    case("marking it booked silences the nudge",
+         lambda d: nudge(d, 7, booked=True), "P1", "!aren't marked booked")
+    case("no nudge while departure is still far away",
+         lambda d: nudge(d, 60), "P1", "!aren't marked booked")
+
     print("\nkind · lodging uses the reduced required set")
     case("lodging missing tier/tickets/closure days must not error",
          lambda d: (hotel(d), with_itinerary(d),

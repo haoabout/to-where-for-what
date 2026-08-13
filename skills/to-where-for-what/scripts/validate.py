@@ -45,7 +45,7 @@ KNOWN_PLACE_FIELDS = {
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
     "photo_note", "tags", "images", "sources",
     "verify", "choice", "choice_reason", "origin",
-    "verdict", "verdict_note",
+    "verdict", "verdict_note", "prep",
 }
 KINDS = {"attraction", "lodging"}
 ORIGINS = {"user"}
@@ -89,6 +89,9 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/140.0 Safari/537.36 to-where-for-what-validate/1.0")
 STALE_DAYS = 30
 DUPE_METERS = 25
+# Within this many days of departure, a scheduled booking-required visit that
+# isn't ticked off in the pre-departure checklist becomes a warning.
+BOOKING_NUDGE_DAYS = 14
 
 # These status codes mean "the site is alive but refuses automated access",
 # which is not a dead link. Measured: Kuromon Market's official site returns
@@ -279,6 +282,23 @@ def check_place(p, idx, doc, rep: Report) -> None:
     v = p.get("verdict")
     if v is not None and v not in VERDICTS:
         rep.add("P0", where, f"verdict={v!r} is invalid; must be one of {sorted(VERDICTS)}")
+
+    # Pre-departure prep state (page-written; the AI must not pre-fill).
+    # Only place-level prep lives here: checked = "the user confirmed the
+    # verify.check items themselves". Booking state is per-visit — bookings
+    # are date-bound — so it sits on itinerary entries as booked, not here.
+    prep = p.get("prep")
+    if prep is not None:
+        if not isinstance(prep, dict):
+            rep.add("P0", where, 'prep must be an object, e.g. {"checked": true}')
+        else:
+            if "checked" in prep and not isinstance(prep["checked"], bool):
+                rep.add("P0", where, f"prep.checked must be a boolean, got {prep['checked']!r}")
+            unknown_prep = set(prep) - {"checked"}
+            if unknown_prep:
+                rep.add("P2", where,
+                        f"prep has fields outside the contract: {sorted(unknown_prep)} — "
+                        f"the page only reads checked")
 
     # Lodging belongs to no attraction category and takes part in no quota, so
     # it needn't appear in categories
@@ -537,6 +557,11 @@ def check_itinerary(doc, rep: Report) -> None:
                 rep.add("P0", ewhere, 'each entry must be an object of the form {"id": "..."}')
                 continue
             pid = ent["id"]
+            # booked is written back by the page when the user ticks a visit
+            # off in the pre-departure checklist. It lives on the entry, not
+            # the place: two scheduled visits are two bookings.
+            if "booked" in ent and not isinstance(ent["booked"], bool):
+                rep.add("P0", ewhere, f"booked must be a boolean, got {ent['booked']!r}")
             p = by_id.get(pid)
             if p is None:
                 rep.add("P0", ewhere, f"id {pid!r} does not exist in places")
@@ -584,6 +609,26 @@ def check_itinerary(doc, rep: Report) -> None:
             rep.add("P1", "itinerary",
                     f"lodging \"{p.get('name')}\" appears on no day — "
                     f"put lodging into each day so start and end points are clear")
+
+    # ---- Booking nudge ----
+    # Within the departure window, any scheduled visit to a booking-required
+    # place that isn't ticked off yet gets one aggregated warning — past that
+    # point, "book it later" quietly becomes "arrived without a ticket".
+    start = _parse_date(((doc.get("trip") or {}).get("dates") or {}).get("start"))
+    if start:
+        days_left = (start - date.today()).days
+        if 0 <= days_left <= BOOKING_NUDGE_DAYS:
+            unbooked = [
+                f"{(by_id.get(ent.get('id')) or {}).get('name')} (day {day.get('n')})"
+                for day in it if isinstance(day, dict)
+                for ent in (day.get("places") or []) if isinstance(ent, dict)
+                if (by_id.get(ent.get("id")) or {}).get("booking") == "required"
+                and not ent.get("booked")
+            ]
+            if unbooked:
+                rep.add("P1", "itinerary",
+                        f"trip starts in {days_left} day(s), and these booking-required visits "
+                        f"aren't marked booked in the pre-departure checklist yet: {', '.join(unbooked)}")
 
 
 # ---------------------------------------------------------------- links

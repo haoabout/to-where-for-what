@@ -303,6 +303,12 @@ Without these three fields, stage D can only improvise.
 |---|---|---|
 | `choice` | `null`\|`yes`\|`maybe`\|`no` | Always `null` when the AI generates |
 | `choice_reason` | string | The user's reason when picking "skip" |
+| `prep` | object | Pre-departure prep state, currently `{"checked": true}`: the user ticked "I confirmed the `verify.check` items myself" in the checklist. Omit entirely when generating |
+
+Booking state is **not** on the place. It lives on the itinerary entry as
+`booked` (see below), because bookings are date-bound: two scheduled visits —
+two consecutive Expo days, say — are two tickets, and one flag on the place
+could only record one of them.
 
 ### Post-trip feedback (written only by the retro flow)
 
@@ -343,7 +349,7 @@ Stage D writes the guide by expanding this user-arranged list.
     "label": "Day 1",
     "places": [                    // array order = visit order
       { "id": "os-h01" },                          // lodging, unnumbered
-      { "id": "os-014" },                          // → shown as number 1
+      { "id": "os-014", "booked": true },          // → shown as number 1; ticket booked
       { "id": "os-031", "note": "night session" }, // → shown as number 2
       { "id": "os-h01" }                           // back to the same hotel at night
     ]
@@ -358,6 +364,7 @@ Stage D writes the guide by expanding this user-arranged list.
 | `label` | string | | Display name; generated from `n` in the UI language when absent. **The page no longer writes this field** — leave it out so the file stays language-neutral |
 | `places[].id` | string | ✅ | Must exist in `places[]` |
 | `places[].note` | string | | Note for this particular visit (distinguishes purposes when a place is visited twice) |
+| `places[].booked` | bool | | **Page-written** when the user ticks this visit off in the pre-departure checklist; the AI must not pre-fill. Per-visit because bookings are date-bound. Dragging the entry to another day keeps the flag (re-check the booked date yourself); removing the entry from the schedule drops it — deliberate, a date-bound booking should be re-confirmed on re-adding |
 
 ### Why the top-level key is `itinerary`, not `days`
 
@@ -488,6 +495,8 @@ Scheduling checks (only when `itinerary` exists):
 - `itinerary[].n` not an integer, or duplicated
 - `itinerary[].places[]` not objects of the form `{"id": "..."}`
 - `itinerary[].places[].id` not present in `places[]`
+- `prep` not an object, `prep.checked` not a boolean, or
+  `itinerary[].places[].booked` not a boolean
 - **A place scheduled on a day it's closed** — not a judgment call; it can't be
   visited that day
 - A scheduled place whose `status` is `permanently_closed`
@@ -503,6 +512,8 @@ Scheduling checks (only when `itinerary` exists):
 - Last place of a trip day missing `last_entry` (needs route.md to judge; checked in stage D)
 - A day with no places at all
 - A `kind: lodging` entry that appears on no day
+- Trip starts within 14 days and a scheduled `booking: required` visit isn't
+  marked `booked` yet
 
 ### P2 · Note
 
