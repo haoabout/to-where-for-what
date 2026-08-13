@@ -2234,6 +2234,24 @@ pre.code{
 .cost-total b{font:400 21px var(--serif);color:var(--ink)}
 .caveat{font-size:11.5px;color:var(--ink-3);padding:9px 13px;border-top:1px dashed var(--line-soft);line-height:1.6}
 
+/* Pre-departure to-do checkbox. A real control on screen, an empty square on
+   paper — state lives in the data (entry.booked / place.prep.checked), so the
+   guide, its paged clones, the dialog and the write-back can never disagree.
+   Sized to the .m mark column so to-do rows and roster rows line up. */
+.pk{
+  width:17px;height:17px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+  border:1.5px solid var(--ink-3);border-radius:5px;background:var(--card);
+  padding:0;cursor:pointer;color:transparent;
+}
+.pk:hover{border-color:var(--ok)}
+.pk.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.pk svg{width:11px;height:11px}
+/* The booking link is an action, not a note — so it isn't .why (italic,
+   ink-3): a to-do row's whole point is that you can act on it right there. */
+.pk-a{font-size:11.5px;white-space:nowrap}
+/* Dialog rows: label text at dialog body size, checkbox leading */
+.pk-row{display:flex;align-items:center;gap:9px;font-size:13.5px;margin:8px 0;color:var(--ink-2)}
+
 /* ── Bento checklist ──
    The all-places table used to be one column of ~50 rows: on A4 that is two
    sheets of mostly margin, and nothing about it is a table — a day's places
@@ -3278,6 +3296,13 @@ en: {
   costNoSched:"The schedule isn't arranged yet, so this estimates from “yes” picks. Once scheduled, it switches to the places actually planned per day.",
   costUnparsed:"{n} ticket prices are text-only and not counted: {list}. Special exhibitions, add-on experiences and night surcharges usually cost extra, so the real total will be higher.",
   costOnly:"Tickets only — no transport, meals, or special-exhibition surcharges.",
+  prepTitle:"Pre-departure to-dos",
+  prepIntro:"Derived from the schedule: visits that need booking, and details that couldn't be verified. Ticking a box records it into the trip data; on paper this prints as a checklist.",
+  prepReq:"Must book", prepRec:"Booking advised", prepChk:"Confirm yourself",
+  prepBooked:"booked", prepChecked:"confirmed myself",
+  prepLink:"book ↗",
+  prepAriaBook:"Mark “{name}” on day {n} as booked",
+  prepAriaChk:"Mark “{name}” as confirmed by yourself",
   markYes:"yes", markMaybe:"maybe", markNo:"no", markNone:"unrated",
   nItems:"{n} items",
   missedTitle:"Marked “yes” but scheduled nowhere", nCount:"{n}",
@@ -3475,6 +3500,13 @@ zh: {
   costNoSched:"日程还没排，这里按标了 yes 的地点估算。排完之后会改成按每天实际要去的点计算。",
   costUnparsed:"以下 {n} 项的票价是文字描述，未计入合计：{list}。特别展、体验项目、夜间加价通常另计，实际花费会高于此数。",
   costOnly:"仅含门票，不含交通、餐饮与特别展加价。",
+  prepTitle:"出发前待办",
+  prepIntro:"由已排的日程推导：需要预约的到访、未能核实完的信息。点击方框即写入行程数据；打印后可当纸面清单勾选。",
+  prepReq:"必须预约", prepRec:"建议预约", prepChk:"待自行核实",
+  prepBooked:"已预约", prepChecked:"已自行核实",
+  prepLink:"预约入口 ↗",
+  prepAriaBook:"标记第 {n} 天的「{name}」为已预约",
+  prepAriaChk:"标记「{name}」为已自行核实",
   /* These four must stay word-for-word identical to yes / maybe / no / none
      above — they label the same four states on the printed checklist, and a
      second name for a state is a second state as far as the reader knows.
@@ -4309,8 +4341,10 @@ function setChoice(id, v, reason){
 
 function saveLocal(){
   try{
+    // The fourth slot (prep) rode in later; loadLocal tolerates both shapes.
     localStorage.setItem(LS_KEY, JSON.stringify(
-      PLACES.filter(p => p.choice).map(p => [p.id, p.choice, p.choice_reason || ""])));
+      PLACES.filter(p => p.choice || p.prep)
+        .map(p => [p.id, p.choice, p.choice_reason || "", p.prep || null])));
     // Half an hour of scheduling vanishing on refresh would be crushing.
     // Stored together with the two fingerprints — see loadItin.
     localStorage.setItem(LS_KEY + ":itin",
@@ -4382,13 +4416,17 @@ function loadLocal(){
   try{
     const raw = localStorage.getItem(LS_KEY);
     if(!raw) return 0;
-    const map = new Map(JSON.parse(raw).map(([id,c,r]) => [id,[c,r]]));
+    const map = new Map(JSON.parse(raw).map(([id,c,r,pp]) => [id,[c,r,pp]]));
     let n = 0;
     for(const p of PLACES){
       const hit = map.get(p.id);
+      if(!hit) continue;
       // If the file already has a choice, the file wins: what the AI just
       // wrote back is newer than the browser cache
-      if(hit && !p.choice){ p.choice = hit[0]; p.choice_reason = hit[1]; n++; }
+      if(hit[0] && !p.choice){ p.choice = hit[0]; p.choice_reason = hit[1]; n++; }
+      // Same precedence for the to-do state (a row stored for prep alone
+      // carries choice=null, hence the guards above and here)
+      if(hit[2] && !p.prep) p.prep = hit[2];
     }
     return n;
   }catch(e){ return 0; }
@@ -4464,6 +4502,7 @@ function openDetail(id, from){
       ${im && im.url ? `<img class="dlg-img" src="${esc(im.url)}" alt="${esc(p.name)}" onerror="this.remove()">
         ${im.credit ? `<div class="credit">${esc(im.credit)}</div>` : ""}` : ""}
       ${detailBodyHTML(p)}
+      ${prepDlgHTML(p)}
       <div class="dlg-f">${schedBtn(p)}${pickHTML(p)}</div>
     </div>`;
   dlgFrom(from);
@@ -4493,6 +4532,72 @@ function schedBtn(p){
   const inDay = schedOf(p.id).some(s => s.n === n);
   return `<button class="btn sched" data-sched="${esc(p.id)}">${
     inDay ? tf("schedRemove", { n }) : tf("schedAdd", { n })}</button>`;
+}
+
+/* ─────────────────────────────────────────────── Pre-departure to-dos */
+/* Checkbox for the pre-departure to-dos, rendered in the guide's to-do boxes
+   and in the detail dialog. Every instance of the same to-do shares its
+   data-prep key, so one click flips all of them (see the [data-prep] branch
+   of the document click handler). Keys:
+     b:<day n>:<entry index>  → that visit's booked flag on the itinerary entry
+     v:<place id>             → the place's prep.checked */
+function prepBtn(t, on, label){
+  return `<button class="pk${on ? " on" : ""}" role="checkbox" aria-checked="${!!on}" `
+    + `data-prep="${esc(t)}" aria-label="${esc(label)}">${MARK_ICON.yes}</button>`;
+}
+
+/* Dialog block: one "booked" row per scheduled visit that wants a booking —
+   per visit, not per place, because bookings are date-bound (two Expo days
+   are two tickets) — plus a "confirmed myself" row when verification didn't
+   complete. Empty until the place is actually scheduled: an unscheduled
+   visit has no itinerary entry to carry the flag. */
+function prepDlgHTML(p){
+  const rows = [];
+  if(p.booking === "required" || p.booking === "recommended"){
+    (DATA.itinerary || []).forEach(d => (d.places || []).forEach((ent, ei) => {
+      if(ent.id !== p.id) return;
+      rows.push(`<div class="pk-row">${prepBtn(`b:${d.n}:${ei}`, !!ent.booked,
+        tf("prepAriaBook", { name: p.name, n: d.n }))}<span>${esc(tf("dayN", { n: d.n }))} · ${T.prepBooked}</span></div>`);
+    }));
+  }
+  const vs = (p.verify || {}).state;
+  if(vs && vs !== "verified")
+    rows.push(`<div class="pk-row">${prepBtn(`v:${p.id}`, !!(p.prep && p.prep.checked),
+      tf("prepAriaChk", { name: p.name }))}<span>${T.prepChecked}</span></div>`);
+  return rows.length ? `<h4>${T.prepTitle}</h4>${rows.join("")}` : "";
+}
+
+/* Ticking never re-renders: it changes no row's height, so every twin of the
+   to-do — the guide's source section, its paged clones, the dialog row — is
+   patched in place, and nothing repaginates or steals focus. The flag is
+   deleted rather than set to false so the file only carries it while true. */
+function togglePrep(t){
+  let on = false;
+  if(t.startsWith("b:")){
+    const [, n, ei] = t.split(":");
+    const day = (DATA.itinerary || []).find(d => d.n === +n);
+    const ent = day && Array.isArray(day.places) ? day.places[+ei] : null;
+    if(!ent) return;
+    if(ent.booked) delete ent.booked; else ent.booked = true;
+    on = !!ent.booked;
+  }else{
+    const p = PLACES.find(x => x.id === t.slice(2));
+    if(!p) return;
+    if(p.prep && p.prep.checked){
+      delete p.prep.checked;
+      if(!Object.keys(p.prep).length) delete p.prep;
+    }else{
+      p.prep = Object.assign(p.prep || {}, { checked: true });
+    }
+    on = !!(p.prep && p.prep.checked);
+  }
+  saveLocal();
+  scheduleAuto();
+  for(const b of $$("[data-prep]")){
+    if(b.dataset.prep !== t) continue;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", String(on));
+  }
 }
 
 /* ─────────────────────────────────────────────── Reasons for skipping */
@@ -4695,7 +4800,7 @@ function toMarkdown(){
         // themselves ("Booking required to enter"), and "Booking: Booking
         // required to enter" says it twice.
         const bk = { required:T.bkRequiredLong, recommended:T.bkRecommendedLong }[p.booking];
-        if(bk) L.push(`  - ${q(bk)}`);
+        if(bk) L.push(`  - ${q(bk)}${e.booked ? ` — ${q(T.prepBooked)} ✓` : ""}`);
 
         if(!lod && !counted.has(p.id)){
           counted.add(p.id);
@@ -7589,6 +7694,54 @@ const GUIDE = (() => {
       </div>`;
   }
 
+  /* ---------- Pre-departure to-dos ----------
+     Derived from the schedule, like the cost panel: a to-do you can act on
+     belongs to a concrete visit, so nothing renders until days exist. Booking
+     rows are per entry — two scheduled visits are two date-bound tickets —
+     while "confirm yourself" rows are per place (the venue's hours are the
+     venue's, however many times you go). Ticked state lives in the data
+     (entry.booked / place.prep.checked), so the screen, the print-out and
+     the write-back can never disagree. */
+  function renderPrep(){
+    const days = (DATA.itinerary || []).filter(d => (d.places || []).length);
+    if(!days.length) return "";
+    const book = { required: [], recommended: [] };
+    const chk = [], seen = new Set();
+    for(const d of days){
+      d.places.forEach((ent, ei) => {
+        const p = BY_ID[ent.id];
+        if(!p || isLodging(p)) return;
+        if(book[p.booking]) book[p.booking].push({ p, ent, d, ei });
+        const vs = (p.verify || {}).state;
+        if(vs && vs !== "verified" && !seen.has(p.id)){ seen.add(p.id); chk.push(p); }
+      });
+    }
+    if(!book.required.length && !book.recommended.length && !chk.length) return "";
+
+    const dayTxt = d => tf("dayN", { n: d.n }) + (d.date ? " · " + d.date.slice(5) : "");
+    const bookRow = ({ p, ent, d, ei }) => `<div class="ck">
+        ${prepBtn(`b:${d.n}:${ei}`, !!ent.booked, tf("prepAriaBook", { name: p.name, n: d.n }))}
+        <span class="n">${esc(p.name)}<span class="sub">${esc(dayTxt(d))}${p.ticket ? " · " + esc(p.ticket) : ""}</span></span>
+        ${p.booking_url ? `<a class="pk-a" href="${esc(p.booking_url)}" target="_blank" rel="noopener">${T.prepLink}</a>` : ""}
+      </div>`;
+    // The sub line is the verify.check list — what to confirm is the row's
+    // whole content; the area only stands in when the AI left check empty.
+    const chkRow = p => `<div class="ck">
+        ${prepBtn(`v:${p.id}`, !!(p.prep && p.prep.checked), tf("prepAriaChk", { name: p.name }))}
+        <span class="n">${esc(p.name)}<span class="sub">${esc(((p.verify || {}).check || []).join(" · ") || p.area)}</span></span>
+      </div>`;
+
+    let html = "";
+    if(book.required.length)
+      html += ckBox(T.prepReq, tf("nCount", { n: book.required.length }), book.required.map(bookRow).join(""));
+    if(book.recommended.length)
+      html += ckBox(T.prepRec, tf("nCount", { n: book.recommended.length }), book.recommended.map(bookRow).join(""));
+    if(chk.length)
+      html += ckBox(T.prepChk, tf("nCount", { n: chk.length }), chk.map(chkRow).join(""));
+
+    return `<h3>${T.prepTitle}</h3><p>${T.prepIntro}</p><div class="bento">${html}</div>`;
+  }
+
   /* ---------- All-places checklist ----------
      Generated straight from choice, so it cannot disagree with the list view.
      Dropped places are listed too — making it easy to judge whether to bring
@@ -7736,8 +7889,9 @@ const GUIDE = (() => {
 
   function render(){
     const auto = $("#guide-auto");
-    auto.innerHTML = renderCost() + renderChecklist();
-    packBento(auto.querySelector(".bento"));
+    auto.innerHTML = renderCost() + renderPrep() + renderChecklist();
+    // Two bentos now (to-dos and the roster); each packs its own boxes
+    auto.querySelectorAll(".bento").forEach(packBento);
     enhanceTimeline($("#guide-body"));
   }
 
@@ -9105,6 +9259,13 @@ document.addEventListener("click", e => {
     }
     return;
   }
+
+  /* Pre-departure to-do checkbox — the guide's boxes, their paged clones and
+     the detail dialog all route here. Before [data-detail]: the guide rows
+     may one day sit inside clickable hosts, and a checkbox that sometimes
+     opens a dialog instead of ticking would be worse than no checkbox. */
+  const pk = e.target.closest("[data-prep]");
+  if(pk){ togglePrep(pk.dataset.prep); return; }
 
   const detail = e.target.closest("[data-detail]");
   /* Selecting a line of the pitch ends in a click. Without this the dialog
