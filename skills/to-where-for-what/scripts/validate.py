@@ -124,6 +124,27 @@ def _blank(v) -> bool:
     return v is None or (isinstance(v, str) and not v.strip())
 
 
+# The validator is the delivery gate for AI-produced data, so a wrong shape is
+# exactly the input it must handle: report a P0 and keep collecting the other
+# findings, never die in a traceback. These readers make "look through a
+# container whose wrong type is reported elsewhere" safe.
+
+def _dict(v) -> dict:
+    return v if isinstance(v, dict) else {}
+
+
+def _place_list(doc) -> list:
+    """places as a list of objects, silently dropping anything else — the
+    element-level P0s are check_document's job."""
+    v = doc.get("places")
+    return [p for p in v if isinstance(p, dict)] if isinstance(v, list) else []
+
+
+def _cat_list(doc) -> list:
+    v = doc.get("categories")
+    return [c for c in v if isinstance(c, dict)] if isinstance(v, list) else []
+
+
 # Character count can't compare a Chinese pitch with an English one: measured on
 # the card, ~28 CJK characters fill a line where ~55 Latin ones do. Counting the
 # wide ones as two puts both languages on the same ruler — the card's three-line
@@ -148,7 +169,7 @@ def _parse_date(s):
 
 def _trip_weekdays(trip) -> set[int] | None:
     """The set of ISO weekdays the trip covers. Returns None without dates."""
-    dates = trip.get("dates") or {}
+    dates = _dict(trip.get("dates"))
     start, end = _parse_date(dates.get("start")), _parse_date(dates.get("end"))
     if not start or not end or end < start:
         return None
@@ -169,6 +190,9 @@ def check_top_level(doc, rep: Report) -> None:
             rep.add("P0", "root", f"missing top-level field {key}")
 
     trip = doc.get("trip") or {}
+    if not isinstance(trip, dict):
+        rep.add("P0", "trip", f"trip must be an object, got {type(trip).__name__}")
+        trip = {}
     for f in ("destination", "country", "bbox", "timezone", "output_language",
               "local_language", "days", "party", "pace", "generated_at", "verified_at"):
         if _blank(trip.get(f)):
@@ -183,6 +207,14 @@ def check_top_level(doc, rep: Report) -> None:
     unknown_trip = set(trip) - KNOWN_TRIP_FIELDS
     if unknown_trip:
         rep.add("P2", "trip", f"fields outside the contract: {sorted(unknown_trip)}")
+
+    cats = doc.get("categories")
+    if cats is not None and not isinstance(cats, list):
+        rep.add("P0", "categories", f"categories must be an array of objects, got {type(cats).__name__}")
+    elif isinstance(cats, list):
+        for i, c in enumerate(cats):
+            if not isinstance(c, dict):
+                rep.add("P0", f"categories[{i}]", "element is not an object")
 
     # UI string override table (optional). The template ships en/zh built in,
     # selected by output_language; for other languages the AI translates the
@@ -211,7 +243,7 @@ def check_top_level(doc, rep: Report) -> None:
                         "the ui override is unnecessary and will shadow the built-in strings")
 
     retro = trip.get("retro")
-    if retro is not None and retro not in RETRO_STATES:
+    if retro is not None and not (isinstance(retro, str) and retro in RETRO_STATES):
         rep.add("P0", "trip", f"retro={retro!r} is invalid; must be one of {sorted(RETRO_STATES)}")
 
     verified = _parse_date(trip.get("verified_at"))
@@ -226,15 +258,17 @@ def check_top_level(doc, rep: Report) -> None:
 def check_place(p, idx, doc, rep: Report) -> None:
     pid = p.get("id") or f"#{idx}"
     where = f"places[{idx}] {pid}"
-    trip = doc.get("trip") or {}
+    # A wrong-typed trip was already reported in check_top_level; here it just
+    # degrades to "no trip context".
+    trip = _dict(doc.get("trip"))
 
     kind = p.get("kind") or "attraction"
-    if kind not in KINDS:
+    if not (isinstance(kind, str) and kind in KINDS):
         rep.add("P0", where, f"kind={p.get('kind')!r} is invalid; must be one of {sorted(KINDS)}")
         kind = "attraction"
 
     origin = p.get("origin")
-    if origin is not None and origin not in ORIGINS:
+    if origin is not None and not (isinstance(origin, str) and origin in ORIGINS):
         rep.add("P0", where, f"origin={origin!r} is invalid; must be one of {sorted(ORIGINS)}")
     # A stub is origin=user with no tier yet — once the AI completes it (fills
     # in tier and the rest), it must be validated against the full attraction
@@ -244,7 +278,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
     # When verification is blocked these fields may be empty — that's exactly
     # what "couldn't find out" means. Forcing them to be filled would make the
     # user treat a guess as verified information.
-    vstate = (p.get("verify") or {}).get("state")
+    vstate = _dict(p.get("verify")).get("state")
     excused = {"hours", "ticket", "status", "closed", "last_entry"} if vstate in ("blocked", "partial") else set()
 
     if kind == "lodging":
@@ -275,12 +309,13 @@ def check_place(p, idx, doc, rep: Report) -> None:
     for field, allowed in (("tier", TIERS), ("scale", SCALES),
                            ("status", STATUSES), ("booking", BOOKINGS)):
         v = p.get(field)
-        if v is not None and v not in allowed:
+        if v is not None and not (isinstance(v, str) and v in allowed):
             rep.add("P0", where, f"{field}={v!r} is invalid; must be one of {sorted(allowed)}")
-    if "choice" in p and p["choice"] not in CHOICES:
+    if "choice" in p and p["choice"] is not None \
+            and not (isinstance(p["choice"], str) and p["choice"] in CHOICES):
         rep.add("P0", where, f"choice={p['choice']!r} is invalid")
     v = p.get("verdict")
-    if v is not None and v not in VERDICTS:
+    if v is not None and not (isinstance(v, str) and v in VERDICTS):
         rep.add("P0", where, f"verdict={v!r} is invalid; must be one of {sorted(VERDICTS)}")
 
     # Pre-departure prep state (page-written; the AI must not pre-fill).
@@ -302,9 +337,13 @@ def check_place(p, idx, doc, rep: Report) -> None:
 
     # Lodging belongs to no attraction category and takes part in no quota, so
     # it needn't appear in categories
-    cat_ids = {c.get("id") for c in doc.get("categories") or []}
-    if kind != "lodging" and p.get("category") and p["category"] not in cat_ids:
-        rep.add("P0", where, f"category={p['category']!r} is not defined in categories")
+    cat_ids = {c.get("id") for c in _cat_list(doc) if isinstance(c.get("id"), str)}
+    cat = p.get("category")
+    if kind != "lodging" and cat:
+        if not isinstance(cat, str):
+            rep.add("P0", where, f"category must be a string, got {cat!r}")
+        elif cat not in cat_ids:
+            rep.add("P0", where, f"category={cat!r} is not defined in categories")
 
     # Coordinates
     c = p.get("coord")
@@ -353,7 +392,7 @@ def check_place(p, idx, doc, rep: Report) -> None:
             rep.add("P0", where, "verify must be an object {state, note, check}")
         else:
             st = v.get("state")
-            if st not in VERIFY_STATES:
+            if not (isinstance(st, str) and st in VERIFY_STATES):
                 rep.add("P0", where, f"verify.state={st!r} is invalid; must be one of {sorted(VERIFY_STATES)}")
             elif st != "verified":
                 if _blank(v.get("note")):
@@ -395,8 +434,8 @@ def check_place(p, idx, doc, rep: Report) -> None:
             rep.add("P2", where, 'scale="spot" without parent_id renders as a standalone card. '
                                  'If the area has a major place, attaching it keeps the list compact')
         else:
-            all_ids = {q.get("id") for q in doc.get("places") or []}
-            if parent not in all_ids:
+            all_ids = {q.get("id") for q in _place_list(doc) if isinstance(q.get("id"), str)}
+            if not isinstance(parent, str) or parent not in all_ids:
                 rep.add("P0", where, f"parent_id={parent!r} points at a nonexistent place")
 
     # Numeric fields
@@ -448,12 +487,12 @@ def check_place(p, idx, doc, rep: Report) -> None:
 
 
 def check_cross(doc, rep: Report) -> None:
-    places = doc.get("places") or []
+    places = _place_list(doc)
 
     seen: dict[str, int] = {}
     for i, p in enumerate(places):
         pid = p.get("id")
-        if not pid:
+        if not pid or not isinstance(pid, str):
             continue
         if pid in seen:
             rep.add("P0", f"places[{i}]", f"id {pid!r} duplicates places[{seen[pid]}]")
@@ -463,8 +502,12 @@ def check_cross(doc, rep: Report) -> None:
     # Category quotas
     counts: dict[str, int] = {}
     for p in places:
-        counts[p.get("category")] = counts.get(p.get("category"), 0) + 1
-    for c in doc.get("categories") or []:
+        cat = p.get("category")
+        if isinstance(cat, str):
+            counts[cat] = counts.get(cat, 0) + 1
+    for c in _cat_list(doc):
+        if not isinstance(c.get("id"), str):
+            continue
         n = counts.get(c.get("id"), 0)
         lo, hi = c.get("min"), c.get("max")
         label = c.get("label", c.get("id"))
@@ -518,8 +561,8 @@ def check_itinerary(doc, rep: Report) -> None:
         rep.add("P0", "itinerary", "itinerary must be an array")
         return
 
-    places = doc.get("places") or []
-    by_id = {p.get("id"): p for p in places if p.get("id")}
+    places = _place_list(doc)
+    by_id = {p.get("id"): p for p in places if isinstance(p.get("id"), str) and p.get("id")}
 
     seen_n: dict[int, int] = {}
     assigned: dict[str, list[int]] = {}      # place id -> which days it appears on
@@ -553,7 +596,7 @@ def check_itinerary(doc, rep: Report) -> None:
 
         for ei, ent in enumerate(entries):
             ewhere = f"{dwhere}.places[{ei}]"
-            if not isinstance(ent, dict) or not ent.get("id"):
+            if not isinstance(ent, dict) or not ent.get("id") or not isinstance(ent["id"], str):
                 rep.add("P0", ewhere, 'each entry must be an object of the form {"id": "..."}')
                 continue
             pid = ent["id"]
@@ -614,14 +657,15 @@ def check_itinerary(doc, rep: Report) -> None:
     # Within the departure window, any scheduled visit to a booking-required
     # place that isn't ticked off yet gets one aggregated warning — past that
     # point, "book it later" quietly becomes "arrived without a ticket".
-    start = _parse_date(((doc.get("trip") or {}).get("dates") or {}).get("start"))
+    start = _parse_date(_dict(_dict(doc.get("trip")).get("dates")).get("start"))
     if start:
         days_left = (start - date.today()).days
         if 0 <= days_left <= BOOKING_NUDGE_DAYS:
             unbooked = [
                 f"{(by_id.get(ent.get('id')) or {}).get('name')} (day {day.get('n')})"
                 for day in it if isinstance(day, dict)
-                for ent in (day.get("places") or []) if isinstance(ent, dict)
+                for ent in (day.get("places") if isinstance(day.get("places"), list) else [])
+                if isinstance(ent, dict) and isinstance(ent.get("id"), str)
                 if (by_id.get(ent.get("id")) or {}).get("booking") == "required"
                 and not ent.get("booked")
             ]
@@ -661,13 +705,18 @@ def _fetch(url: str) -> tuple[str, int | str]:
 
 def check_links(doc, rep: Report) -> None:
     targets: dict[str, list[str]] = {}
-    for i, p in enumerate(doc.get("places") or []):
+    places = doc.get("places")
+    for i, p in enumerate(places if isinstance(places, list) else []):
+        if not isinstance(p, dict):
+            continue
         where = f"places[{i}] {p.get('id')}"
-        for s in p.get("sources") or []:
-            if _is_url(s.get("url")):
+        srcs = p.get("sources")
+        for s in (srcs if isinstance(srcs, list) else []):
+            if isinstance(s, dict) and _is_url(s.get("url")):
                 targets.setdefault(s["url"], []).append(f"{where} sources")
-        for im in p.get("images") or []:
-            if _is_url(im.get("url")):
+        imgs = p.get("images")
+        for im in (imgs if isinstance(imgs, list) else []):
+            if isinstance(im, dict) and _is_url(im.get("url")):
                 targets.setdefault(im["url"], []).append(f"{where} images")
         if _is_url(p.get("booking_url")):
             targets.setdefault(p["booking_url"], []).append(f"{where} booking_url")
@@ -687,6 +736,23 @@ def check_links(doc, rep: Report) -> None:
             else:
                 for where in targets[url]:
                     rep.add("P1", where, f"link unreachable [{status}] {url}")
+
+
+def check_document(doc, rep: Report) -> None:
+    """Every offline check, in order. Any parseable JSON value is acceptable
+    input: a wrong shape is a P0 finding, never a traceback."""
+    if not isinstance(doc, dict):
+        rep.add("P0", "root", f"top-level value must be an object, got {type(doc).__name__}")
+        return
+    check_top_level(doc, rep)
+    if isinstance(doc.get("places"), list):
+        for i, p in enumerate(doc["places"]):
+            if isinstance(p, dict):
+                check_place(p, i, doc, rep)
+            else:
+                rep.add("P0", f"places[{i}]", "element is not an object")
+        check_cross(doc, rep)
+        check_itinerary(doc, rep)
 
 
 # ---------------------------------------------------------------- output
@@ -731,16 +797,8 @@ def main() -> int:
         return 2
 
     rep = Report()
-    check_top_level(doc, rep)
-    if isinstance(doc.get("places"), list):
-        for i, p in enumerate(doc["places"]):
-            if isinstance(p, dict):
-                check_place(p, i, doc, rep)
-            else:
-                rep.add("P0", f"places[{i}]", "element is not an object")
-        check_cross(doc, rep)
-        check_itinerary(doc, rep)
-    if args.check_links:
+    check_document(doc, rep)
+    if args.check_links and isinstance(doc, dict):
         check_links(doc, rep)
 
     if args.json:

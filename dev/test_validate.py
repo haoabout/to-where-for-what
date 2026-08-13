@@ -66,13 +66,9 @@ def base_doc() -> dict:
     }
 
 
-def run(doc: dict) -> validate.Report:
+def run(doc) -> validate.Report:
     rep = validate.Report()
-    validate.check_top_level(doc, rep)
-    for i, p in enumerate(doc["places"]):
-        validate.check_place(p, i, doc, rep)
-    validate.check_cross(doc, rep)
-    validate.check_itinerary(doc, rep)
+    validate.check_document(doc, rep)
     return rep
 
 
@@ -332,6 +328,54 @@ def main() -> int:
          "P0", "missing required field coord")
     case("illegal kind value",
          lambda d: d["places"][1].update(kind="hostel"), "P0", "kind='hostel' is invalid")
+
+    print("\nmalformed shapes · report P0, never traceback")
+    # The validator is the delivery gate for AI-produced data; a wrong
+    # container shape is exactly the input it must survive.
+    rep = validate.Report()
+    validate.check_document([{"id": "x"}], rep)
+    shape_ok = "top-level value must be an object" in messages(rep, "P0")
+    results.append(shape_ok)
+    print(f"  {PASS if shape_ok else FAIL} top-level array reports P0 instead of crashing")
+
+    case("trip is an array",
+         lambda d: d.update(trip=[1, 2]), "P0", "trip must be an object")
+    case("trip is a string",
+         lambda d: d.update(trip="大阪"), "P0", "trip must be an object")
+    case("a bad trip container doesn't stop the other checks",
+         lambda d: (d.update(trip=[1]), d["places"][1].pop("sources")),
+         "P0", "sources is empty")
+    case("categories is an object instead of an array",
+         lambda d: d.update(categories={"id": "museum"}),
+         "P0", "categories must be an array")
+    case("categories is a list of bare strings",
+         lambda d: d.update(categories=["museum", "landmark"]),
+         "P0", "element is not an object")
+    case("verify is a string",
+         lambda d: d["places"][1].update(verify="ok"), "P0", "verify must be an object")
+    case("verify is an array",
+         lambda d: d["places"][1].update(verify=["hours"]), "P0", "verify must be an object")
+    case("choice is an array",
+         lambda d: d["places"][1].update(choice=["yes"]), "P0", "is invalid")
+    case("kind is an object",
+         lambda d: d["places"][1].update(kind={"a": 1}), "P0", "is invalid")
+    case("tier is an array (unhashable enum value)",
+         lambda d: d["places"][1].update(tier=["S"]), "P0", "is invalid")
+    case("retro is an array",
+         lambda d: d["trip"].update(retro=["done"]), "P0", "retro=")
+    case("category is an array",
+         lambda d: d["places"][1].update(category=["museum"]),
+         "P0", "category must be a string")
+    case("parent_id is an array",
+         lambda d: d["places"][1].update(scale="spot", parent_id=["os-001"]),
+         "P0", "points at a nonexistent place")
+    case("itinerary entry id is an array",
+         lambda d: (with_itinerary(d),
+                    d["itinerary"][0]["places"].append({"id": ["os-001"]})),
+         "P0", "of the form")
+    case("trip.dates is an array (weekday and nudge checks degrade quietly)",
+         lambda d: (d["trip"].update(dates=["2026-09-12"]), with_itinerary(d)),
+         "P0", "")
 
     ok, total = sum(results), len(results)
     print(f"\n{'\033[92m' if ok == total else '\033[91m'}{ok}/{total} passed\033[0m")
