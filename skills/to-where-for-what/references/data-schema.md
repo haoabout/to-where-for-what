@@ -78,6 +78,7 @@ resort, not a routine.
 | `party` | string | ✅ | Travel party, e.g. "couple, 2 people" |
 | `pace` | string | ✅ | Stamina, e.g. "moderate; up to 12 km walking per day is fine" |
 | `bases` | array | | Home bases `[{name, coord, nights}]` |
+| `note` | string | | Trip-level note **for the AI, not the page** — nothing renders it. Half-day arrival/departure shapes (SKILL.md, "Why ask down to the hour") and the festival / public-holiday conclusion (research-playbook.md) live here; stage D reads it when checking hard constraints |
 | `generated_at` | string | ✅ | `YYYY-MM-DD`, when the data was generated |
 | `verified_at` | string | ✅ | `YYYY-MM-DD`, last online verification. **If >30 days before today, the page shows a staleness warning** |
 | `retro` | `done`\|`skipped` | | Post-trip retro state (SKILL.md, "Retro on past trips"). Absent = not yet asked; either value = never ask again |

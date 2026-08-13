@@ -24,7 +24,9 @@ Before spawning, the main conversation:
 
 After all subagents return: merge the partials into `places.json` (dedupe by
 name and coordinates — the same place found by two groups keeps one entry
-with merged `sources`), then run A3 yourself.
+with merged `sources`), write the `event` group's festival / public-holiday
+report into `trip.note` (the subagents cannot — they own only their own
+partial file), then run A3 yourself.
 
 ---
 
@@ -69,9 +71,23 @@ with merged `sources`), then run A3 yourself.
 > - Leave `choice`, `verdict`, and everything the schema marks as
 >   page-written or retro-written unset.
 >
+> **Only if `event` is one of your categories** — otherwise skip this
+> paragraph entirely: run the destination-level check in the playbook's
+> "Festivals and public holidays" section. Search the local-language
+> festival calendar and the tourism bureau's events page for the trip
+> window, and separately establish whether those dates touch a public
+> holiday or long weekend. Festivals that fit go into your partial file as
+> `event` places, with the hour and exact location in `detail`. The holiday
+> findings do **not** go into any file — you own only
+> `partial-<group>.json`, and `trip.note` belongs to the main conversation
+> — so report them in your reply instead.
+>
 > When done, reply with: how many places per category; which places you
 > could **not** verify and why; which quotas you could not honestly fill —
-> shortfalls are stated, never padded.
+> shortfalls are stated, never padded. If you ran the festival check, add:
+> the festivals found with their dates, and what the public-holiday
+> situation is — "nothing significant on" is a valid and required answer,
+> silence is not.
 
 ---
 

@@ -23,6 +23,45 @@ Bump rules:
 
 ---
 
+## 1.8.1 — 2026-08-13
+
+### Added
+
+- **Festivals and public holidays are now a required, named check** —
+  research-playbook.md gains a destination-level section for it. Until now
+  the only hook was the `event` category's one-word "seasonal", and every
+  worked example under it was about museum special exhibitions; a run could
+  miss a Songkran-sized event entirely and nothing in the pipeline would
+  notice. The check has two halves: **what's on** (local-language calendar
+  search, the tourism bureau's events page, venue news lists — English-only
+  queries return the three festivals every tourist blog knows) and **what a
+  public holiday does to the other 40 places** (mass closures, holiday-shifted
+  closure rules, transport, surcharges, crowds).
+- The **event-category subagent** now carries the check explicitly
+  (subagent-briefing.md), reports its findings in its reply, and the main
+  conversation writes them into `trip.note` on merge — a subagent owns only
+  its own `partial-<group>.json`.
+- **Stage D consumes it**: route-design.md treats an `event` place as
+  date- and hour-pinned (schedule it first, like a booked slot) and puts the
+  holiday consequences into "Caveats".
+- **checklist.md 1-9** and a delivery line make "nothing significant on" a
+  statement the user actually receives — an unchecked empty `event` category
+  and a checked-and-empty one are indistinguishable in the data otherwise.
+
+### Fixed
+
+- **`trip.note` is finally documented** in data-schema.md. `validate.py` has
+  always allowed it and SKILL.md has always used it for half-day trip shapes,
+  but it was missing from the `trip` field table.
+
+### Notes for updaters
+
+- Documentation only — no script, schema, or template change, and `event`
+  quotas stay 0–6 (the obligation added is to *look*, not to fill). Existing
+  `places.json` files validate unchanged.
+
+---
+
 ## 1.8.0 — 2026-08-13
 
 ### Changed

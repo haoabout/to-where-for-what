@@ -62,6 +62,12 @@ The validator blocks "closures cover the whole trip", but **partial conflicts
 are yours to schedule around**: a place closed Mondays on a trip containing a
 Monday must land on another day.
 
+**A public holiday in the window changes the rules themselves** — schedule
+against the holiday-adjusted closure, not the weekday one. "Closed Mondays,
+following day when Monday is a holiday" moves the closure onto Tuesday, and
+year-end / New Year style periods shut venues for a stretch that no
+`closed_days` weekday list expresses.
+
 ### 0-6. Coordinates inside the destination
 
 The validator uses `bbox`. But also eyeball the map view — **an obviously
@@ -114,6 +120,16 @@ never nudging a number to clear this line.
 
 ---
 
+### 1-9. The festival / public-holiday check actually ran
+
+Not "no `event` places, so presumably nothing was on". Either name the
+festivals that fall in the window with their dates, or state plainly that
+none do — and either way, the public-holiday conclusion is in `trip.note`.
+An empty `event` category that nobody checked and one that was checked and
+came up empty look identical in the data; only this item separates them.
+
+---
+
 ## 🔵 P2 · Nice to have
 
 ### 2-1. `photo_note` specific to position and time
@@ -143,6 +159,9 @@ Without these, the user forms wrong expectations:
 - [ ] **If the model has no vision capability**: say that images passed text
   checks only, not visual review — a wrong-looking photo spotted while
   filtering is worth reporting; swapping is cheap
+- [ ] **Which festivals fall in the window, and what the public holidays do**
+  — or, explicitly, that none do. Without the explicit "none", the user can't
+  tell a quiet fortnight from an unchecked one
 - [ ] **Weather beyond 16 days is a historical average, not a forecast**
 - [ ] **After the server stops**, double-click opening still reads fine, but no
   direct file writes and no OSM raster basemap

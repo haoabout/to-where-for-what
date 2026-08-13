@@ -40,9 +40,22 @@ home bases (`trip.bases`) set each day's start and end points.
 | Night value | `night: true` | Schedule at the end of its day |
 | Last entry | `last_entry` | **Must** be stated for each day's final place — don't let anyone rush over for nothing |
 | Renovation / closed | `status ≠ open` | Shouldn't be in the route; if the user chose it anyway, explain in the body |
+| Festival / holiday | `trip.note` + any `event` place | Both are date- and hour-bound; see below |
 
 Closure-day conflicts are usually what determines the route's skeleton — solve
 them first, then arrange everything else.
+
+**Festivals are not ordinary places.** An `event` place is often a single
+evening, a single morning, or one street on one date — it pins its day, and
+frequently its hour, before anything else moves. Schedule it first, like a
+booked slot, then build the day around it; a matsuri dropped into an
+afternoon slot because the map said it was nearby is a matsuri missed.
+
+And if `trip.note` records a public holiday in the window, re-read the
+closure column with that in mind: holiday rules override ordinary ones
+("closed Mondays, following day when Monday is a holiday" moves the
+closure), timetables change, and the crowd estimate behind every duration is
+wrong. Anything the user has to act on goes into "Caveats".
 
 ---
 
@@ -251,6 +264,12 @@ why that slot. This module is explicitly requested in the user's preferences.
 Only what **genuinely needs care**: closure-day traps, pickpocket zones,
 cash-only places, expectation management.
 No filler like "stay safe" or "mind your belongings".
+
+**Public holidays in the window belong here** — the `trip.note` conclusion,
+turned into what the user must actually do about it: which days lose venues
+to holiday closures, where the crowds and the surcharges land, what the
+transport does. Same bar as everything else in this section: a concrete
+consequence, not "it may be busy".
 
 ---
 

@@ -16,6 +16,8 @@ to it:
 - [Category quotas](#category-quotas) — incl. flexing toward interests (floors
   are hard), wildcard slots, small cities, `event`
 - [Information that must be in the first pass](#information-that-must-be-in-the-first-pass)
+- [Festivals and public holidays](#festivals-and-public-holidays-are-a-destination-level-check)
+  — the one check that belongs to the dates, not to a place
 - [Search strategy](#search-strategy) — sources hierarchy, two pages per
   place, snippets are not a source, unverifiable ≠ delete, fake official
   domains, exhibition runs, hidden gems, micro-spots
@@ -105,6 +107,12 @@ known**. Current exhibitions must be looked up online, never recalled from
 memory. Record each exhibition's start/end dates and confirm they cover the
 user's trip days.
 
+The category is **wider than museum special exhibitions**: festivals and
+matsuri, temple fairs, fireworks, processions, night markets, and
+season-only openings all land here. The quota stays 0–6 either way — the
+obligation is to *look*, not to fill. How to look:
+[Festivals and public holidays](#festivals-and-public-holidays-are-a-destination-level-check).
+
 ---
 
 ## Information that must be in the first pass
@@ -122,6 +130,61 @@ Without these fields, the user's filtering is wasted:
 
 Left for stage D: exact walking routes inside venues, gallery-level detail,
 same-day weather adaptation, specific camera angles.
+
+---
+
+## Festivals and public holidays are a destination-level check
+
+Everything else in this file verifies places one at a time. This check
+belongs to the **dates**, and it has no owner unless you give it one: run it
+once for the whole trip, alongside the category searches. Skipping it is the
+difference between arriving in the middle of Songkran and finding out about
+Songkran on arrival.
+
+### 1. What is on — read a calendar, not a list of venues
+
+- Search **in the local language**, always: `<city> <year><month> 祭り` ·
+  `เทศกาล <เดือน>` · `<city> festival <month> <year>`. English-only queries
+  return the three festivals a tourist blog already knows.
+- The **official tourism bureau's events / calendar page** is the canonical
+  list — same authority ranking as its place pages (see the source hierarchy
+  below).
+- Big venues, shrines, and temples announce their own dates in their **news
+  lists** — the page you are already fetching for closure notices.
+
+Record start/end dates for every hit and confirm they cover the trip days,
+exactly as for exhibition runs. One that ends the day before arrival earns a
+line in `trip.note` and nothing more.
+
+Festivals are **time-bound in a way ordinary places are not**: a matsuri is
+one evening, a procession is one morning on one street, fireworks are a
+single date cancelled by rain. Put the hour and the exact location in
+`detail` — a festival scheduled like a museum is a festival missed.
+
+### 2. What a public holiday does to the other 40 places
+
+This half isn't about finding something to do; it's about everything else
+behaving differently. Establish whether the trip window touches a national
+holiday, a long weekend, or a religious period — and if it does, check:
+
+| Check | Typical failure |
+|---|---|
+| Mass closures and altered hours | Public museums shut for a whole New Year period; "closed Mondays, **following day when Monday is a holiday**" quietly shifts the closure onto a day you scheduled |
+| Transport | Holiday timetables running reduced — or the opposite, extra late services; streets closed for a procession |
+| Prices | Hotel and ticket peak-date surcharges, which the cost summary won't know about |
+| Crowds | A two-hour queue where the normal wait is ten minutes |
+
+Write the conclusion into **`trip.note`** as one or two plain sentences.
+Stage D reads it when checking hard constraints and turns it into the
+guide's "Caveats" paragraph.
+
+### 3. "Nothing on" is a result, not a skip
+
+If the window is genuinely quiet, say so at delivery: "no significant local
+festival falls in these dates." Same rule as an unfillable quota — the
+shortfall is stated honestly, never padded with a minor event dressed up as
+a headliner, and never silently omitted, which leaves the user unable to
+tell whether it was ever checked.
 
 ---
 
@@ -553,6 +616,8 @@ face is backlit at noon".
 ## Pre-output self-check
 
 - [ ] Every category meets its minimum, or the shortfall is honestly explained
+- [ ] The festival / public-holiday check actually ran, and its conclusion —
+      including "nothing significant on" — is in `trip.note`
 - [ ] Every place has `sources` with URLs actually visited
 - [ ] Every `status` was confirmed; none filled in as `open` on assumption
 - [ ] `closed_days` agrees with the `closed` text

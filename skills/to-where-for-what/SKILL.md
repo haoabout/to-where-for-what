@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 1.8.0
+version: 1.8.1
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -337,7 +337,7 @@ Destination is mandatory. Four more:
 
 | Ask | Why |
 |---|---|
-| **Travel dates + number of days** | Determines closure-day conflicts, seasonal specials, limited-run exhibitions, weather. Without dates, none of these can be done |
+| **Travel dates + number of days** | Determines closure-day conflicts, seasonal specials, limited-run exhibitions, local festivals, public-holiday effects, weather. Without dates, none of these can be done |
 | **Arrival and departure times** | See "Why ask down to the hour" below |
 | **Party + stamina** | Determines route intensity and place selection |
 | **Home base** | Address if a hotel is booked, rough area if not. Determines each day's start and end points |
@@ -409,6 +409,15 @@ Key points:
 - Hours, closure days, booking status, tickets, renovation status **must be
   obtained in the first pass** — otherwise the user filters for an hour and then
   discovers the place is shut that day
+- **Run the festival / public-holiday check once for the whole trip** — the
+  one check that belongs to the dates rather than to a place: what's on
+  during the window (local-language calendar, not an English tourist list),
+  and what a public holiday does to the other 40 places (mass closures,
+  altered hours, transport, prices, crowds). Festivals that fit become
+  `event` places; the holiday conclusion goes into `trip.note`, where stage D
+  picks it up. "Nothing significant on" is a result to state, not a reason to
+  say nothing. Full rules:
+  [research-playbook.md](references/research-playbook.md#festivals-and-public-holidays-are-a-destination-level-check)
 - Coordinates use the `{"lon":…, "lat":…}` object form, never an array
 - Image URLs: let `enrich.py`'s candidate pipeline run first — it collects up
   to 2 verified candidates per place into `image-audit.json`; the verdicts
