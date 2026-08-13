@@ -1,9 +1,9 @@
 # dev/ — development-time verification tools
 
-Two things kept for whoever works on the skill: a **regression suite** for the
-validator, and a **probe** for the browser-capability boundary the template's
-save path depends on. Neither is part of the skill itself; `npx skills add`
-does not install them.
+Verification tools kept for whoever works on the skill: regression suites for
+the validator and the local save server, and a **probe** for the
+browser-capability boundary the template's save path depends on. None of this
+is part of the skill itself; `npx skills add` does not install them.
 
 ## test_validate.py
 
@@ -13,6 +13,18 @@ validator or to the data contract it enforces.
 
 ```bash
 python3 dev/test_validate.py
+```
+
+## test_server.py
+
+Black-box tests for `build.py`'s local save server: builds a throwaway trip,
+starts a real `--serve` process on a random port, and talks to it over HTTP.
+Asserts the prep round-trip, the save-token / Origin / Content-Type gates, and
+that dotfiles are never served. Run after any change to `build()`, `merge()`,
+`SERVER_SRC`, or the template's save path.
+
+```bash
+python3 dev/test_server.py
 ```
 
 ## capability-probe.html
