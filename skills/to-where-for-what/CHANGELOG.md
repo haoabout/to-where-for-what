@@ -23,6 +23,48 @@ Bump rules:
 
 ---
 
+## 1.8.0 — 2026-08-13
+
+### Changed
+
+- **Image flow reworked into a candidate pipeline** (`enrich.py --images`).
+  Instead of writing the first hit, each place now collects up to 3
+  verified, deduplicated candidates across all source families (Wikipedia
+  exact title + redirects → Wikidata P18 → Wikipedia search → official
+  meta/body images → Commons category via P373 → geosearch → Openverse),
+  graded `high`/`medium`/`low` by identity evidence. Only exact-identity
+  `high` candidates are provisionally written, and only for places with no
+  image; official-site images and events' venue hits cap at `medium`
+  (a clean-named news photo passes any filename filter — Siam Paragon
+  lesson), and geo hits whose title doesn't match the place stay `low`
+  no matter how close (Old Customs House lesson).
+- Every candidate is verified with a real streaming `GET` (2xx + image MIME
+  + magic bytes) — og:image URLs routinely 404 (theCOMMONS `share.webp`
+  lesson), and `HEAD` lies on some hosts. Network layer gains a per-run
+  cache, per-domain throttling, and 429/5xx retries honoring `Retry-After`.
+  Failures are recorded, not silently swallowed.
+- Existing images are re-verified each run as `existing` candidates; a dead
+  URL triggers fresh collection, but existing images are **never
+  auto-replaced** — that decision belongs to the visual pass. Incremental
+  by default; `--recheck` re-collects everywhere.
+
+### Added
+
+- **`image-audit.json`** next to `places.json` (own `schema_version: 1`;
+  metadata and URLs only, no image bytes): every candidate with source,
+  confidence, matched title, network check, and visual verdict.
+- **`enrich.py --apply-image-review images-patch.json`** — validates the
+  review agent's output (now `patches` + `reviews`), applies it atomically,
+  and writes verdicts back into the audit. An invalid patch changes nothing.
+- `dev/test_enrich_images.py` — 21 no-network regression checks for the
+  pipeline.
+
+`places.json` schema unchanged — no `schema_version` bump; existing trips
+keep working. The A3 image subagent now judges pre-collected candidates
+(briefing rewritten) instead of searching from scratch.
+
+---
+
 ## 1.7.0 — 2026-08-13
 
 ### Added

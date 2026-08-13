@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 1.7.0
+version: 1.8.0
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -410,7 +410,8 @@ Key points:
   obtained in the first pass** — otherwise the user filters for an hour and then
   discovers the place is shut that day
 - Coordinates use the `{"lon":…, "lat":…}` object form, never an array
-- Image URLs: let `enrich.py`'s chain run first; leftovers and verification
+- Image URLs: let `enrich.py`'s candidate pipeline run first — it collects up
+  to 3 verified candidates per place into `image-audit.json`; the verdicts
   belong to the A3 image subagent. Wikimedia thumbnail URLs specifically are
   **never hand-assembled** (see the playbook's image section)
 - **Create the lodging entry now** — the moment the questionnaire yields a
@@ -455,13 +456,17 @@ splits two ways:
   mismatch, or a place the user really means to visit?) need trip context
   only you have. Rules: playbook, "Getting coordinates".
 - **Images — spawn one image subagent, always**, the moment
-  `--coords --images` finishes. It finds images for the misses and visually
-  verifies every image the chain filled — the slowest part of A3 — in the
-  background while you fix coordinates and run `--transit`. Build its prompt
-  from [references/image-agent-briefing.md](references/image-agent-briefing.md)
+  `--coords --images` finishes. The script has already collected up to 3
+  verified candidates per place into `image-audit.json` (only exact-identity
+  `high` hits were provisionally written; everything else waits); the agent
+  judges the candidates visually — contact sheets, not one by one — and
+  writes `images-patch.json` (patches + reviews), in the background while
+  you fix coordinates and run `--transit`. Build its prompt from
+  [references/image-agent-briefing.md](references/image-agent-briefing.md)
   — copy the template, fill the placeholders; don't improvise. Prefer a
-  vision-capable model. It writes only `images-patch.json`; review it and
-  merge into `places.json` before validating (merge rules in the briefing).
+  vision-capable model. Merge its output with
+  `enrich.py <places.json> --apply-image-review images-patch.json` — it
+  validates, applies atomically, and writes verdicts back to the audit.
   No subagent capability? Do the image work yourself, same playbook rules.
 
 **Delivery requires zero P0.** Read each P1 and decide to fix or ignore.
@@ -586,6 +591,7 @@ current choices. That is the form to hand back to an AI; the built page is
 ├── brief.md          # trip parameters (answers to the opening questionnaire)
 ├── places.json       # ★ the single source of truth; every view renders from it
 ├── transit.geojson   # metro lines & stations (from enrich.py --transit)
+├── image-audit.json  # image candidates + verdicts (from enrich.py --images)
 ├── route.md          # guide body (you write this)
 └── trip.html         # build artifact — never hand-edit
 ```

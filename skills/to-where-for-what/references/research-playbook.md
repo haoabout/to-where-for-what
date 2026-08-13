@@ -282,32 +282,55 @@ another source — or don't include the place.
 Without online confirmation, `open` is forbidden. It's the only mechanism
 preventing "arrived to find it under renovation".
 
-### Images: let the script's chain run first, then fill gaps by hand
+### Images: the candidate pipeline runs first, then the visual pass decides
 
-`enrich.py --images` walks the sources below and stops at the first hit.
-Composite display names (「梅田蓝天大厦 · 空中庭园展望台」) are retried as
-variants — stripped of parentheticals, split on ·. Places whose `category`
-is `event` try their official page FIRST: the venue photo every other source
-would find is not the event.
+`enrich.py --images` no longer stops at the first hit. Per place it collects
+up to **3 verified, deduplicated candidates** across the source families
+below — every candidate is fetched with a real streaming `GET` (2xx + image
+MIME + magic bytes; og:image URLs routinely 404, and some CDNs serve an HTML
+error page with 200) — grades each by identity confidence, and records
+everything in `image-audit.json` next to `places.json`:
 
-1. **Wikipedia lead image by name** — most representative, rarely mislabeled
-2. **Wikidata P18 by name** — catches items with no Wikipedia article (small
-   galleries, markets); only accepted when the entity's coordinate falls
-   inside the trip bbox, so same-name entities elsewhere can't sneak in
-3. **Nearest Wikipedia article by coordinate** (geosearch, 150m) — names
-   that match no article title but whose subject is right there on the map
-4. **Commons photos shot at the coordinate** (geosearch, 120m) — streetscapes
-   (arcades, alleys, piers) no article covers but photographers have shot
-5. **The place's own official page** (`sources[]` → og:image) — routinely the
-   only usable source for pop-up events and small shops
-6. **Openverse keyword search** — aggregated CC photos (Flickr etc.), no API
-   key; local-language query first, then English; highest mislabel risk,
-   hence last
+- `high` — exact identity: Wikipedia exact-title/redirect lead image, or a
+  Wikidata P18 whose entity matches **both** name and bbox. Only these are
+  provisionally written to `places.json`, and only for places that had no
+  image at all.
+- `medium` — Wikipedia search hits, official-site og/meta/body images,
+  Commons category members. Plausible but not proven; the visual pass decides.
+- `low` — pure geo hits, Openverse, weak name evidence. **Distance never
+  decides identity**: a geosearch hit whose title doesn't match the place's
+  names stays low no matter how close (measured in Bangkok — the Old Customs
+  House won on distance for a place whose coordinate sat 180m off).
 
-When even that chain comes up empty, **fill `images` manually with a direct
-link from an official page**: the venue's own site or official social account
-(a press-kit photo, a post). Two conditions: the URL actually loads (fetch
-it, don't assume), and the photo shows *this* place. This is a personal-use
+Source families, in trust-then-cost order: Wikipedia exact title + redirects
+→ Wikidata P18 (bbox-checked via P625) → Wikipedia search → official pages
+(og/twitter/JSON-LD/itemprop meta, then body `img`/`srcset`) → Commons
+category via P373 (one subcategory level) → geosearch (Wikipedia 150m,
+Commons 120m) → Openverse. Composite display names (「梅田蓝天大厦 ·
+空中庭园展望台」, 「大邮政大楼与 TCDC 曼谷」) are retried as variants —
+parentheticals stripped, split on `·`/`&`/`and`/`与` and friends. Places
+whose `category` is `event` scan their official page FIRST, and their
+Wikipedia/Wikidata hits are capped at medium: an exact-title hit on a name
+segment is the *venue's* facade, and an exhibition must never be represented
+by the building it happens in. An official og:image is capped at medium for
+the same reason from the other side — it can be a logo, a campaign banner,
+or a news photo of an event at the venue (measured: Siam Paragon), and no
+filename filter catches a clean-named news photo.
+
+Existing images aren't trusted either: each run re-verifies them as
+`existing` candidates, and a dead URL triggers fresh collection — but an
+existing image is **never auto-replaced**; that swap belongs to the visual
+pass. Every failure (404, 429, non-image, decode, identity mismatch) lands
+in the audit instead of being silently swallowed.
+
+The visual pass (the A3 image subagent, or you) reads `places.json` +
+`image-audit.json`, judges the candidates, and hands back
+`images-patch.json`; merge it with `--apply-image-review`, which validates,
+applies atomically, and writes verdicts back into the audit. When the whole
+pipeline comes up empty, **fill `images` manually with a direct link from an
+official page**: the venue's own site or official social account (a
+press-kit photo, a post). Two conditions: the URL actually loads (fetch it,
+don't assume), and the photo shows *this* place. This is a personal-use
 tool, so the licensing posture is pragmatic — but keep `credit` honest about
 where the image came from. Truly nothing anywhere? Leave it empty; images
 are optional, wrong images are not.
@@ -347,14 +370,19 @@ it. Most mislabels leak into text: that subway-station mismatch above carried
 the filename `Osaka-subway-T19-Nakazakicho-station.jpg`, catchable with no
 eyes at all. Per source:
 
+The audit's `source` tag tells you which rule applies:
+
 | Source | Text-only rule |
 |---|---|
-| Wikipedia lead image (by name) | Trust as-is — lead images are rarely mislabeled |
-| Wikidata P18 | Keep only if the entity label / filename relates to the place name; otherwise drop |
-| Wikipedia geosearch (`wiki-geo`) | Keep only if the found article's title relates to the place name — the nearest article can be a neighbor |
-| Commons geosearch (`commons-geo`) | Keep only when the filename / description relates to the place or its street; otherwise drop |
-| Official og:image (`official`) | Confirm the URL loads; drop if the filename screams logo/banner (`logo`, `ogp`, `banner`) |
-| Openverse | Strictest: keep only when title / tags / filename contain the place name; otherwise leave empty |
+| `wikipedia` (exact title/redirect) | Trust as-is — lead images are rarely mislabeled |
+| `wikidata` | Keep only if `matched_title` / filename relates to the place name; otherwise drop |
+| `wiki-search` | Keep only if the hit article's title relates to the place name |
+| `official-meta` / `official-body` | Confirm the URL loads; drop if the filename screams logo/banner (`logo`, `ogp`, `banner`) — and remember a clean-named news photo passes this filter while still being wrong |
+| `commons-category` | Keep only when the filename relates to the place — the first file in a category can be anything |
+| `wiki-geo` | Keep only if the found article's title relates to the place name — the nearest article can be a neighbor |
+| `commons-geo` | Keep only when the filename / description relates to the place or its street; otherwise drop |
+| `openverse` | Strictest: keep only when title / tags / filename contain the place name; otherwise leave empty |
+| `existing` | Already on the page; drop only with a reason (dead URL, wrong subject per the rules above) |
 | Official-site direct link (manual) | Confirm the URL loads; a venue's own site doesn't misphotograph itself |
 
 Then **tell the user at delivery, explicitly**: the model in use has no vision,
