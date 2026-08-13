@@ -285,7 +285,7 @@ preventing "arrived to find it under renovation".
 ### Images: the candidate pipeline runs first, then the visual pass decides
 
 `enrich.py --images` no longer stops at the first hit. Per place it collects
-up to **3 verified, deduplicated candidates** across the source families
+up to **2 verified, deduplicated candidates** across the source families
 below — every candidate is fetched with a real streaming `GET` (2xx + image
 MIME + magic bytes; og:image URLs routinely 404, and some CDNs serve an HTML
 error page with 200) — grades each by identity confidence, and records

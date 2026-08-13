@@ -411,7 +411,7 @@ Key points:
   discovers the place is shut that day
 - Coordinates use the `{"lon":…, "lat":…}` object form, never an array
 - Image URLs: let `enrich.py`'s candidate pipeline run first — it collects up
-  to 3 verified candidates per place into `image-audit.json`; the verdicts
+  to 2 verified candidates per place into `image-audit.json`; the verdicts
   belong to the A3 image subagent. Wikimedia thumbnail URLs specifically are
   **never hand-assembled** (see the playbook's image section)
 - **Create the lodging entry now** — the moment the questionnaire yields a
@@ -456,7 +456,7 @@ splits two ways:
   mismatch, or a place the user really means to visit?) need trip context
   only you have. Rules: playbook, "Getting coordinates".
 - **Images — spawn one image subagent, always**, the moment
-  `--coords --images` finishes. The script has already collected up to 3
+  `--coords --images` finishes. The script has already collected up to 2
   verified candidates per place into `image-audit.json` (only exact-identity
   `high` hits were provisionally written; everything else waits); the agent
   judges the candidates visually — contact sheets, not one by one — and

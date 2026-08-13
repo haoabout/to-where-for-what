@@ -294,7 +294,8 @@ def case_openverse_last(tmp: Path) -> None:
     _, audit, _ = run_pipeline([p], net, tmp)
     srcs = [c["source"] for c in cands(audit, "bkk-x01") if c["check"]["ok"]]
     check("wikipedia and official fill the cap before openverse",
-          len(srcs) == 3 and "openverse" not in srcs, f"sources={srcs}")
+          len(srcs) == enrich.MAX_CANDIDATES and "openverse" not in srcs,
+          f"sources={srcs}")
     check("openverse not even queried once the cap is reached",
           not any("openverse" in u for u in net.log))
 
@@ -351,8 +352,8 @@ def case_cache_and_dedupe(tmp: Path) -> None:
           len(fetches) == 1, f"fetches={len(fetches)}")
 
 
-def case_cap_three(tmp: Path) -> None:
-    """候选上限 3 生效:官网正文多图时只保留 3 个有效候选。"""
+def case_cap_limit(tmp: Path) -> None:
+    """候选上限(MAX_CANDIDATES)生效:官网正文多图时只保留上限数量的有效候选。"""
     net = FakeNet()
     imgs = "".join(f'<img src="/p{i}.jpg">' for i in range(6))
     net.on("official.example", status=200, body=imgs.encode(), ctype="text/html")
@@ -361,7 +362,8 @@ def case_cap_three(tmp: Path) -> None:
     p = place(sources=[{"title": "官网", "url": "https://official.example/"}])
     _, audit, _ = run_pipeline([p], net, tmp)
     ok_n = sum(1 for c in cands(audit, "bkk-x01") if c["check"]["ok"])
-    check("verified candidates capped at 3", ok_n == 3, f"ok={ok_n}")
+    check(f"verified candidates capped at {enrich.MAX_CANDIDATES}",
+          ok_n == enrich.MAX_CANDIDATES, f"ok={ok_n}")
 
 
 def case_existing_flow(tmp: Path) -> None:
@@ -511,7 +513,7 @@ def main() -> int:
                                 case_og_dead_body_alive, case_get_not_head,
                                 case_commons_subcat, case_event_priority,
                                 case_openverse_last, case_retry_429,
-                                case_cache_and_dedupe, case_cap_three,
+                                case_cache_and_dedupe, case_cap_limit,
                                 case_existing_flow, case_generic_redirect,
                                 case_lows_dont_crowd, case_apply_review]):
             d = base / f"c{i}"

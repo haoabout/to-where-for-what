@@ -203,7 +203,7 @@ def fill_coords(doc: dict, dry: bool) -> int:
 # --apply-image-review. Every candidate and every failure is recorded in
 # image-audit.json next to places.json: metadata and URLs only, never bytes.
 
-MAX_CANDIDATES = 3
+MAX_CANDIDATES = 2
 AUDIT_NAME = "image-audit.json"
 
 # --- network layer: one choke point for the whole image pipeline.

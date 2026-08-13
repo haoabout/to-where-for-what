@@ -8,7 +8,7 @@ template below, fill every `<placeholder>`.
 
 Unlike the stage-A search agents, this one is spawned **once, always, in the
 background** — right after `enrich.py --coords --images` finishes. The script
-has already collected up to 3 verified candidates per place into
+has already collected up to 2 verified candidates per place into
 `image-audit.json` (only exact-identity `high` hits were provisionally
 written to `places.json`; every `medium`/`low` candidate waits), so the
 agent's job is **judging**, not searching: look at the candidates, pick the
@@ -23,15 +23,17 @@ Before spawning, the main conversation:
    the script runs.
 2. **Substitutes absolute paths** for `<ABS_SKILL_ROOT>` and
    `<ABS_TRIP_DIR>` — the subagent's working directory may differ.
-3. **Picks the model**: default **Sonnet**, not the usual one-tier-below
-   rule — the job is a yes/no visual judgment over pre-collected
-   candidates, and measured on Bangkok (41 places, 70 candidates) a
-   top-tier model spent 20+ minutes on the download-look-record loop that
-   a smaller one handles as well. Escalate a tier only when the trip is
-   dense with hard identity calls (look-alike branches, event key visuals).
-   Whatever the tier, it **must be vision-capable**. A text-only agent must
-   downgrade to the playbook's per-source text rules — and its report must
-   say so, so delivery can disclose it.
+3. **Picks the model**: default **Sonnet** where available, not the usual
+   one-tier-below rule — the job is a yes/no visual judgment over
+   pre-collected candidates, and measured on Bangkok (41 places, 70
+   candidates) a top-tier model was no better, only pricier. Runtimes
+   without Sonnet (Codex and friends) just use their available
+   vision-capable model — the model matters far less than the loop.
+   Escalate a tier only when the trip is dense with hard identity calls
+   (look-alike branches, event key visuals). Whatever the tier, it **must
+   be vision-capable**. A text-only agent must downgrade to the playbook's
+   per-source text rules — and its report must say so, so delivery can
+   disclose it.
 
 After the agent returns:
 
@@ -69,7 +71,7 @@ main conversation, by the same playbook rules.
 > visual pass decides" through "No vision capability? Verify textually, and
 > say so" — that is the contract for this task.
 >
-> `image-audit.json` holds up to 3 verified candidates per place, each with
+> `image-audit.json` holds up to 2 verified candidates per place, each with
 > `source`, `confidence` (high/medium/low/existing), `matched_title`, and a
 > network check. Your job, per place:
 >

@@ -28,7 +28,7 @@ Bump rules:
 ### Changed
 
 - **Image flow reworked into a candidate pipeline** (`enrich.py --images`).
-  Instead of writing the first hit, each place now collects up to 3
+  Instead of writing the first hit, each place now collects up to 2
   verified, deduplicated candidates across all source families (Wikipedia
   exact title + redirects → Wikidata P18 → Wikipedia search → official
   meta/body images → Commons category via P373 → geosearch → Openverse),
