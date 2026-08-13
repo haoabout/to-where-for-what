@@ -9,14 +9,58 @@ Bump rules:
 - **MAJOR** — breaks existing user state: a `schema_version` bump, a field
   rename or semantic change in `places.json`, a `preferences.md` section
   whose meaning changed. Requires migration notes in the entry.
-- **MINOR** — new behavior or new optional fields, backward compatible.
-- **PATCH** — fixes and copy edits, no behavior change.
+- **MINOR** — a sizeable new capability: a new view, a new pipeline stage,
+  a reworked interaction model. Backward compatible.
+- **PATCH** — everything smaller, and it is the *default* bump: fixes, copy
+  edits, and small behavior improvements all land here (1.4.5-style).
+  Routine work should move the third number, not the second.
 
 > **Renumbered 2026-08-13**: the 2.x line was over-eager — by the rules
 > above, nothing in it broke user state, so those releases were MINORs
 > wearing MAJOR numbers. Old ↔ new: 2.1.0 = 1.2.0, 2.2.0 = 1.3.0,
 > 2.3.0 = 1.4.0, 2.4.0 = 1.5.0. An install reporting 2.x is *older* than
 > 1.5.0 despite the bigger number.
+
+---
+
+## 1.6.0 — 2026-08-13
+
+### Changed
+
+- **Deck cards now carry the full detail** — the card IS the detail page
+  (shared body with the dialog via `detailBodyHTML`), scrollable in place,
+  so reading and deciding never leave the deck and the throw/stamp physics
+  stay visible. Cards grew to 560px × up to ~860px (progress folded into
+  the toolbar as a quiet `n / total`; maybe pile moved into the left wing
+  under no; action buttons flattened to one band with keys beside them).
+  Replaces the short-lived detail-lightbox browsing (`←/→` paging) that
+  never shipped in a release.
+- **Throw detection is sector-based** — one radial threshold (120px), and
+  you throw toward where the pile actually sits: right cone = yes,
+  down/down-left = maybe, the rest of the left half = no, straight up
+  springs back. The card shrinks toward mini-card size as it travels;
+  stamps are centred, hollow and big. On touch, vertical pan scrolls the
+  card (maybe = button/S); the mouse keeps all four directions.
+- **Rating tokens unified as literal no / maybe / yes** in every language,
+  ordered no-left / maybe / yes-right everywhere (cards' pick row, filters,
+  piles). Keys: A/S/D rate — in the deck and in any place-detail dialog
+  (list/map open it; no advance there); Z / Backspace undo.
+- `enrich.py --images` finds far more: composite display names retried as
+  variants, two geo fallbacks (nearest Wikipedia article; Commons photos
+  shot at the spot), official-page og:image in the chain (events try it
+  first), Openverse queried in the local language. Measured on the Osaka
+  trip: 25 missing → 25 candidates (verification pass still adjudicates).
+
+### Fixed
+
+- Transit legend collapses to a single chip row with a `+N` overflow chip;
+  over-long line refs (Bangkok's airport APM) truncate with the full name
+  in the tooltip.
+- The disabled Guide tab now says why: instant hover/focus bubble plus a
+  toast on click/tap (`aria-disabled`, so Safari and touch get it too).
+- Portrait and square photos display whole on the media band's paper
+  backing instead of being cover-cropped to a sliver; photo-less pile minis
+  get the same paper fill and category mark.
 
 ---
 
