@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 2.2.0
+version: 2.3.0
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -221,7 +221,10 @@ first scan:
    the to-complete list
 2. Run them through the stage-A research pipeline: verify hours / tickets /
    booking online, write `pitch` and `detail`, set `tier`/`scale`/`category`,
-   fill `name_local` (contract: data-schema.md, "User stubs")
+   fill `name_local` (contract: data-schema.md, "User stubs"). **3 or more
+   stubs → spawn one completion subagent** (prompt: subagent-briefing.md,
+   "Variant: completing user stubs" — it finds and verifies images too);
+   1–2 → do it in the main conversation, a spawn costs more than it saves
 3. **Keep the `origin: "user"` field** (it records provenance, not a to-do flag),
    and **keep the user's existing `choice` and any schedule references** — a
    place the user deliberately searched for and added usually already has
@@ -509,6 +512,9 @@ Key points:
 - Cluster by `area`; **at most 1–2 areas per day**
 - Exclude conflicts with `closed_days`; put `night: true` places in the evening;
   draw rain alternatives from `indoor: true`
+- Transport numbers are looked up, never estimated — and the lookups can go
+  to a subagent while you write (route-design.md, "Delegate the lookups");
+  you keep the segment planning and write the table yourself
 - Write to `trips/<trip>/route.md` in Markdown
 - List items starting with `09:30 ` render as a timeline automatically — **no
   special syntax**
@@ -586,6 +592,15 @@ localize automatically via `Intl`; no work needed there.
 
 ## Pre-delivery self-check
 
+Once `validate.py` is at zero P0, **spawn the verify subagent** — prompt from
+[references/verify-agent-briefing.md](references/verify-agent-briefing.md).
+It re-opens sources with fresh eyes (you checking data you wrote repeats
+your own misreadings) and handles the web-facing checklist items in the
+background while you do the one thing it can't: open the built page and look
+at the render. Adjudicate its findings — it's briefed to over-report — fix
+what's real, then finish the checklist. No subagent capability? Run every
+check yourself, as before.
+
 Run through **[references/checklist.md](references/checklist.md)**, especially:
 
 - [ ] `validate.py` reports zero P0
@@ -633,6 +648,7 @@ local edits, then merge the directory as one unit).
 | [references/research-playbook.md](references/research-playbook.md) | Before stage-A searching — required |
 | [references/subagent-briefing.md](references/subagent-briefing.md) | When spawning stage-A search subagents |
 | [references/image-agent-briefing.md](references/image-agent-briefing.md) | When spawning the A3 image subagent |
+| [references/verify-agent-briefing.md](references/verify-agent-briefing.md) | When spawning the pre-delivery verify subagent |
 | [references/route-design.md](references/route-design.md) | Before stage-D routing — required |
 | [references/checklist.md](references/checklist.md) | Before delivery |
 | [references/updating.md](references/updating.md) | When the user asks to update this skill |

@@ -14,6 +14,35 @@ Bump rules:
 
 ---
 
+## 2.3.0 — 2026-08-13
+
+### Added
+
+Three more subagent delegations, same pattern as 2.2.0's image agent
+(subagents produce reports or patch files; adjudication and merging stay in
+the main conversation; without subagent capability the flow is unchanged):
+
+- **Pre-delivery verify subagent** (always) — after `validate.py` hits zero
+  P0, one read-only agent re-checks the web-facing checklist items (source
+  spot-checks, status re-confirmation, closure/date conflicts, coordinate
+  sanity, stale `verified_at`, tier inflation) with fresh eyes, returning a
+  findings list. The main conversation keeps the page-render check, all fix
+  decisions, and delivery. New
+  [references/verify-agent-briefing.md](references/verify-agent-briefing.md).
+- **P3 stub-completion subagent** (3+ stubs) — user-added map stubs are
+  completed by one agent running the stage-A research pass, images included;
+  it writes `partial-stubs.json`, merged by `id` preserving `origin`,
+  `choice`, and schedule references. New "Variant: completing user stubs"
+  section in
+  [references/subagent-briefing.md](references/subagent-briefing.md).
+- **Stage-D transit-lookup subagent** (a day's worth of segments or more) —
+  the per-segment transit lookups (no-estimating rule unchanged) go to one
+  agent; segment planning, the "better routing" judgment, and writing the
+  Transport table stay in the main conversation. New "Delegate the lookups"
+  section in [references/route-design.md](references/route-design.md).
+
+---
+
 ## 2.2.0 — 2026-08-12
 
 ### Added

@@ -69,3 +69,39 @@ with merged `sources`), then run A3 yourself.
 > When done, reply with: how many places per category; which places you
 > could **not** verify and why; which quotas you could not honestly fill —
 > shortfalls are stated, never padded.
+
+---
+
+## Variant: completing user stubs
+
+For the P3 flow (SKILL.md, "Completing user-added stubs"): when **3 or more**
+stubs await completion, spawn **one** agent with the template above modified
+as follows; with 1–2, completing them in the main conversation is cheaper
+than a spawn.
+
+Replace the quota paragraph ("Your categories and quotas…") with:
+
+> Your task is not to search for new places but to **complete these existing
+> ones** — the user added them on a map and they have only a name and
+> coordinates so far:
+>
+> `<rows: id · name · coord · OSM link>`
+>
+> For each, run the full research pass: verify hours / tickets / booking /
+> status online, write `pitch` and `detail`, set `tier` / `scale` /
+> `category`, fill `name_local` (contract: data-schema.md, "User stubs").
+
+And replace the coordinate/image bullet in the hard rules with:
+
+> - Coordinates are already set (they came from the user's map click) —
+>   don't touch them. **Images are yours to find and verify** in the same
+>   pass: you already have each place's official pages open, so follow the
+>   playbook's image section — official pages first, Wikimedia thumbnails
+>   only via the Commons API, fetch and look at every image, and leave the
+>   list empty rather than keep a doubtful one.
+
+Output file: `partial-stubs.json`, same `{"places": [ … ]}` shape, each
+entry a **complete place object keeping its original `id`**. After the agent
+returns, merge by `id` into `places.json` — preserving each stub's existing
+`origin`, `choice`, and any `itinerary` references (SKILL.md P3 rules) —
+then run `validate.py`.

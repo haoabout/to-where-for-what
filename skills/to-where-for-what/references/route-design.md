@@ -172,6 +172,39 @@ The page returns lines, transfer stations, transfer counts, duration, fare, and
 stop counts. In other countries, find the local official or mainstream transit
 planner.
 
+#### Delegate the lookups to a subagent
+
+A full trip's worth of segments means a dozen-plus lookups whose result pages
+are pure context ballast. **Planning the segment list is yours** — which
+segments, and from which station each day actually starts (the tenfold
+Yodoyabashi/Nakanoshima difference below is a route-design judgment, not a
+lookup). The lookups themselves go to one subagent when there's at least a
+day's worth of segments; for one or two, just look them up yourself. No
+subagent capability? Look everything up yourself — the no-estimating rule is
+unchanged.
+
+Prompt (a subagent inherits nothing — include all of this):
+
+> Look up these transit segments; you may not estimate any number.
+>
+> `<rows: origin station · destination station · date · rough departure time>`
+>
+> Tool: `<the planner guidance above, e.g. the Yahoo! Transit URL pattern,
+> filled with the trip's dates>`. For each segment report: lines, transfer
+> stations, transfer count, duration, IC fare. **Every number comes from a
+> lookup you actually ran**; anything you could not look up is reported as
+> missing, never guessed. Walking legs are marked "estimate". While you're
+> in the results, note better routings than the asked segment (fewer
+> transfers, cheaper, day-pass coverage) — report them, don't substitute
+> them. Also look up: `<day-pass names>` — real price (weekday/weekend),
+> covered lines, and *not*-covered lines, from the official site only.
+> Reply with table-ready rows, the pass findings, and the query source and
+> date.
+
+You then write the Transport table and pass advice into `route.md` yourself —
+the writing, the "better routing" judgment calls, and the footer (source,
+date, re-check reminder) stay in the main conversation.
+
 Lay the table out like this:
 
 | Segment | Lines & transfers | Transfers | Duration | IC fare |
