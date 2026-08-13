@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 1.6.0
+version: 1.7.0
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -549,8 +549,11 @@ Key points:
 - Write to `trips/<trip>/route.md` in Markdown
 - List items starting with `09:30 ` render as a timeline automatically — **no
   special syntax**
-- **Don't** hand-write the cost summary or the place-by-place table in
-  `route.md` — the page generates them from the data, guaranteed correct
+- **Don't** hand-write the cost summary, the pre-departure to-dos or the
+  place-by-place table in `route.md` — the page generates them from the data,
+  guaranteed correct. The to-dos are also where the user ticks off bookings
+  (`itinerary[].places[].booked`) and self-checks (`prep.checked`) — both are
+  page-written fields you must never pre-fill
 - **`---` is a page break.** The guide is laid out on A4 sheets by default and
   always prints that way. Put a `---` between sections that shouldn't share a
   sheet, and aim each section at one sheet — roughly 1,300–1,500 CJK

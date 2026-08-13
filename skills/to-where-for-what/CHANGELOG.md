@@ -23,6 +23,26 @@ Bump rules:
 
 ---
 
+## 1.7.0 — 2026-08-13
+
+### Added
+
+- **Pre-departure to-dos** — a new auto-generated guide section derived from
+  the schedule: booking-required and booking-advised visits (one row per
+  visit) and places whose verification didn't complete (`verify.check`
+  items). Each row has a checkbox; ticking writes back into the data and
+  prints as a paper checklist. The same toggles appear in the place detail
+  dialog.
+- **Schema (additive, no `schema_version` bump)**: `itinerary[].places[].booked`
+  (per-visit — bookings are date-bound, two scheduled visits are two
+  tickets) and place-level `prep.checked`. Both are page-written; the AI
+  must not pre-fill them. `validate.py` type-checks both (P0) and warns
+  (P1) when departure is ≤14 days away with booking-required visits still
+  unticked.
+- Markdown export marks booked visits on their booking line.
+
+---
+
 ## 1.6.0 — 2026-08-13
 
 ### Changed
