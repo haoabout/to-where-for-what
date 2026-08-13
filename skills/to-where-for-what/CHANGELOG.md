@@ -12,9 +12,15 @@ Bump rules:
 - **MINOR** — new behavior or new optional fields, backward compatible.
 - **PATCH** — fixes and copy edits, no behavior change.
 
+> **Renumbered 2026-08-13**: the 2.x line was over-eager — by the rules
+> above, nothing in it broke user state, so those releases were MINORs
+> wearing MAJOR numbers. Old ↔ new: 2.1.0 = 1.2.0, 2.2.0 = 1.3.0,
+> 2.3.0 = 1.4.0, 2.4.0 = 1.5.0. An install reporting 2.x is *older* than
+> 1.5.0 despite the bigger number.
+
 ---
 
-## 2.4.0 — 2026-08-13
+## 1.5.0 — 2026-08-13
 
 ### Added
 
@@ -33,11 +39,11 @@ Bump rules:
 
 ---
 
-## 2.3.0 — 2026-08-13
+## 1.4.0 — 2026-08-13
 
 ### Added
 
-Three more subagent delegations, same pattern as 2.2.0's image agent
+Three more subagent delegations, same pattern as 1.3.0's image agent
 (subagents produce reports or patch files; adjudication and merging stay in
 the main conversation; without subagent capability the flow is unchanged):
 
@@ -62,7 +68,7 @@ the main conversation; without subagent capability the flow is unchanged):
 
 ---
 
-## 2.2.0 — 2026-08-12
+## 1.3.0 — 2026-08-12
 
 ### Added
 
@@ -81,7 +87,7 @@ the main conversation; without subagent capability the flow is unchanged):
 
 ---
 
-## 2.1.0 — 2026-08-11
+## 1.2.0 — 2026-08-11
 
 ### Added
 
