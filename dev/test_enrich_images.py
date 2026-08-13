@@ -69,10 +69,12 @@ class FakeNet:
         return {"status": 404, "body": b"", "ctype": "", "error": None}
 
 
-def pageimages(filename: str | None, title: str) -> dict:
+def pageimages(filename: str | None, title: str, coord=None) -> dict:
     pg = {"title": title}
     if filename:
         pg["pageimage"] = filename
+    if coord:
+        pg["coordinates"] = [{"lon": coord[0], "lat": coord[1]}]
     return {"query": {"pages": [pg]}}
 
 
@@ -128,9 +130,12 @@ def case_composite_name(tmp: Path) -> None:
     成为 high 并自动写入无图地点。"""
     net = FakeNet()
     # Only the split-off segment has an article, via redirect to the GPO.
+    # The redirect target's title doesn't match any name variant, so the
+    # article's in-bbox coordinate is what corroborates identity.
     net.on("en.wikipedia.org", "pageimages",
            urllib.parse.quote_plus("Grand Postal Building"),
-           json_body=pageimages("GPO.jpg", "General Post Office (Bangkok)"))
+           json_body=pageimages("GPO.jpg", "General Post Office (Bangkok)",
+                                coord=(100.514, 13.727)))
     net.on("commons.wikimedia.org", "GPO.jpg",
            json_body=thumbinfo("https://upload.wikimedia.org/gpo-960.jpg"))
     net.img("upload.wikimedia.org/gpo-960.jpg")
@@ -383,6 +388,25 @@ def case_existing_flow(tmp: Path) -> None:
           wrote == 0 and doc["places"][1]["images"][0]["url"].endswith("dead.webp"))
 
 
+def case_generic_redirect(tmp: Path) -> None:
+    """Speakerbox 回归:品牌名被重定向进普通名词条目(Loudspeaker
+    enclosure,无坐标、标题不匹配)→ 只能 low,绝不自动写入。"""
+    net = FakeNet()
+    net.on("en.wikipedia.org", "pageimages", urllib.parse.quote_plus("Speakerbox"),
+           json_body=pageimages("Speakers.JPG", "Loudspeaker enclosure"))
+    net.on("commons.wikimedia.org", "Speakers.JPG",
+           json_body=thumbinfo("https://upload.wikimedia.org/speakers-960.jpg"))
+    net.img("upload.wikimedia.org/speakers-960.jpg")
+    p = place(name="Speakerbox独立现场空间", name_en="Speakerbox")
+    doc, audit, wrote = run_pipeline([p], net, tmp)
+    c = next((c for c in cands(audit, "bkk-x01") if c["source"] == "wikipedia"), None)
+    check("generic-noun redirect grades low and is not written",
+          wrote == 0 and not doc["places"][0].get("images")
+          and bool(c) and c["confidence"] == "low"
+          and c["matched_title"] == "Loudspeaker enclosure",
+          f"wrote={wrote} cand={c}")
+
+
 def case_lows_dont_crowd(tmp: Path) -> None:
     """theCOMMONS 回归:垃圾 wiki-search low 不得把官网正文图挤出上限;
     logo 文件名在所有来源都被过滤,并以 filename:negative 入审计。"""
@@ -484,8 +508,8 @@ def main() -> int:
                                 case_commons_subcat, case_event_priority,
                                 case_openverse_last, case_retry_429,
                                 case_cache_and_dedupe, case_cap_three,
-                                case_existing_flow, case_lows_dont_crowd,
-                                case_apply_review]):
+                                case_existing_flow, case_generic_redirect,
+                                case_lows_dont_crowd, case_apply_review]):
             d = base / f"c{i}"
             d.mkdir()
             fn(d)

@@ -352,13 +352,15 @@ def commons_thumb(title: str, width: int = 960) -> dict | None:
             "source_url": ii.get("descriptionurl", "")}
 
 
-def wiki_lead_image(title: str, lang: str) -> tuple[str, str] | None:
-    """Lead-image filename + canonical article title for an exact title.
-    The lead image is usually the most representative one and rarely
-    mislabeled. redirects=1 matters: 「大邮政大楼」-style display names reach
-    their article only via a redirect, which the plain query misses."""
-    q = {"action": "query", "titles": title, "prop": "pageimages",
-         "piprop": "name", "redirects": "1",
+def wiki_lead_image(title: str, lang: str) -> tuple[str, str, tuple | None] | None:
+    """Lead-image filename + canonical title + article coordinate (lon, lat)
+    for an exact title. The lead image is usually the most representative
+    one and rarely mislabeled. redirects=1 matters: 「大邮政大楼」-style
+    display names reach their article only via a redirect, which the plain
+    query misses. The coordinate rides along because the caller needs it to
+    tell a real place article from a generic-noun one (see wikipedia_exact)."""
+    q = {"action": "query", "titles": title, "prop": "pageimages|coordinates",
+         "piprop": "name", "redirects": "1", "colimit": "1",
          "format": "json", "formatversion": "2"}
     d = _json(f"https://{lang}.wikipedia.org/w/api.php?" + urllib.parse.urlencode(q))
     try:
@@ -366,7 +368,13 @@ def wiki_lead_image(title: str, lang: str) -> tuple[str, str] | None:
     except (TypeError, KeyError, IndexError):
         return None
     fn = pg.get("pageimage")
-    return (fn, pg.get("title") or title) if fn else None
+    if not fn:
+        return None
+    coord = None
+    co = (pg.get("coordinates") or [{}])[0]
+    if isinstance(co.get("lon"), (int, float)) and isinstance(co.get("lat"), (int, float)):
+        coord = (co["lon"], co["lat"])
+    return fn, pg.get("title") or title, coord
 
 
 def wiki_search_images(name: str, lang: str, limit: int = 3) -> list[tuple[str, str]]:
@@ -381,7 +389,7 @@ def wiki_search_images(name: str, lang: str, limit: int = 3) -> list[tuple[str, 
         title = h.get("title") or ""
         hit = wiki_lead_image(title, lang)
         if hit:
-            out.append(hit)
+            out.append((hit[0], hit[1]))
     return out
 
 
@@ -722,16 +730,25 @@ def iter_candidates(p: dict, trip: dict, bbox, langs: list[str]):
                         credit=c["credit"], source_url=c["source_url"])
 
     def wikipedia_exact():
-        # Exact title (following redirects) — the only Wikipedia form that
-        # counts as identity. Lead images are rarely mislabeled.
+        # Exact title (following redirects). A hit alone is NOT identity:
+        # redirects also suck brand-like names into generic-noun articles —
+        # measured in Bangkok, "Speakerbox" (an indie live house) redirected
+        # to "Loudspeaker enclosure" and auto-wrote a photo of hi-fi
+        # speakers. high therefore needs corroboration: the canonical title
+        # matches a name, or the article carries a coordinate inside the
+        # trip bbox (real place articles have one; generic nouns don't).
         for lang in langs:
             for nm in _query_names(p, lang):
                 hit = wiki_lead_image(nm, lang)
                 if hit:
-                    fn, title = hit
+                    fn, title, acoord = hit
                     thumb = commons_thumb(fn)
                     if thumb:
-                        yield _cand(thumb["url"], "wikipedia", "high",
+                        ident = (name_matches(names, title)
+                                 or (acoord and bbox
+                                     and in_bbox(acoord[0], acoord[1], bbox)))
+                        yield _cand(thumb["url"], "wikipedia",
+                                    "high" if ident else "low",
                                     credit=thumb["credit"],
                                     source_url=thumb["source_url"], title=title)
 
@@ -786,7 +803,7 @@ def iter_candidates(p: dict, trip: dict, bbox, langs: list[str]):
                 hit = wiki_lead_image(h["title"], lang)
                 if not hit:
                     continue
-                fn, title = hit
+                fn, title, _ = hit
                 thumb = commons_thumb(fn)
                 if thumb:
                     conf = "medium" if name_matches(names, title) else "low"
