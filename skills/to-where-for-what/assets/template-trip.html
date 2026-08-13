@@ -4684,7 +4684,7 @@ function payload(){
    only choices makes the user's day arrangement silently vanish, and neither
    the person pasting it back nor the AI reading it would notice anything
    missing. */
-/* What goes back to the local server is only the three fields the page owns,
+/* What goes back to the local server is only the fields the page owns,
    not the whole document.
 
    First, the in-memory DATA is a snapshot from build time; writing it back
@@ -4700,7 +4700,9 @@ function payload(){
 function patch(){
   return JSON.stringify({
     patch: 1,
-    choices: PLACES.map(p => [p.id, p.choice || null, p.choice_reason || ""]),
+    // Slot 3 (prep) mirrors the 4-wide localStorage tuple. null means "not
+    // checked" and the server clears the flag — unticking is also a change.
+    choices: PLACES.map(p => [p.id, p.choice || null, p.choice_reason || "", p.prep || null]),
     itinerary: DATA.itinerary || [],
     // Always send the full set, not just "the new ones" — the server dedupes
     // by id, naturally idempotent, so the page needn't track "which ones are

@@ -471,8 +471,8 @@ def rebuild_soon(delay=12.0):
 
 
 def merge(incoming):
-    """The page sends back only choice / choice_reason / itinerary; for
-    everything else the disk wins.
+    """The page sends back only choice / choice_reason / prep / itinerary;
+    for everything else the disk wins.
 
     Wholesale replacement won't do: the page's in-memory DATA is a snapshot
     from *build time*. If the AI runs enrich.py to fill in coordinates or
@@ -492,6 +492,24 @@ def merge(incoming):
             continue             # a place the AI just added that the page doesn't know about — leave it alone
         p["choice"] = c[1] if len(c) > 1 else None
         p["choice_reason"] = (c[2] if len(c) > 2 else "") or ""
+        # Slot 3 is prep. Only pages that send a 4-wide tuple get to touch it —
+        # a 3-wide tuple is an older page and must not clear flags it never
+        # knew about. Only the "checked" key is honored (it's prep's whole
+        # contract; the browser must not inject arbitrary keys), and false is
+        # stored as absence, same as the page's own delete-when-false rule.
+        if len(c) > 3:
+            if isinstance(c[3], dict) and c[3].get("checked") is True:
+                cur = p.get("prep")
+                if not isinstance(cur, dict):
+                    cur = {}
+                    p["prep"] = cur
+                cur["checked"] = True
+            else:
+                cur = p.get("prep")
+                if isinstance(cur, dict):
+                    cur.pop("checked", None)
+                    if not cur:
+                        p.pop("prep", None)
 
     # Stubs the user added via map search (origin=user). The page sends the
     # full set on every save, and "skip if the id already exists on disk"
