@@ -24,9 +24,11 @@ Before spawning, the main conversation:
    `places.json` itself.
 3. **Substitutes absolute paths** for `<ABS_SKILL_ROOT>` and
    `<ABS_TRIP_DIR>` — the subagent's working directory may differ.
-4. **Picks a vision-capable model** when the platform lets you choose. A
-   text-only agent must downgrade to the playbook's per-source text rules —
-   and its report must say so, so delivery can disclose it.
+4. **Picks the model**: one tier below the main conversation's (SKILL.md,
+   "Subagent model tier"), and it **must be vision-capable** — one tier
+   down normally still sees images. A text-only agent must downgrade to the
+   playbook's per-source text rules — and its report must say so, so
+   delivery can disclose it.
 
 After the agent returns:
 

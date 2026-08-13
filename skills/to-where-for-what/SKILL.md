@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 2.3.0
+version: 2.4.0
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -170,6 +170,34 @@ for the whole conversation (written as `<PY>` below):
 | 3 | `python3 --version` | The norm on macOS / Linux |
 
 Python 3.9+ is required. If none works, tell the user to install it — don't push on.
+
+---
+
+## Subagent model tier — confirm once, then announce
+
+The subagents here — searching by explicit rules, completing stubs, looking
+up transit tables, re-checking facts — don't need the main conversation's
+model. **When the platform lets you pick a subagent model, pick one tier
+below the main conversation's** (still vision-capable where the briefing
+requires it). The savings are real: stage A alone spawns 2–4 agents doing
+dozens of searches each.
+
+The user pays for every spawn, so the tier is their call — but ask **once
+per conversation, not once per spawn**:
+
+- **Before the first spawn**, fold the question into the nearest user-facing
+  beat — usually the A1½ confirmation; when continuing an old trip, whatever
+  message precedes the first spawn. Name the actual models ("subagents on
+  <X>, main conversation stays on <Y>"), recommend one tier down, offer
+  same-tier and no-subagents as the alternatives.
+- **Every spawn after that, announce in one line** — "image agent (<X>)
+  running in the background" — and never re-ask. Asking five times for one
+  decision that can't change mid-trip is the anti-pattern table's re-asking
+  row.
+- **Platform can't choose models?** Subagents inherit the main model. Say
+  so in that same one-time question — it's exactly the cost fact the user
+  might want to veto — and the choice collapses to "spawn or do it all in
+  the main conversation".
 
 ---
 
@@ -362,7 +390,10 @@ In the same message, set two expectations:
   subagent inherits nothing from this conversation, including every rule
   you've read). Parallel agents never write the same file: each writes its
   own `partial-<group>.json`, and you merge into `places.json` afterwards,
-  then run A3 yourself (A3 spawns one further subagent, for images — see A3). No subagent capability (plain chat, Codex)? Search in
+  then run A3 yourself (A3 spawns one further subagent, for images — see A3).
+  This message is also where the one-time model-tier question lands
+  ("Subagent model tier" above): name the models, recommend one tier down,
+  and collect the yes alongside the search-plan confirmation. No subagent capability (plain chat, Codex)? Search in
   the main conversation as before — the time warning matters even more then.
 
 ### A2. Search and produce `places.json`

@@ -18,6 +18,9 @@ Before spawning, the main conversation:
    weights, "not interested" entries, mobility notes). Never paste the whole
    `preferences.md` — the rest is the user's private context and no search
    needs it.
+4. **Picks the model**: one tier below the main conversation's, per
+   SKILL.md "Subagent model tier" — the tier was confirmed with the user
+   before the first spawn; announce each spawn, never re-ask.
 
 After all subagents return: merge the partials into `places.json` (dedupe by
 name and coordinates — the same place found by two groups keeps one entry

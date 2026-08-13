@@ -178,8 +178,10 @@ A full trip's worth of segments means a dozen-plus lookups whose result pages
 are pure context ballast. **Planning the segment list is yours** — which
 segments, and from which station each day actually starts (the tenfold
 Yodoyabashi/Nakanoshima difference below is a route-design judgment, not a
-lookup). The lookups themselves go to one subagent when there's at least a
-day's worth of segments; for one or two, just look them up yourself. No
+lookup). The lookups themselves go to one subagent — one model tier below
+the main conversation, like every subagent (SKILL.md, "Subagent model
+tier") — when there's at least a day's worth of segments; for one or two,
+just look them up yourself. No
 subagent capability? Look everything up yourself — the no-estimating rule is
 unchanged.
 

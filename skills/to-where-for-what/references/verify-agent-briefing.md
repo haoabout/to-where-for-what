@@ -27,6 +27,9 @@ Before spawning, the main conversation:
 3. **Pastes in the trip dates** — the agent needs them for closure-conflict
    and staleness checks, and reading `brief.md` is more context than it
    needs.
+4. **Picks the model**: one tier below the main conversation's, like every
+   subagent (SKILL.md, "Subagent model tier") — rule-driven fact checks
+   don't need the main model; spend the savings on sampling more places.
 
 After the agent returns:
 

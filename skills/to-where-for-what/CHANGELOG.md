@@ -14,6 +14,25 @@ Bump rules:
 
 ---
 
+## 2.4.0 — 2026-08-13
+
+### Added
+
+- **Subagent model tier: one tier down, confirmed once** — every subagent
+  (search, image, stub completion, transit lookup, verify) now defaults to
+  a model one tier below the main conversation's when the platform allows
+  choosing (still vision-capable where the briefing requires it). The tier
+  is the user's call, asked **once per conversation** with real model
+  names — folded into the A1½ confirmation, or whatever beat precedes the
+  first spawn when continuing an old trip — with same-tier and no-subagents
+  as alternatives; every later spawn announces itself in one line and never
+  re-asks. Platforms without model choice inherit the main model, stated in
+  the same question. New SKILL.md section "Subagent model tier — confirm
+  once, then announce"; all four briefings' pre-spawn steps gained a model
+  item.
+
+---
+
 ## 2.3.0 — 2026-08-13
 
 ### Added
