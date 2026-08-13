@@ -809,10 +809,14 @@ def iter_candidates(p: dict, trip: dict, bbox, langs: list[str]):
                 yield _cand(c["url"], "openverse", "low", credit=c["credit"],
                             source_url=c["source_url"], title=c.get("title", ""))
 
-    families = [wikipedia_exact, wikidata, official, commons_cat, geo, openverse]
+    # Official pages come before Wikipedia search: search hits are the
+    # junkiest medium/low family (measured on theCOMMONS — a logo and a
+    # subway platform), and they must not crowd out the venue's own photos.
+    families = [wikipedia_exact, wikidata, official, wiki_search,
+                commons_cat, geo, openverse]
     if event:
-        families = [official, wikipedia_exact, wikidata, commons_cat, geo, openverse]
-    families.insert(2 if not event else 3, wiki_search)
+        families = [official, wikipedia_exact, wikidata, wiki_search,
+                    commons_cat, geo, openverse]
     for fam in families:
         yield from fam()
 
@@ -821,10 +825,16 @@ def collect_candidates(p: dict, trip: dict, bbox, langs: list[str],
                        existing: list[dict]) -> list[dict]:
     """Assemble up to MAX_CANDIDATES verified candidates. Existing images
     enter first as `existing` candidates and count toward the cap; failed
-    checks are kept in the list (for the audit) but don't count."""
+    checks are kept in the list (for the audit) but don't count.
+
+    Only high/medium (and live existing) candidates stop the scan early —
+    low ones are fillers that must never crowd out a later, more
+    trustworthy family (measured on theCOMMONS: three junk wiki-search hits
+    filled the cap before the official page, which held the actual photos,
+    was ever scanned). Overflow lows are trimmed at the end."""
     out: list[dict] = []
     seen: set[str] = set()
-    kept = 0
+    strong = 0
     for img in existing:
         url = (img or {}).get("url") or ""
         if not url or url in seen:
@@ -835,27 +845,39 @@ def collect_candidates(p: dict, trip: dict, bbox, langs: list[str],
         c["check"] = check_image_url(url)
         out.append(c)
         if c["check"]["ok"]:
-            kept += 1
-    if kept >= MAX_CANDIDATES:
-        return out
-    event = p.get("category") == "event"
-    for c in iter_candidates(p, trip, bbox, langs):
-        if event and c["confidence"] == "high":
-            # An event's identity is the event, not the venue. An exact
-            # Wikipedia/Wikidata hit on a name segment is the building's
-            # facade — never a reason to auto-write over the activity's key
-            # visual, so events produce no auto-write (high) candidates.
-            c["confidence"] = "medium"
-        if c["url"] in seen:
-            continue
-        seen.add(c["url"])
-        c["check"] = check_image_url(c["url"])
-        out.append(c)
-        if c["check"]["ok"]:
-            kept += 1
-            if kept >= MAX_CANDIDATES:
-                break
-    return out
+            strong += 1
+    if strong < MAX_CANDIDATES:
+        event = p.get("category") == "event"
+        for c in iter_candidates(p, trip, bbox, langs):
+            if event and c["confidence"] == "high":
+                # An event's identity is the event, not the venue. An exact
+                # Wikipedia/Wikidata hit on a name segment is the building's
+                # facade — never a reason to auto-write over the activity's
+                # key visual, so events produce no auto-write candidates.
+                c["confidence"] = "medium"
+            if c["url"] in seen:
+                continue
+            seen.add(c["url"])
+            # Filename furniture is skipped across every family — Commons
+            # and Openverse serve *_Logo.svg.png files too, not just
+            # official sites.
+            if looks_negative(c["url"]):
+                c["check"] = {"ok": False, "reason": "filename:negative"}
+                out.append(c)
+                continue
+            c["check"] = check_image_url(c["url"])
+            out.append(c)
+            if c["check"]["ok"] and c["confidence"] != "low":
+                strong += 1
+                if strong >= MAX_CANDIDATES:
+                    break
+    # Trim overflow: live candidates never exceed the cap, and lows are the
+    # ones trimmed — a strong found by a late family beats an early filler.
+    ok_strong = [c for c in out if c["check"]["ok"] and c["confidence"] != "low"]
+    ok_low = [c for c in out if c["check"]["ok"] and c["confidence"] == "low"]
+    keep = set(map(id, ok_strong[:MAX_CANDIDATES]
+                   + ok_low[:max(0, MAX_CANDIDATES - len(ok_strong))]))
+    return [c for c in out if not c["check"]["ok"] or id(c) in keep]
 
 
 # --------------------------------------------------------------- image audit

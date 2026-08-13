@@ -383,6 +383,41 @@ def case_existing_flow(tmp: Path) -> None:
           wrote == 0 and doc["places"][1]["images"][0]["url"].endswith("dead.webp"))
 
 
+def case_lows_dont_crowd(tmp: Path) -> None:
+    """theCOMMONS 回归:垃圾 wiki-search low 不得把官网正文图挤出上限;
+    logo 文件名在所有来源都被过滤,并以 filename:negative 入审计。"""
+    net = FakeNet()
+    # wiki-search returns two junk articles (titles unrelated → low) plus a
+    # logo file; the official page holds the real photo.
+    net.on("en.wikipedia.org", "list=search",
+           json_body={"query": {"search": [{"title": "Wireless House"},
+                                           {"title": "Lumphini Station"}]}})
+    net.on("en.wikipedia.org", "pageimages", urllib.parse.quote_plus("Wireless House"),
+           json_body=pageimages("WH_Logo.svg.png", "Wireless House"))
+    net.on("en.wikipedia.org", "pageimages", urllib.parse.quote_plus("Lumphini Station"),
+           json_body=pageimages("Platform.jpg", "Lumphini Station"))
+    net.on("commons.wikimedia.org", "WH_Logo.svg.png",
+           json_body=thumbinfo("https://upload.wikimedia.org/WH_Logo.svg.png"))
+    net.on("commons.wikimedia.org", "Platform.jpg",
+           json_body=thumbinfo("https://upload.wikimedia.org/platform-960.jpg"))
+    net.img("upload.wikimedia.org/platform-960.jpg")
+    net.img("upload.wikimedia.org/WH_Logo.svg.png")
+    html = '<img src="/api/media/file/DSC06722.webp">'
+    net.on("thecommons.example", status=200, body=html.encode(), ctype="text/html")
+    net.img("thecommons.example/api/media/file/DSC06722.webp")
+    p = place(name="theCOMMONS 测试", name_en="theCOMMONS Test",
+              sources=[{"title": "官网", "url": "https://thecommons.example/"}])
+    _, audit, _ = run_pipeline([p], net, tmp)
+    cs = cands(audit, "bkk-x01")
+    ok = [(c["source"], c["confidence"]) for c in cs if c["check"]["ok"]]
+    logo = next((c for c in cs if "WH_Logo" in c["url"]), None)
+    check("official body photo survives despite junk low search hits",
+          ("official-body", "medium") in ok, f"ok={ok}")
+    check("logo filename filtered in non-official families too",
+          bool(logo) and not logo["check"]["ok"]
+          and logo["check"]["reason"] == "filename:negative", f"logo={logo}")
+
+
 def case_apply_review(tmp: Path) -> None:
     """--apply-image-review:合法 patch 原子合并 + verdict 写回审计;
     非法 patch 一个字节都不改。"""
@@ -449,7 +484,8 @@ def main() -> int:
                                 case_commons_subcat, case_event_priority,
                                 case_openverse_last, case_retry_429,
                                 case_cache_and_dedupe, case_cap_three,
-                                case_existing_flow, case_apply_review]):
+                                case_existing_flow, case_lows_dont_crowd,
+                                case_apply_review]):
             d = base / f"c{i}"
             d.mkdir()
             fn(d)
