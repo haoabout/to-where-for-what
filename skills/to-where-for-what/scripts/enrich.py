@@ -827,7 +827,14 @@ def collect_candidates(p: dict, trip: dict, bbox, langs: list[str],
             kept += 1
     if kept >= MAX_CANDIDATES:
         return out
+    event = p.get("category") == "event"
     for c in iter_candidates(p, trip, bbox, langs):
+        if event and c["confidence"] == "high":
+            # An event's identity is the event, not the venue. An exact
+            # Wikipedia/Wikidata hit on a name segment is the building's
+            # facade — never a reason to auto-write over the activity's key
+            # visual, so events produce no auto-write (high) candidates.
+            c["confidence"] = "medium"
         if c["url"] in seen:
             continue
         seen.add(c["url"])
