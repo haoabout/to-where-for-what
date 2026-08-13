@@ -12,9 +12,63 @@ Bump rules:
 - **MINOR** — new behavior or new optional fields, backward compatible.
 - **PATCH** — fixes and copy edits, no behavior change.
 
+> **Renumbered 2026-08-13**: the 2.x line was over-eager — by the rules
+> above, nothing in it broke user state, so those releases were MINORs
+> wearing MAJOR numbers. Old ↔ new: 2.1.0 = 1.2.0, 2.2.0 = 1.3.0,
+> 2.3.0 = 1.4.0, 2.4.0 = 1.5.0. An install reporting 2.x is *older* than
+> 1.5.0 despite the bigger number.
+
 ---
 
-## 2.2.0 — 2026-08-12
+## 1.5.0 — 2026-08-13
+
+### Added
+
+- **Subagent model tier: one tier down, confirmed once** — every subagent
+  (search, image, stub completion, transit lookup, verify) now defaults to
+  a model one tier below the main conversation's when the platform allows
+  choosing (still vision-capable where the briefing requires it). The tier
+  is the user's call, asked **once per conversation** with real model
+  names — folded into the A1½ confirmation, or whatever beat precedes the
+  first spawn when continuing an old trip — with same-tier and no-subagents
+  as alternatives; every later spawn announces itself in one line and never
+  re-asks. Platforms without model choice inherit the main model, stated in
+  the same question. New SKILL.md section "Subagent model tier — confirm
+  once, then announce"; all four briefings' pre-spawn steps gained a model
+  item.
+
+---
+
+## 1.4.0 — 2026-08-13
+
+### Added
+
+Three more subagent delegations, same pattern as 1.3.0's image agent
+(subagents produce reports or patch files; adjudication and merging stay in
+the main conversation; without subagent capability the flow is unchanged):
+
+- **Pre-delivery verify subagent** (always) — after `validate.py` hits zero
+  P0, one read-only agent re-checks the web-facing checklist items (source
+  spot-checks, status re-confirmation, closure/date conflicts, coordinate
+  sanity, stale `verified_at`, tier inflation) with fresh eyes, returning a
+  findings list. The main conversation keeps the page-render check, all fix
+  decisions, and delivery. New
+  [references/verify-agent-briefing.md](references/verify-agent-briefing.md).
+- **P3 stub-completion subagent** (3+ stubs) — user-added map stubs are
+  completed by one agent running the stage-A research pass, images included;
+  it writes `partial-stubs.json`, merged by `id` preserving `origin`,
+  `choice`, and schedule references. New "Variant: completing user stubs"
+  section in
+  [references/subagent-briefing.md](references/subagent-briefing.md).
+- **Stage-D transit-lookup subagent** (a day's worth of segments or more) —
+  the per-segment transit lookups (no-estimating rule unchanged) go to one
+  agent; segment planning, the "better routing" judgment, and writing the
+  Transport table stay in the main conversation. New "Delegate the lookups"
+  section in [references/route-design.md](references/route-design.md).
+
+---
+
+## 1.3.0 — 2026-08-12
 
 ### Added
 
@@ -33,7 +87,7 @@ Bump rules:
 
 ---
 
-## 2.1.0 — 2026-08-11
+## 1.2.0 — 2026-08-11
 
 ### Added
 

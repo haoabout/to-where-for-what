@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 2.2.0
+version: 1.5.0
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -173,6 +173,34 @@ Python 3.9+ is required. If none works, tell the user to install it — don't pu
 
 ---
 
+## Subagent model tier — confirm once, then announce
+
+The subagents here — searching by explicit rules, completing stubs, looking
+up transit tables, re-checking facts — don't need the main conversation's
+model. **When the platform lets you pick a subagent model, pick one tier
+below the main conversation's** (still vision-capable where the briefing
+requires it). The savings are real: stage A alone spawns 2–4 agents doing
+dozens of searches each.
+
+The user pays for every spawn, so the tier is their call — but ask **once
+per conversation, not once per spawn**:
+
+- **Before the first spawn**, fold the question into the nearest user-facing
+  beat — usually the A1½ confirmation; when continuing an old trip, whatever
+  message precedes the first spawn. Name the actual models ("subagents on
+  <X>, main conversation stays on <Y>"), recommend one tier down, offer
+  same-tier and no-subagents as the alternatives.
+- **Every spawn after that, announce in one line** — "image agent (<X>)
+  running in the background" — and never re-ask. Asking five times for one
+  decision that can't change mid-trip is the anti-pattern table's re-asking
+  row.
+- **Platform can't choose models?** Subagents inherit the main model. Say
+  so in that same one-time question — it's exactly the cost fact the user
+  might want to veto — and the choice collapses to "spawn or do it all in
+  the main conversation".
+
+---
+
 ## Before starting · check for a trip already in progress
 
 When the user says "continue", "pick up where we left off", or "tweak my X trip",
@@ -221,7 +249,10 @@ first scan:
    the to-complete list
 2. Run them through the stage-A research pipeline: verify hours / tickets /
    booking online, write `pitch` and `detail`, set `tier`/`scale`/`category`,
-   fill `name_local` (contract: data-schema.md, "User stubs")
+   fill `name_local` (contract: data-schema.md, "User stubs"). **3 or more
+   stubs → spawn one completion subagent** (prompt: subagent-briefing.md,
+   "Variant: completing user stubs" — it finds and verifies images too);
+   1–2 → do it in the main conversation, a spawn costs more than it saves
 3. **Keep the `origin: "user"` field** (it records provenance, not a to-do flag),
    and **keep the user's existing `choice` and any schedule references** — a
    place the user deliberately searched for and added usually already has
@@ -359,7 +390,10 @@ In the same message, set two expectations:
   subagent inherits nothing from this conversation, including every rule
   you've read). Parallel agents never write the same file: each writes its
   own `partial-<group>.json`, and you merge into `places.json` afterwards,
-  then run A3 yourself (A3 spawns one further subagent, for images — see A3). No subagent capability (plain chat, Codex)? Search in
+  then run A3 yourself (A3 spawns one further subagent, for images — see A3).
+  This message is also where the one-time model-tier question lands
+  ("Subagent model tier" above): name the models, recommend one tier down,
+  and collect the yes alongside the search-plan confirmation. No subagent capability (plain chat, Codex)? Search in
   the main conversation as before — the time warning matters even more then.
 
 ### A2. Search and produce `places.json`
@@ -509,6 +543,9 @@ Key points:
 - Cluster by `area`; **at most 1–2 areas per day**
 - Exclude conflicts with `closed_days`; put `night: true` places in the evening;
   draw rain alternatives from `indoor: true`
+- Transport numbers are looked up, never estimated — and the lookups can go
+  to a subagent while you write (route-design.md, "Delegate the lookups");
+  you keep the segment planning and write the table yourself
 - Write to `trips/<trip>/route.md` in Markdown
 - List items starting with `09:30 ` render as a timeline automatically — **no
   special syntax**
@@ -586,6 +623,15 @@ localize automatically via `Intl`; no work needed there.
 
 ## Pre-delivery self-check
 
+Once `validate.py` is at zero P0, **spawn the verify subagent** — prompt from
+[references/verify-agent-briefing.md](references/verify-agent-briefing.md).
+It re-opens sources with fresh eyes (you checking data you wrote repeats
+your own misreadings) and handles the web-facing checklist items in the
+background while you do the one thing it can't: open the built page and look
+at the render. Adjudicate its findings — it's briefed to over-report — fix
+what's real, then finish the checklist. No subagent capability? Run every
+check yourself, as before.
+
 Run through **[references/checklist.md](references/checklist.md)**, especially:
 
 - [ ] `validate.py` reports zero P0
@@ -633,6 +679,7 @@ local edits, then merge the directory as one unit).
 | [references/research-playbook.md](references/research-playbook.md) | Before stage-A searching — required |
 | [references/subagent-briefing.md](references/subagent-briefing.md) | When spawning stage-A search subagents |
 | [references/image-agent-briefing.md](references/image-agent-briefing.md) | When spawning the A3 image subagent |
+| [references/verify-agent-briefing.md](references/verify-agent-briefing.md) | When spawning the pre-delivery verify subagent |
 | [references/route-design.md](references/route-design.md) | Before stage-D routing — required |
 | [references/checklist.md](references/checklist.md) | Before delivery |
 | [references/updating.md](references/updating.md) | When the user asks to update this skill |
