@@ -3124,6 +3124,11 @@ const ROUTE_MD   = /*__ROUTE_MD__*/"";
 const TRANSIT    = /*__TRANSIT__*/null;
 const BUILT_AT   = /*__BUILT_AT__*/null;
 const STANDALONE = __STANDALONE__;
+/* Per-launch save token. build.py injects it while a local server session is
+   being set up; the server rejects save POSTs without it, so a random page
+   in the same browser can't blind-POST edits into places.json. Empty in
+   standalone and plain builds — those never save through the server. */
+const SAVE_TOKEN = /*__SAVE_TOKEN__*/"";
 
 const TRIP   = DATA.trip || {};
 const PLACES = DATA.places || [];
@@ -4700,6 +4705,9 @@ function payload(){
 function patch(){
   return JSON.stringify({
     patch: 1,
+    // In the body, not the URL: sendBeacon can't set headers, and a token in
+    // the query string could leak through logs or Referer.
+    token: SAVE_TOKEN,
     // Slot 3 (prep) mirrors the 4-wide localStorage tuple. null means "not
     // checked" and the server clears the flag — unticking is also a change.
     choices: PLACES.map(p => [p.id, p.choice || null, p.choice_reason || "", p.prep || null]),

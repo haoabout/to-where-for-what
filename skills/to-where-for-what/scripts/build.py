@@ -26,6 +26,7 @@ import argparse
 import json
 import os
 import re
+import secrets
 import signal
 import subprocess
 import sys
@@ -47,7 +48,14 @@ TRANSIT_MARK = "/*__TRANSIT__*/null"
 SORTABLE_MARK = "/*__SORTABLE__*/"
 BUILT_MARK = "/*__BUILT_AT__*/null"
 THEME_MARK = "/*__THEME__*/"
+SAVE_TOKEN_MARK = '/*__SAVE_TOKEN__*/""'
 PID_FILE = ".server.pid"
+# Per-launch save token. main() writes a fresh one before building for
+# --serve; build() injects it into the page and the server requires it on
+# every save POST, so other websites in the same browser can't blind-POST
+# edits into places.json. Rebuilds re-read the same file, which is how the
+# token survives the server's own background rebuilds. stop() deletes it.
+TOKEN_FILE = ".server.token"
 
 
 # --------------------------------------------------------------------- theme
@@ -391,6 +399,13 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     for w in theme_warn:
         print(f"  ⚠ {w}")
 
+    # The standalone guide never saves through the server, so it never
+    # carries the token.
+    token = ""
+    token_path = trip_dir / TOKEN_FILE
+    if not standalone and token_path.exists():
+        token = token_path.read_text(encoding="utf-8").strip()
+
     html = html.replace(DATA_MARK, data_js)
     html = html.replace(ROUTE_MARK, route_js)
     html = html.replace(ROUTE_MD_MARK, route_md_js)
@@ -398,6 +413,7 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
     html = html.replace(SORTABLE_MARK, sortable)
     html = html.replace(THEME_MARK, theme)
     html = html.replace(BUILT_MARK, json.dumps(time.strftime("%Y-%m-%d %H:%M")))
+    html = html.replace(SAVE_TOKEN_MARK, json.dumps(token))
     if standalone:
         html = html.replace("__STANDALONE__", "true")
     else:
@@ -423,15 +439,27 @@ def build(trip_dir: Path, standalone: bool = False) -> Path:
 # ------------------------------------------------------------------ serve
 
 SERVER_SRC = r'''
-import json, os, subprocess, sys, threading, time
+import hmac, json, os, subprocess, sys, threading, time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(sys.argv[2]).resolve()
 BUILD_PY = sys.argv[3]
 TARGET = ROOT / "places.json"
 LOCK = threading.Lock()
 _timer = None
+
+# The save token build.py injected into the page. Binding to 127.0.0.1 stops
+# the LAN, but not other websites open in the same browser — those can still
+# fire blind cross-origin POSTs at localhost. The token is what tells this
+# trip page apart from them. Fail closed: no token file, no saves.
+try:
+    TOKEN = (ROOT / ".server.token").read_text(encoding="utf-8").strip()
+except OSError:
+    TOKEN = ""
+ALLOWED_ORIGINS = {"http://localhost:" + sys.argv[1],
+                   "http://127.0.0.1:" + sys.argv[1]}
 
 
 def rebuild():
@@ -592,19 +620,54 @@ class H(SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _hidden(self):
+        # .server.token and .server.pid live inside the served directory;
+        # the static file half of this server must never hand them out.
+        # unquote first: /%2Eserver.token is the same file.
+        path = unquote(self.path.partition("?")[0])
+        return any(seg.startswith(".") for seg in path.split("/") if seg)
+
+    def do_GET(self):
+        if self._hidden():
+            self.send_error(404)
+            return
+        super().do_GET()
+
+    def do_HEAD(self):
+        if self._hidden():
+            self.send_error(404)
+            return
+        super().do_HEAD()
+
     def do_POST(self):
         path, _, query = self.path.partition("?")
         if path.rstrip("/") != "/__save__":
             self.send_error(404)
             return
         now = "now=1" in query          # manual save: rebuild at once, don't make the user wait 12s
+        code = 400
         try:
+            # The token in the body is the main gate; Origin and Content-Type
+            # are depth. Same-origin requests may omit Origin (older engines),
+            # so absent passes — a wrong one never does.
+            origin = self.headers.get("Origin")
+            if origin and origin not in ALLOWED_ORIGINS:
+                code = 403
+                raise ValueError("origin not allowed")
+            ctype = (self.headers.get("Content-Type") or "").lower()
+            if not ctype.strip().startswith("application/json"):
+                raise ValueError("Content-Type must be application/json")
             n = int(self.headers.get("Content-Length") or 0)
             if n <= 0 or n > 8 * 1024 * 1024:
                 raise ValueError("unexpected request body size")
             doc = json.loads(self.rfile.read(n).decode("utf-8"))
             if not isinstance(doc, dict) or not doc.get("patch"):
                 raise ValueError("not a valid patch structure")
+            sent = doc.pop("token", None)
+            if not TOKEN or not isinstance(sent, str) \
+                    or not hmac.compare_digest(sent, TOKEN):
+                code = 403
+                raise ValueError("save token mismatch — stale page, reload it")
             # Always writes this one filename under ROOT; arbitrary paths
             # from the page are never accepted
             with LOCK:
@@ -617,7 +680,7 @@ class H(SimpleHTTPRequestHandler):
             self.send_response(200)
         except Exception as e:
             body = json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode()
-            self.send_response(400)
+            self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -641,7 +704,9 @@ def _detach() -> dict:
 
 
 def serve(trip_dir: Path, page: Path, port: int, open_browser: bool = True) -> None:
-    stop(trip_dir, quiet=True)
+    # The previous server was already stopped in main(), before the token was
+    # written — stop() deletes the token file, so calling it here would kill
+    # the token the page was just built with.
     proc = subprocess.Popen(
         [sys.executable, "-c", SERVER_SRC, str(port), str(trip_dir),
          str(Path(__file__).resolve())],
@@ -672,6 +737,8 @@ def serve(trip_dir: Path, page: Path, port: int, open_browser: bool = True) -> N
 def stop(trip_dir: Path, quiet: bool = False) -> None:
     f = trip_dir / PID_FILE
     if not f.exists():
+        # A crashed server can leave the token behind without a pid file.
+        (trip_dir / TOKEN_FILE).unlink(missing_ok=True)
         if not quiet:
             print("No server running")
         return
@@ -694,6 +761,8 @@ def stop(trip_dir: Path, quiet: bool = False) -> None:
             print("Server is no longer running")
     finally:
         f.unlink(missing_ok=True)
+        # The save token dies with its server; the next --serve mints a new one.
+        (trip_dir / TOKEN_FILE).unlink(missing_ok=True)
 
 
 # ------------------------------------------------------------------ cli
@@ -715,6 +784,14 @@ def main() -> int:
     if args.stop:
         stop(trip_dir)
         return 0
+
+    if args.serve:
+        # Stop the previous server and mint this launch's token *before*
+        # building, so the page being built already carries it. Background
+        # rebuilds re-read the same file and keep the token stable for the
+        # lifetime of the server.
+        stop(trip_dir, quiet=True)
+        (trip_dir / TOKEN_FILE).write_text(secrets.token_urlsafe(32), encoding="utf-8")
 
     page = build(trip_dir, standalone=args.standalone)
     if args.serve:
