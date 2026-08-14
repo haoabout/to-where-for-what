@@ -23,6 +23,14 @@ trips/
 
 # Development-time scratch files
 .tmp/
+temp/
+
+# Point-in-time repository reviews. A review is working material: its findings
+# either become commits and CHANGELOG entries or get consciously dropped, and
+# once that's happened the file is a stale second account of the same history
+# — exactly the duplicated-contract problem the 2026-08 review itself flagged.
+# Keep the local copy for as long as it's useful; git already holds the record.
+REVIEW.md
 
 # Local Claude Code config (preview server launch config etc.) — per-machine
 # tooling, same reasoning as .impeccable/ above.
