@@ -23,6 +23,40 @@ Bump rules:
 
 ---
 
+## 1.8.3 — 2026-08-14
+
+### Changed
+
+- **SKILL.md slimmed from 706 lines / 35.8KB to 476 lines / 22.0KB** (body
+  −40%). What went: content that was word-for-word duplicated in a reference
+  the flow already requires reading at that moment (A2/Stage-D key points →
+  playbook / route-design; stub completion steps → subagent-briefing +
+  data-schema; pre-delivery checkboxes → checklist; subagent mechanics → the
+  briefings), plus illustrative prose (worked examples, the anti-pattern
+  table — every row restated a rule that stays). What stayed, compressed but
+  complete: the four hard rules, the four-beat questioning method, B+C page
+  operations and short-code parsing, trip-resume and stub-scan triggers, the
+  model-tier section (the briefings cite it as authority), and every
+  degraded-path fallback.
+- **The post-trip retro flow moved to `references/retro.md`** — SKILL.md keeps
+  the trigger (new trip, pre-A1, `dates.end` passed, `trip.retro` unset) and
+  routes there. Cross-references in data-schema.md and research-playbook.md
+  now point at retro.md directly.
+- References absorbed the relocated rules a release earlier in the same day:
+  lodging timing (data-schema "Lodging"), to-dos ownership (route-design),
+  the ✅❌ render check and first-trip preferences offer (checklist).
+- A typical new-trip start now loads ~78KB of required context
+  (SKILL + playbook + schema) instead of ~91KB.
+
+### Notes for updaters
+
+- Documentation restructuring only — no script, schema, or template change;
+  the behavior contract is unchanged and existing `places.json` files
+  validate as before. A rule-by-rule traceability check and six behavioral
+  scenario traces were run against the new layout before release.
+
+---
+
 ## 1.8.2 — 2026-08-14
 
 Data-chain hardening from the 2026-08 repository review (its P1-1, P1-3,
