@@ -222,6 +222,7 @@ find out the place is closed.
 | `last_entry` | string | | Last-entry time. **Required for the last place of each trip day** |
 | `closed_days` | `int[]` | ✅ | ISO weekdays, 1 = Monday … 7 = Sunday. `[]` for no closures. **Structured field used for conflict validation** |
 | `closed` | string | ✅ | Full closure description, e.g. "Mondays; between exhibitions; New Year holidays". Write "none" if none |
+| `run` | object | conditional | `{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}` — the limited run window. Required for festivals, limited-run exhibitions and pop-ups. **Structured field used for conflict validation** |
 | `ticket` | string | ✅ | e.g. `¥1300 (special exhibitions ¥1500)`; write "free" if free |
 | `booking` | enum | ✅ | `required` booking mandatory / `recommended` walk-up possible but booking advised / `none` |
 | `booking_url` | string | conditional | Should be present when `booking ≠ none` (missing = P2) |
@@ -231,6 +232,28 @@ find out the place is closed.
 
 > **Never guess `status`.** Without online confirmation, `open` is forbidden.
 > This is the only gate against "arrived to find it under renovation".
+
+#### The limited run window `run`
+
+```jsonc
+"run": { "start": "2026-09-12", "end": "2026-09-13" }
+```
+
+A festival, a limited-run exhibition or a pop-up is **not open the rest of the
+year**, and that is a different fact from "closed on Mondays". Outside the
+window the place does not exist to visit at all, so `closed_days` can honestly
+be `[]` while scheduling it is still a mistake.
+
+Measured failure: a two-day matsuri running 09-12 – 09-13 was dragged onto
+09-14 and the page said nothing. `closed_days: []` was correct, `status` was
+`open`, and the only trace of the dates lived in the prose of `hours` and
+`closed` — where no check can read them. `run` is the structured half of that
+prose, exactly as `closed_days` is the structured half of `closed`: keep both,
+because the text still carries the hour, the venue and the rain policy.
+
+`run` needs no new `kind`; a festival stays `kind: attraction` and normally
+sits in the `event` category. Omit the field entirely for anything that runs
+year-round — an absent `run` means "no limited window", never "unknown".
 
 ### Verification state `verify`
 
@@ -497,6 +520,8 @@ Rules:
 - `status ≠ open` without a `status_note`
 - **Closure days cover the whole trip** — `closed_days` collides with every trip
   day, i.e. the place can't be visited at all
+- `run` malformed — not an object, a date not in `YYYY-MM-DD`, or `start` after
+  `end`
 - `parent_id` pointing at a nonexistent id
 - Illegal `kind` (only `attraction` / `lodging`)
 
@@ -509,6 +534,8 @@ Scheduling checks (only when `itinerary` exists):
   `itinerary[].places[].booked` not a boolean
 - **A place scheduled on a day it's closed** — not a judgment call; it can't be
   visited that day
+- **A place scheduled outside its `run` window** — the event isn't on that day,
+  so the slot is empty however good the place is
 - A scheduled place whose `status` is `permanently_closed`
 - `itinerary[].date` not in `YYYY-MM-DD` format
 
@@ -516,6 +543,8 @@ Scheduling checks (only when `itinerary` exists):
 
 - `--check-links` found dead links (`sources` / `images` / `booking_url`)
 - A category count below `min` or above `max`
+- **The `run` window doesn't overlap the trip at all** — the event is over, or
+  hasn't started; keep it out of the list or say so in `trip.note`
 - `local_language ≠ output_language` but `name_local` missing
 - Two places with nearly identical coordinates (<25 m), likely duplicates
 - `verified_at` more than 30 days old

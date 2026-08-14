@@ -41,7 +41,7 @@ RETRO_STATES = {"done", "skipped"}
 KNOWN_PLACE_FIELDS = {
     "id", "name", "name_local", "name_en", "kind", "category", "tier", "scale",
     "parent_id", "area", "coord", "hours", "last_entry", "closed_days",
-    "closed", "ticket", "booking", "booking_url", "status", "status_note",
+    "closed", "run", "ticket", "booking", "booking_url", "status", "status_note",
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
     "photo_note", "tags", "images", "sources",
     "verify", "choice", "choice_reason", "origin",
@@ -179,6 +179,23 @@ def _trip_weekdays(trip) -> set[int] | None:
         days.add(cur.isoweekday())
         cur += timedelta(days=1)
     return days
+
+
+def _run_window(p):
+    """A place's limited run window as (start, end), or None if it has none.
+
+    Returns None for a malformed window too: shape errors are reported once
+    where the field is checked, and every consumer downstream should behave as
+    if the place simply runs year-round rather than derive conflicts from
+    half-parsed dates.
+    """
+    r = p.get("run")
+    if not isinstance(r, dict):
+        return None
+    start, end = _parse_date(r.get("start")), _parse_date(r.get("end"))
+    if not start or not end or end < start:
+        return None
+    return start, end
 
 
 # ---------------------------------------------------------------- checks
@@ -445,6 +462,36 @@ def check_place(p, idx, doc, rep: Report) -> None:
                         f"closure days cover the whole trip (trip spans {names}; the place is shut on all of them) — "
                         f"the user should never see it as selectable")
 
+    # run: the limited window a festival / limited-run exhibition / pop-up is
+    # actually on. Distinct from closed_days, which describes a weekly rhythm
+    # inside a year-round operation — a two-day matsuri has no closure day at
+    # all, and without this field its dates survive only in the prose of
+    # `hours`, where no check can read them.
+    r = p.get("run")
+    if r is not None:
+        if not isinstance(r, dict):
+            rep.add("P0", where, 'run must be an object {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}')
+        else:
+            rs, re_ = _parse_date(r.get("start")), _parse_date(r.get("end"))
+            if not rs or not re_:
+                rep.add("P0", where,
+                        f"run.start/run.end must both be dates in YYYY-MM-DD, got "
+                        f"{r.get('start')!r} / {r.get('end')!r}")
+            elif re_ < rs:
+                rep.add("P0", where, f"run ends ({re_}) before it starts ({rs})")
+            else:
+                dates = _dict(trip.get("dates"))
+                ts, te = _parse_date(dates.get("start")), _parse_date(dates.get("end"))
+                # Not a P0: an event just outside the window is legitimate
+                # content — "it ended the day before you land" is worth
+                # telling the user. It only must not be silently schedulable.
+                if ts and te and te >= ts and (re_ < ts or rs > te):
+                    when = ("the event is already over" if re_ < ts
+                            else "the event hasn't started yet")
+                    rep.add("P1", where,
+                            f"run {rs}–{re_} doesn't overlap the trip ({ts}–{te}); {when} — "
+                            f"drop it from the list, or keep it and say so in trip.note")
+
     # Spot parentage. parent_id is optional — in practice some micro-spots
     # (ferry piers, small roadside shrines) have no major place in their area
     # at all, and forcing a parent would fabricate a false hierarchy.
@@ -642,6 +689,15 @@ def check_itinerary(doc, rep: Report) -> None:
                     rep.add("P0", ewhere,
                             f"{p.get('name')} is scheduled on {day.get('date')} ({WEEK_NAMES[wd]}), "
                             f"but it's closed that day (closed_days={cds})")
+                # Outside its run window a limited-run place isn't shut, it
+                # isn't happening — the slot is empty however good the place is.
+                win = _run_window(p)
+                if win and not win[0] <= d <= win[1]:
+                    rs, re_ = win
+                    when = (f"it ended on {re_}" if d > re_ else f"it doesn't start until {rs}")
+                    rep.add("P0", ewhere,
+                            f"{p.get('name')} is scheduled on {day.get('date')}, but {when} "
+                            f"(run {rs}–{re_}) — it isn't on that day")
             if p.get("status") == "permanently_closed":
                 rep.add("P0", ewhere, f"{p.get('name')} is permanently closed and cannot be scheduled")
 

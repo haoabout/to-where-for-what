@@ -104,8 +104,8 @@ When a quota can't be met, in order:
 
 Its quota starts at 0 because it's **only meaningful once travel dates are
 known**. Current exhibitions must be looked up online, never recalled from
-memory. Record each exhibition's start/end dates and confirm they cover the
-user's trip days.
+memory. Record each exhibition's start/end dates in `run` and confirm they
+cover the user's trip days.
 
 The category is **wider than museum special exhibitions**: festivals and
 matsuri, temple fairs, fireworks, processions, night markets, and
@@ -155,6 +155,11 @@ Songkran on arrival.
 Record start/end dates for every hit and confirm they cover the trip days,
 exactly as for exhibition runs. One that ends the day before arrival earns a
 line in `trip.note` and nothing more.
+
+Put those dates in **`run`** (`{"start": …, "end": …}`), not only in the prose
+of `hours` and `closed` — a matsuri has no weekly closure day, so `run` is the
+one field that can stop the user dragging a two-day festival onto a day it
+isn't on. Required for every festival, limited-run exhibition and pop-up.
 
 Festivals are **time-bound in a way ordinary places are not**: a matsuri is
 one evening, a procession is one morning on one street, fireworks are a
@@ -621,6 +626,7 @@ face is backlit at noon".
 - [ ] Every place has `sources` with URLs actually visited
 - [ ] Every `status` was confirmed; none filled in as `open` on assumption
 - [ ] `closed_days` agrees with the `closed` text
+- [ ] Every limited-run place (festival, pop-up, exhibition run) carries `run`
 - [ ] Every micro-spot has a `parent_id`
 - [ ] Every `tier` is explainable from the detour ladder, and the distribution
       isn't inflated (`S` ≤ ~12%, `S + A` ≤ ~⅓)
