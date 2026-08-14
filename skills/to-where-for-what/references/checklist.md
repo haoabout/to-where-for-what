@@ -45,6 +45,10 @@ Not reading the code — **actually opening it**. This step has caught:
 `el.hidden === true` doesn't mean it isn't displayed — check
 `getComputedStyle(el).display`.
 
+While the page is open, also confirm the guide's ✅❌ table matches the user's
+`choice` values — it's generated from the data, but "generated" still has to
+have rendered.
+
 ### 0-4. Every `status` was confirmed
 
 Not one filled in as `open` because it "looked like it should be". This is the
@@ -169,6 +173,10 @@ Without these, the user forms wrong expectations:
   from OSM's `colour` tag; where a city lacks them the map falls back to
   auto-assigned colors and says so in the legend
 - [ ] How many places remain **undecided** — want another look?
+- [ ] **First trip only**: if `preferences.md` is still mostly placeholders,
+  offer — don't push — "two minutes now to fill the interest weights, and the
+  next trip starts sharper". This is the moment the user best knows what
+  they'd adjust; there is no other designated point for the initial fill
 
 ---
 

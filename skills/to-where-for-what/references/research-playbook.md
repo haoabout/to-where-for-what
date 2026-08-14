@@ -86,8 +86,8 @@ algorithm would keep. Rules:
 - The `pitch` says honestly what each one is: "not your usual profile, but
   locals rate it exceptionally — judge for yourself"
 - Wildcards are how the profile grows: one the user later reports loving (the
-  retro loop, SKILL.md) promotes that direction in the next trip's quotas and
-  tiers
+  retro loop, [retro.md](retro.md)) promotes that direction in the next trip's
+  quotas and tiers
 
 ### What about small cities
 

@@ -122,5 +122,5 @@ And replace the coordinate/image bullet in the hard rules with:
 Output file: `partial-stubs.json`, same `{"places": [ … ]}` shape, each
 entry a **complete place object keeping its original `id`**. After the agent
 returns, merge by `id` into `places.json` — preserving each stub's existing
-`origin`, `choice`, and any `itinerary` references (SKILL.md P3 rules) —
-then run `validate.py`.
+`origin`, `choice`, and any `itinerary` references (data-schema.md, "User
+stubs") — then run `validate.py`.

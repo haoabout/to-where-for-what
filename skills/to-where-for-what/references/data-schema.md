@@ -81,7 +81,7 @@ resort, not a routine.
 | `note` | string | | Trip-level note **for the AI, not the page** — nothing renders it. Half-day arrival/departure shapes (SKILL.md, "Why ask down to the hour") and the festival / public-holiday conclusion (research-playbook.md) live here; stage D reads it when checking hard constraints |
 | `generated_at` | string | ✅ | `YYYY-MM-DD`, when the data was generated |
 | `verified_at` | string | ✅ | `YYYY-MM-DD`, last online verification. **If >30 days before today, the page shows a staleness warning** |
-| `retro` | `done`\|`skipped` | | Post-trip retro state (SKILL.md, "Retro on past trips"). Absent = not yet asked; either value = never ask again |
+| `retro` | `done`\|`skipped` | | Post-trip retro state ([retro.md](retro.md)). Absent = not yet asked; either value = never ask again |
 
 ### Picking `theme_hue`
 
@@ -165,6 +165,11 @@ number in the day sequence** (attractions stay 1, 2, 3 consecutively), and
 doesn't count toward the attraction-total quotas. It may appear twice in one day
 (check out of A, check in at B).
 
+**Create the entry the moment stage A's questionnaire yields a hotel name or
+address** — the user reads the map around their hotel from the very first
+build, and this is the step that keeps getting forgotten. Only a rough area so
+far? Note it in `brief.md` and add the entry when the booking lands.
+
 #### User stubs `origin: "user"`
 
 Points the user added ad hoc via the trip page's map search. The page only has
@@ -186,11 +191,15 @@ completes them afterwards".
 - **Coordinates outside `trip.bbox` are only P1 for stubs, not P0**: spontaneous
   additions often sit just outside the bbox (adding Nara to an Osaka trip), and
   the coordinates come from OSM, not from the AI — the prior of a swap or
-  mis-search is far lower.
+  mis-search is far lower. Just confirm it isn't a same-name mismatch; a point
+  genuinely far outside gets routed in the guide with realistic travel times.
 - When the AI continues work on an existing trip, treat every
   "`origin=="user"` and no `tier`" point as a research to-do and run it through
   the research pipeline (see SKILL.md, "Completing user-added stubs"). Once
   completed, the full attraction required set applies.
+- When completing, **keep the stub's existing `origin`, `choice`, and any
+  `itinerary` references** — a place the user deliberately searched for and
+  added usually already has `choice: yes`; completion must not touch it.
 
 ### Location
 
@@ -314,7 +323,7 @@ could only record one of them.
 ### Post-trip feedback (written only by the retro flow)
 
 Recorded when the user, asked after a trip has ended, reports how places
-actually turned out (SKILL.md, "Retro on past trips"). Both optional; only
+actually turned out (flow: [retro.md](retro.md)). Both optional; only
 places the user volunteers get them — never fill by inference.
 
 | Field | Type | Notes |

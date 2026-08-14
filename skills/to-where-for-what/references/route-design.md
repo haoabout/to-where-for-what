@@ -109,11 +109,14 @@ happens, either trim the section or split it with another `---`.
 Type size is the same on every sheet and is not tuned per section. Don't ask
 for a section to be "made to fit" by shrinking it.
 
-**Don't** hand-write a "cost summary" or an "all-places table" — the page
-generates both from `places.json`, always in sync with the data. Hand-written
-copies duplicate them and eventually contradict them.
+**Don't** hand-write a "cost summary", an "all-places table", or the
+pre-departure to-dos — the page generates all three from `places.json`, always
+in sync with the data. Hand-written copies duplicate them and eventually
+contradict them. The to-dos are also where the user ticks off bookings
+(`itinerary[].places[].booked`) and self-checks (`prep.checked`) — both are
+page-written fields the AI must never pre-fill.
 
-Both blocks follow `itinerary`, not `choice`:
+The cost summary and the table follow `itinerary`, not `choice`:
 
 - **Costs** are grouped by day and only count scheduled places (a place on two
   days is one ticket). A place marked "want" but scheduled nowhere costs
