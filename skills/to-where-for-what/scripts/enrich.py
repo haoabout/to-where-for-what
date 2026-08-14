@@ -32,10 +32,12 @@ import json
 import math
 import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 UA = "to-where-for-what-enrich/1.0 (https://github.com/; trip planning skill)"
@@ -212,9 +214,26 @@ AUDIT_NAME = "image-audit.json"
 # families surface it; 429/5xx get 3 retries honoring Retry-After (else
 # 1/2/4s). Other HTTP errors return a result instead of raising, so the
 # caller can record *why* a candidate failed instead of silently eating it.
+#
+# Several places are collected at once (see fill_images), so everything here
+# runs on multiple threads. Politeness is per host, not global: each host
+# gets its own lock, held across its whole request cycle, so two requests to
+# commons.wikimedia.org stay strictly serial and DOMAIN_INTERVAL apart while
+# a slow official site in another thread costs them nothing. Both the
+# throttle timestamp and the breaker counter live behind that lock, which is
+# the only mutable state a request touches — no second lock needed, and no
+# lock is ever held while waiting for another.
+#
+# Only the image pipeline goes through here. Nominatim (--coords, get_json)
+# and Overpass (--transit) each open their own connections on the main
+# thread and keep their own, far stricter pacing; concurrency does not reach
+# them.
 
 _HTTP_CACHE: dict[str, dict] = {}
+_INFLIGHT: dict[str, threading.Event] = {}
+_CACHE_LOCK = threading.Lock()
 _DOMAINS: dict[str, dict] = {}
+_DOMAINS_LOCK = threading.Lock()
 DOMAIN_INTERVAL = 0.35
 RETRY_HTTP = {429, 500, 502, 503, 504}
 
@@ -232,19 +251,43 @@ HOST_FAIL_LIMIT = 2
 
 
 def _domain(url: str) -> dict:
-    """This host's throttling timestamp and circuit-breaker state."""
+    """This host's lock, throttling timestamp and circuit-breaker state."""
     host = urllib.parse.urlparse(url).netloc
-    st = _DOMAINS.get(host)
-    if st is None:
-        st = {"last": 0.0, "fails": 0, "first_err": None, "dead": None}
-        _DOMAINS[host] = st
-    return st
+    with _DOMAINS_LOCK:
+        st = _DOMAINS.get(host)
+        if st is None:
+            st = {"lock": threading.Lock(), "last": 0.0,
+                  "fails": 0, "first_err": None, "dead": None}
+            _DOMAINS[host] = st
+        return st
 
 
-def _throttle(st: dict) -> None:
-    dt = time.monotonic() - st["last"]
-    if dt < DOMAIN_INTERVAL:
-        time.sleep(DOMAIN_INTERVAL - dt)
+def _claim(url: str) -> tuple[dict | None, bool]:
+    """(cached result, do I own the fetch). The cache only helps when a URL
+    is asked for twice in sequence; with several places in flight the same
+    Commons thumbnail is routinely asked for twice at once, so the second
+    caller waits on the first's result instead of putting an identical
+    request on the wire. A fetch that ends without publishing anything (an
+    exception escaping http_get) hands ownership to whoever waits."""
+    while True:
+        with _CACHE_LOCK:
+            hit = _HTTP_CACHE.get(url)
+            if hit is not None:
+                return hit, False
+            ev = _INFLIGHT.get(url)
+            if ev is None:
+                _INFLIGHT[url] = threading.Event()
+                return None, True
+        ev.wait()
+
+
+def _publish(url: str, res: dict | None) -> None:
+    with _CACHE_LOCK:
+        if res is not None:
+            _HTTP_CACHE[url] = res
+        ev = _INFLIGHT.pop(url, None)
+    if ev is not None:
+        ev.set()
 
 
 def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
@@ -254,75 +297,83 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
     Returns {"status", "body", "ctype", "error"}; "error" is set on network
     failure after retries, "status" on any HTTP response including 4xx. A
     request to a host the breaker has condemned comes back immediately as
-    error "host-dead:<the error that first broke it>".
+    error "host-dead:<the error that first broke it>"."""
+    cached, mine = _claim(url)
+    if not mine:
+        return cached
+    res = None
+    try:
+        res = _fetch(url, accept, cap, timeout)
+        return res
+    finally:
+        _publish(url, res)
+
+
+def _fetch(url: str, accept: str, cap: int, timeout: int) -> dict:
+    """The request itself, once per URL per run.
 
     Retry policy is asymmetric on purpose: 429/5xx are cheap, fast responses
     worth 3 retries (honoring Retry-After, else 1/2/4s) — but a connection
     timeout already cost `timeout` seconds, so network errors get exactly
     one retry. Measured on the Bangkok run: 3 retries × 20s timeouts on a
     handful of dead official domains stretched one --images pass past 20
-    minutes."""
-    cached = _HTTP_CACHE.get(url)
-    if cached is not None:
-        return cached
+    minutes. The backoff sleeps outside the host lock; only the request
+    itself holds it."""
     st = _domain(url)
     last_err = None
     net_fails = 0
     for attempt in range(4):                     # 1 try + up to 3 retries
-        if st["dead"]:
-            return {"status": None, "body": b"", "ctype": "",
-                    "error": f"host-dead:{st['dead']}"}
-        _throttle(st)
-        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
         retry_after = None
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                res = {"status": r.status, "body": r.read(cap),
-                       "ctype": (r.headers.get("Content-Type") or "").lower(),
-                       "error": None}
+        with st["lock"]:
+            if st["dead"]:
+                return {"status": None, "body": b"", "ctype": "",
+                        "error": f"host-dead:{st['dead']}"}
+            dt = time.monotonic() - st["last"]
+            if dt < DOMAIN_INTERVAL:
+                time.sleep(DOMAIN_INTERVAL - dt)
+            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    st["fails"], st["first_err"] = 0, None
+                    return {"status": r.status, "body": r.read(cap),
+                            "ctype": (r.headers.get("Content-Type") or "").lower(),
+                            "error": None}
+            except urllib.error.HTTPError as e:
+                # Any status at all means the host answered, so it counts as
+                # proof of life even when the retry loop keeps going.
                 st["fails"], st["first_err"] = 0, None
-                _HTTP_CACHE[url] = res
-                return res
-        except urllib.error.HTTPError as e:
-            # Any status at all means the host answered, so it counts as
-            # proof of life even when the retry loop keeps going.
-            st["fails"], st["first_err"] = 0, None
-            if e.code not in RETRY_HTTP:
-                res = {"status": e.code, "body": b"", "ctype": "", "error": None}
-                _HTTP_CACHE[url] = res
-                return res
-            last_err = f"http:{e.code}"
-            retry_after = (e.headers or {}).get("Retry-After")
-        except Exception as e:  # noqa: BLE001  timeouts, DNS, resets
-            last_err = type(e).__name__
-            net_fails += 1
-            # Only true transport failures may feed the breaker. This branch
-            # also catches client-side errors that say nothing about the
-            # host — measured on the Osaka run, glico.com serves image URLs
-            # with Japanese filenames that raise UnicodeEncodeError before a
-            # single packet leaves, and counting those condemned a perfectly
-            # healthy domain. Everything at the socket layer, timeouts and
-            # resets included, is an OSError; those are the real evidence.
-            if isinstance(e, OSError):
-                st["fails"] += 1
-                if st["first_err"] is None:
-                    st["first_err"] = last_err
-                if st["fails"] >= HOST_FAIL_LIMIT:
-                    st["dead"] = st["first_err"]
-                    break
-            if net_fails >= 2:
-                break
-        finally:
-            st["last"] = time.monotonic()
+                if e.code not in RETRY_HTTP:
+                    return {"status": e.code, "body": b"", "ctype": "", "error": None}
+                last_err = f"http:{e.code}"
+                retry_after = (e.headers or {}).get("Retry-After")
+            except Exception as e:  # noqa: BLE001  timeouts, DNS, resets
+                last_err = type(e).__name__
+                net_fails += 1
+                # Only true transport failures may feed the breaker. This
+                # branch also catches client-side errors that say nothing
+                # about the host — measured on the Osaka run, glico.com
+                # serves image URLs with Japanese filenames that raise
+                # UnicodeEncodeError before a single packet leaves, and
+                # counting those condemned a perfectly healthy domain.
+                # Everything at the socket layer, timeouts and resets
+                # included, is an OSError; those are the real evidence.
+                if isinstance(e, OSError):
+                    st["fails"] += 1
+                    if st["first_err"] is None:
+                        st["first_err"] = last_err
+                    if st["fails"] >= HOST_FAIL_LIMIT:
+                        st["dead"] = st["first_err"]
+            finally:
+                st["last"] = time.monotonic()
+        if st["dead"] or net_fails >= 2:
+            break
         if attempt < 3:
             try:
                 wait = max(0.0, float(retry_after))
             except (TypeError, ValueError):
                 wait = float(2 ** attempt)       # 1s, 2s, 4s
             time.sleep(wait)
-    res = {"status": None, "body": b"", "ctype": "", "error": last_err}
-    _HTTP_CACHE[url] = res
-    return res
+    return {"status": None, "body": b"", "ctype": "", "error": last_err}
 
 
 def _json(url: str) -> dict | None:
@@ -978,6 +1029,80 @@ def _atomic_write_json(path: Path, doc: dict) -> None:
     tmp.replace(path)
 
 
+# A place's collection is almost entirely time spent waiting on somebody
+# else's server, so places are collected several at a time. Five workers,
+# not more: the throttle keeps same-host requests serial no matter how many
+# threads there are, and since Commons and Wikipedia are on the critical
+# path for nearly every place, extra workers would only queue up behind
+# those two hosts while making the run look busier than it is.
+IMAGE_WORKERS = 5
+
+# Workers print a whole place's block at once. Without this the lines of two
+# places that finish together interleave into an unreadable mess.
+_PRINT_LOCK = threading.Lock()
+
+
+def _images_for_place(p: dict, trip: dict, bbox, langs: list[str],
+                      dry: bool, recheck: bool) -> tuple[dict, str | None]:
+    """One place's whole image pass, run on a worker thread: verify what's
+    on the page, collect if needed, and (when it had nothing) adopt a
+    verified `high` candidate. Returns its audit record and the URL written,
+    if any. Touches only this place's own dict; the caller does the merging,
+    so the audit keeps places.json order however the threads finish."""
+    existing = [i for i in (p.get("images") or []) if isinstance(i, dict)]
+    # Verify what's already on the page — a dead URL is an audit-worthy
+    # failure, not a silent skip.
+    existing_checked = []
+    broken = False
+    for img in existing:
+        url = img.get("url") or ""
+        c = _cand(url, "existing", "existing",
+                  credit=img.get("credit", ""),
+                  source_url=img.get("source_url", ""))
+        c["check"] = check_image_url(url) if url else {"ok": False, "reason": "empty-url"}
+        existing_checked.append(c)
+        if not c["check"]["ok"]:
+            broken = True
+
+    needs_collect = recheck or not existing or broken
+    if not needs_collect:
+        return {"name": p.get("name", ""),
+                "checked": _now_iso(),
+                "written": None,
+                "candidates": existing_checked}, None
+
+    with _PRINT_LOCK:
+        print(f"  → {p.get('name')} …", flush=True)
+    cands = collect_candidates(p, trip, bbox, langs, existing)
+    written = None
+    if not existing and not dry:
+        best = next((c for c in cands
+                     if c["confidence"] == "high" and c["check"]["ok"]), None)
+        if best:
+            p["images"] = [{"url": best["url"], "credit": best["credit"],
+                            "source_url": best["source_url"]}]
+            written = best["url"]
+
+    ok_n = sum(1 for c in cands if (c["check"] or {}).get("ok"))
+    bad_n = len(cands) - ok_n
+    tag = ("✓ high→written" if written
+           else ("existing broken" if broken and existing else "awaiting review"))
+    lines = [f"  {p.get('name'):<24} {ok_n} candidate(s), {bad_n} failed  [{tag}]"]
+    for c in cands:
+        chk = c["check"] or {}
+        mark = "·" if chk.get("ok") else "✗"
+        lines.append(f"      {mark} [{c['source']}/{c['confidence']}] "
+                     f"{c['url'].rsplit('/', 1)[-1][:48]}"
+                     f"{'' if chk.get('ok') else '  (' + chk.get('reason', '?') + ')'}")
+    with _PRINT_LOCK:
+        print("\n".join(lines), flush=True)
+
+    return {"name": p.get("name", ""),
+            "checked": _now_iso(),
+            "written": written,
+            "candidates": cands}, written
+
+
 def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
     """Candidate pipeline. Writes places.json only for places that had no
     image and produced a verified `high` candidate; every place touched gets
@@ -993,61 +1118,35 @@ def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
     n_missing = sum(1 for p in doc["places"] if not p.get("images"))
     print(f"Images: candidate pipeline (max {MAX_CANDIDATES}/place; "
           f"{n_missing} place(s) without images"
-          f"{', full recheck' if recheck else ''})")
+          f"{', full recheck' if recheck else ''}; {IMAGE_WORKERS} workers)")
 
+    def run(p: dict):
+        # One place blowing up must cost that place only. Its previous audit
+        # record is left in place rather than overwritten with an empty one —
+        # yesterday's candidates are worth more than a blank entry.
+        try:
+            return _images_for_place(p, trip, bbox, langs, dry, recheck)
+        except Exception as exc:  # noqa: BLE001
+            with _PRINT_LOCK:
+                print(f"  ✗ {p.get('name')}: {type(exc).__name__}: {exc}"
+                      f" — skipped, its audit entry is left as it was",
+                      file=sys.stderr, flush=True)
+            return None, None
+
+    with ThreadPoolExecutor(max_workers=IMAGE_WORKERS,
+                            thread_name_prefix="img") as ex:
+        results = list(ex.map(run, doc["places"]))
+
+    # Merged in places.json order, after every worker is done: the audit's
+    # key order and its one-shot write are what the visual review agent and
+    # --apply-image-review read.
     wrote = 0
-    for p in doc["places"]:
-        pid = p.get("id") or p.get("name") or "?"
-        existing = [i for i in (p.get("images") or []) if isinstance(i, dict)]
-        # Verify what's already on the page — a dead URL is an audit-worthy
-        # failure, not a silent skip.
-        existing_checked = []
-        broken = False
-        for img in existing:
-            url = img.get("url") or ""
-            c = _cand(url, "existing", "existing",
-                      credit=img.get("credit", ""),
-                      source_url=img.get("source_url", ""))
-            c["check"] = check_image_url(url) if url else {"ok": False, "reason": "empty-url"}
-            existing_checked.append(c)
-            if not c["check"]["ok"]:
-                broken = True
-
-        needs_collect = recheck or not existing or broken
-        if not needs_collect:
-            audit["places"][pid] = {"name": p.get("name", ""),
-                                    "checked": _now_iso(),
-                                    "written": None,
-                                    "candidates": existing_checked}
+    for p, (rec, written) in zip(doc["places"], results):
+        if rec is None:
             continue
-
-        print(f"  → {p.get('name')} …", flush=True)
-        cands = collect_candidates(p, trip, bbox, langs, existing)
-        written = None
-        if not existing and not dry:
-            best = next((c for c in cands
-                         if c["confidence"] == "high" and c["check"]["ok"]), None)
-            if best:
-                p["images"] = [{"url": best["url"], "credit": best["credit"],
-                                "source_url": best["source_url"]}]
-                written = best["url"]
-                wrote += 1
-        audit["places"][pid] = {"name": p.get("name", ""),
-                                "checked": _now_iso(),
-                                "written": written,
-                                "candidates": cands}
-
-        ok_n = sum(1 for c in cands if (c["check"] or {}).get("ok"))
-        bad_n = len(cands) - ok_n
-        tag = ("✓ high→written" if written
-               else ("existing broken" if broken and existing else "awaiting review"))
-        print(f"  {p.get('name'):<24} {ok_n} candidate(s), {bad_n} failed  [{tag}]")
-        for c in cands:
-            chk = c["check"] or {}
-            mark = "·" if chk.get("ok") else "✗"
-            print(f"      {mark} [{c['source']}/{c['confidence']}] "
-                  f"{c['url'].rsplit('/', 1)[-1][:48]}"
-                  f"{'' if chk.get('ok') else '  (' + chk.get('reason', '?') + ')'}")
+        audit["places"][p.get("id") or p.get("name") or "?"] = rec
+        if written:
+            wrote += 1
 
     if not dry:
         save_audit(trip_dir, audit)
