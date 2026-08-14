@@ -214,17 +214,37 @@ AUDIT_NAME = "image-audit.json"
 # caller can record *why* a candidate failed instead of silently eating it.
 
 _HTTP_CACHE: dict[str, dict] = {}
-_DOMAIN_LAST: dict[str, float] = {}
+_DOMAINS: dict[str, dict] = {}
 DOMAIN_INTERVAL = 0.35
 RETRY_HTTP = {429, 500, 502, 503, 504}
 
+# A dead host is dead for every URL under it, but the per-URL stop-loss can
+# only ever learn that one URL at a time. Measured on the Osaka run: an
+# official domain that no longer resolves costs 2 network attempts × 12s for
+# each of the five candidate URLs the page extractor found on it — the same
+# 24 seconds paid five times over for information the first URL already
+# gave. Two consecutive network failures therefore condemn the host for the
+# rest of the process and later requests to it return without touching the
+# wire. Consecutive is the operative word: any answer from the host, a 404
+# and a 503 included, clears the streak, so a single flaky moment cannot
+# blacklist a live site.
+HOST_FAIL_LIMIT = 2
 
-def _throttle(url: str) -> None:
+
+def _domain(url: str) -> dict:
+    """This host's throttling timestamp and circuit-breaker state."""
     host = urllib.parse.urlparse(url).netloc
-    dt = time.monotonic() - _DOMAIN_LAST.get(host, 0.0)
+    st = _DOMAINS.get(host)
+    if st is None:
+        st = {"last": 0.0, "fails": 0, "first_err": None, "dead": None}
+        _DOMAINS[host] = st
+    return st
+
+
+def _throttle(st: dict) -> None:
+    dt = time.monotonic() - st["last"]
     if dt < DOMAIN_INTERVAL:
         time.sleep(DOMAIN_INTERVAL - dt)
-    _DOMAIN_LAST[host] = time.monotonic()
 
 
 def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
@@ -232,7 +252,9 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
     """Streaming GET, first `cap` bytes only. Never HEAD — several official
     sites (measured) 404 on HEAD while the GET serves the image fine.
     Returns {"status", "body", "ctype", "error"}; "error" is set on network
-    failure after retries, "status" on any HTTP response including 4xx.
+    failure after retries, "status" on any HTTP response including 4xx. A
+    request to a host the breaker has condemned comes back immediately as
+    error "host-dead:<the error that first broke it>".
 
     Retry policy is asymmetric on purpose: 429/5xx are cheap, fast responses
     worth 3 retries (honoring Retry-After, else 1/2/4s) — but a connection
@@ -243,10 +265,14 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
     cached = _HTTP_CACHE.get(url)
     if cached is not None:
         return cached
+    st = _domain(url)
     last_err = None
     net_fails = 0
     for attempt in range(4):                     # 1 try + up to 3 retries
-        _throttle(url)
+        if st["dead"]:
+            return {"status": None, "body": b"", "ctype": "",
+                    "error": f"host-dead:{st['dead']}"}
+        _throttle(st)
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": accept})
         retry_after = None
         try:
@@ -254,9 +280,13 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
                 res = {"status": r.status, "body": r.read(cap),
                        "ctype": (r.headers.get("Content-Type") or "").lower(),
                        "error": None}
+                st["fails"], st["first_err"] = 0, None
                 _HTTP_CACHE[url] = res
                 return res
         except urllib.error.HTTPError as e:
+            # Any status at all means the host answered, so it counts as
+            # proof of life even when the retry loop keeps going.
+            st["fails"], st["first_err"] = 0, None
             if e.code not in RETRY_HTTP:
                 res = {"status": e.code, "body": b"", "ctype": "", "error": None}
                 _HTTP_CACHE[url] = res
@@ -266,8 +296,24 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
         except Exception as e:  # noqa: BLE001  timeouts, DNS, resets
             last_err = type(e).__name__
             net_fails += 1
+            # Only true transport failures may feed the breaker. This branch
+            # also catches client-side errors that say nothing about the
+            # host — measured on the Osaka run, glico.com serves image URLs
+            # with Japanese filenames that raise UnicodeEncodeError before a
+            # single packet leaves, and counting those condemned a perfectly
+            # healthy domain. Everything at the socket layer, timeouts and
+            # resets included, is an OSError; those are the real evidence.
+            if isinstance(e, OSError):
+                st["fails"] += 1
+                if st["first_err"] is None:
+                    st["first_err"] = last_err
+                if st["fails"] >= HOST_FAIL_LIMIT:
+                    st["dead"] = st["first_err"]
+                    break
             if net_fails >= 2:
                 break
+        finally:
+            st["last"] = time.monotonic()
         if attempt < 3:
             try:
                 wait = max(0.0, float(retry_after))
