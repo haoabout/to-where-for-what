@@ -43,7 +43,7 @@ KNOWN_PLACE_FIELDS = {
     "parent_id", "area", "coord", "hours", "last_entry", "closed_days",
     "closed", "run", "ticket", "booking", "booking_url", "status", "status_note",
     "duration_min", "indoor", "night", "pitch", "detail", "photo_index",
-    "photo_note", "tags", "images", "sources",
+    "photo_note", "tags", "images", "image_gallery", "sources",
     "verify", "choice", "choice_reason", "origin",
     "verdict", "verdict_note", "prep",
 }
@@ -517,6 +517,14 @@ def check_place(p, idx, doc, rep: Report) -> None:
     for f in ("indoor", "night"):
         if p.get(f) is not None and not isinstance(p[f], bool):
             rep.add("P0", where, f"{f} must be a boolean, got {p[f]!r}")
+    # image_gallery is a marker, not a switch: enrich.py sets it to true on
+    # the places whose image its identity families vouched for, and removes
+    # it from the rest. "Absent" is the only way to say no, so any other
+    # value — false included — is a hand-edit the template can't act on.
+    if "image_gallery" in p and p["image_gallery"] is not True:
+        rep.add("P1", where,
+                f"image_gallery must be true when present, got {p['image_gallery']!r} — "
+                f"delete the field instead (it is written by enrich.py --images)")
 
     # ---- P1
     # Stubs are exempt: name_local is a research product, and the page can

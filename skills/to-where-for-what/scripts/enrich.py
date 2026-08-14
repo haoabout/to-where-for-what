@@ -189,14 +189,31 @@ def fill_coords(doc: dict, dry: bool) -> int:
 # ------------------------------------------------------------------ images
 #
 # The image flow is a candidate pipeline, not a first-hit chain: each place
-# collects up to MAX_CANDIDATES verified, deduplicated candidates across the
-# source families below, each graded by identity confidence:
+# collects verified, deduplicated candidates across the source families
+# below, each graded by identity confidence:
 #
 #   high   — exact-identity: Wikipedia exact-title/redirect lead image, or a
 #            Wikidata P18 whose entity matches both name and bbox
 #   medium — Wikipedia search hits, official-site og/meta/body images,
 #            Commons category members
 #   low    — pure geo hits, Openverse, anything with weak name evidence
+#
+# What a place gets is decided by the evidence rather than spent evenly. The
+# two identity families run first; a place that leaves them holding a live,
+# corroborated `high` was *easy to find* and stops right there with that one
+# candidate — the five remaining families, which are also the slow ones,
+# never run for it. Everything else is *hard to find* and gets the full scan
+# up to MAX_CANDIDATES. The audit records which tier a place landed in as
+# `review: "glance" | "full"`, and the visual pass spends its eyes
+# accordingly (references/image-agent-briefing.md).
+#
+# The split is measured, not guessed (Osaka, 47 places, cross-tabbed against
+# the visual pass's verdicts): `medium` candidates were rejected 79% of the
+# time, so hard places must keep every pair of eyes they have. `high`
+# candidates were still wrong about 10% of the time — a lead image that shot
+# the neighbor, a museum's holdings rather than its building, an interior —
+# which is too often to skip review altogether, and rare and coarse enough
+# that a contact-sheet glance catches it. Hence glance, never exempt.
 #
 # Only `high` may be provisionally written to places.json, and only for
 # places that had no image at all. Everything else — including every image
@@ -837,8 +854,18 @@ def _query_names(p: dict, lang: str) -> list[str]:
     return out[:6]
 
 
-def iter_candidates(p: dict, trip: dict, bbox, langs: list[str]):
-    """Yield raw candidates family by family, in trust-then-cost order.
+def candidate_families(p: dict, trip: dict, bbox, langs: list[str],
+                       ambiguous: set) -> tuple[list, list]:
+    """Build this place's source families in trust-then-cost order, split
+    into the two identity families that always run and the rest that only a
+    hard-to-find place pays for. Each entry is a zero-argument generator.
+
+    `ambiguous` is filled in by the Wikidata family: one name resolving to
+    several in-bbox entities means the corroboration is not corroboration at
+    all — two neighboring temples, a station and the district it is named
+    after — so such a place is pushed into the full tier no matter what its
+    `high` looks like.
+
     Events put the official page first: the venue photo every other source
     would find is not the event, and the key visual on the organizer's page
     is — an exhibition must never be represented by the building's facade."""
@@ -886,7 +913,21 @@ def iter_candidates(p: dict, trip: dict, bbox, langs: list[str]):
         # neighbor.
         for lang in langs:
             for nm in _query_names(p, lang)[:3]:
-                for ent in wikidata_entities(nm, lang, bbox):
+                ents = wikidata_entities(nm, lang, bbox)
+                # One name, several in-bbox entities that each carry an
+                # image: the "corroboration" no longer says *which* of them
+                # this place is, so the place loses the cheap tier. Measured
+                # on Osaka this fires on 4 of 47, and on exactly the traps it
+                # should — 住吉大社 against its station and its three
+                # sub-shrines, 藤田美術館 against the sutras it holds, 大阪城
+                # against the hall and the park. Filtering these by
+                # name_matches was tried and changed none of them: that
+                # predicate is deliberately loose (it strips generic
+                # suffixes, so 大阪城 → 大阪 matches 大阪商業大学), which
+                # makes it useless as a tiebreak between rivals.
+                if len({e["id"] for e in ents}) > 1:
+                    ambiguous.add(nm)
+                for ent in ents:
                     if not ent["p18"]:
                         continue
                     thumb = commons_thumb(ent["p18"])
@@ -957,72 +998,125 @@ def iter_candidates(p: dict, trip: dict, bbox, langs: list[str]):
     # Official pages come before Wikipedia search: search hits are the
     # junkiest medium/low family (measured on theCOMMONS — a logo and a
     # subway platform), and they must not crowd out the venue's own photos.
-    families = [wikipedia_exact, wikidata, official, wiki_search,
-                commons_cat, geo, openverse]
     if event:
-        families = [official, wikipedia_exact, wikidata, wiki_search,
+        # No identity stage: an event can never qualify for the cheap tier
+        # (its `high` hits are the venue, and collect_candidates caps them at
+        # medium anyway), so the whole chain runs in the events order.
+        return [], [official, wikipedia_exact, wikidata, wiki_search,
                     commons_cat, geo, openverse]
-    for fam in families:
-        yield from fam()
+    return ([wikipedia_exact, wikidata],
+            [official, wiki_search, commons_cat, geo, openverse])
 
 
 def collect_candidates(p: dict, trip: dict, bbox, langs: list[str],
-                       existing: list[dict]) -> list[dict]:
-    """Assemble up to MAX_CANDIDATES verified candidates. Existing images
-    enter first as `existing` candidates and count toward the cap; failed
-    checks are kept in the list (for the audit) but don't count.
+                       existing: list[dict]) -> tuple[list[dict], str]:
+    """Assemble verified candidates and report how hard the place was to
+    find: returns (candidates, review) where review is "glance" or "full".
+
+    Existing images enter first as `existing` candidates and count toward the
+    cap; failed checks are kept in the list (for the audit) but don't count.
 
     Only high/medium (and live existing) candidates stop the scan early —
     low ones are fillers that must never crowd out a later, more
     trustworthy family (measured on theCOMMONS: three junk wiki-search hits
     filled the cap before the official page, which held the actual photos,
-    was ever scanned). Overflow lows are trimmed at the end."""
+    was ever scanned). Overflow lows are trimmed at the end.
+
+    The glance tier is only granted when the corroborated `high` is the image
+    the reader will actually end up seeing. With nothing on the page yet that
+    is automatic — the high is adopted below. With an image already there,
+    only a high that *is* that image qualifies (the dedup branch catches it,
+    which is how a --recheck re-earns the tier for places whose image this
+    pipeline wrote in the first place); an existing image no source vouches
+    for stays in the full tier, where the visual pass is free to replace it."""
     out: list[dict] = []
-    seen: set[str] = set()
+    seen: dict[str, dict] = {}
     strong = 0
     for img in existing:
         url = (img or {}).get("url") or ""
         if not url or url in seen:
             continue
-        seen.add(url)
         c = _cand(url, "existing", "existing",
                   credit=img.get("credit", ""), source_url=img.get("source_url", ""))
         c["check"] = check_image_url(url)
         out.append(c)
+        seen[url] = c
         if c["check"]["ok"]:
             strong += 1
-    if strong < MAX_CANDIDATES:
-        event = p.get("category") == "event"
-        for c in iter_candidates(p, trip, bbox, langs):
-            if event and c["confidence"] == "high":
-                # An event's identity is the event, not the venue. An exact
-                # Wikipedia/Wikidata hit on a name segment is the building's
-                # facade — never a reason to auto-write over the activity's
-                # key visual, so events produce no auto-write candidates.
-                c["confidence"] = "medium"
-            if c["url"] in seen:
-                continue
-            seen.add(c["url"])
-            # Filename furniture is skipped across every family — Commons
-            # and Openverse serve *_Logo.svg.png files too, not just
-            # official sites.
-            if looks_negative(c["url"]):
-                c["check"] = {"ok": False, "reason": "filename:negative"}
-                out.append(c)
-                continue
-            c["check"] = check_image_url(c["url"])
+
+    live_existing = any(c["check"]["ok"] for c in out)
+    event = p.get("category") == "event"
+    ambiguous: set[str] = set()
+    identity, rest = candidate_families(p, trip, bbox, langs, ambiguous)
+    high_ev: dict | None = None
+
+    def absorb(c: dict) -> bool:
+        """Record one raw candidate; True once the cap is full."""
+        nonlocal strong, high_ev
+        if event and c["confidence"] == "high":
+            # An event's identity is the event, not the venue. An exact
+            # Wikipedia/Wikidata hit on a name segment is the building's
+            # facade — never a reason to auto-write over the activity's
+            # key visual, so events produce no auto-write candidates.
+            c["confidence"] = "medium"
+        dup = seen.get(c["url"])
+        if dup is not None:
+            # A `high` that only repeats what is already on the page is still
+            # identity evidence: the tiering reads the source, not the record.
+            if (c["confidence"] == "high" and high_ev is None
+                    and dup["check"]["ok"]):
+                high_ev = dup
+            return False
+        seen[c["url"]] = c
+        # Filename furniture is skipped across every family — Commons
+        # and Openverse serve *_Logo.svg.png files too, not just
+        # official sites.
+        if looks_negative(c["url"]):
+            c["check"] = {"ok": False, "reason": "filename:negative"}
             out.append(c)
-            if c["check"]["ok"] and c["confidence"] != "low":
-                strong += 1
-                if strong >= MAX_CANDIDATES:
-                    break
-    # Trim overflow: live candidates never exceed the cap, and lows are the
-    # ones trimmed — a strong found by a late family beats an early filler.
-    ok_strong = [c for c in out if c["check"]["ok"] and c["confidence"] != "low"]
-    ok_low = [c for c in out if c["check"]["ok"] and c["confidence"] == "low"]
-    keep = set(map(id, ok_strong[:MAX_CANDIDATES]
-                   + ok_low[:max(0, MAX_CANDIDATES - len(ok_strong))]))
-    return [c for c in out if not c["check"]["ok"] or id(c) in keep]
+            return False
+        c["check"] = check_image_url(c["url"])
+        out.append(c)
+        if not c["check"]["ok"]:
+            return False
+        if c["confidence"] == "high" and high_ev is None:
+            high_ev = c
+        if c["confidence"] != "low":
+            strong += 1
+            return strong >= MAX_CANDIDATES
+        return False
+
+    def scan(families) -> bool:
+        """Run families in order; True if the cap filled and we stopped."""
+        for fam in families:
+            for c in fam():
+                if absorb(c):
+                    return True
+        return False
+
+    review = "full"
+    if strong < MAX_CANDIDATES:
+        capped = scan(identity)
+        if (high_ev is not None and not ambiguous
+                and (not live_existing or high_ev["source"] == "existing")):
+            review = "glance"
+        elif not capped:
+            scan(rest)
+
+    if review == "glance":
+        # One candidate, and specifically the corroborated one: anything else
+        # collected alongside it would only be an unreviewed distraction on
+        # the contact sheet.
+        keep = {id(high_ev)}
+    else:
+        # Trim overflow: live candidates never exceed the cap, and lows are
+        # the ones trimmed — a strong found by a late family beats an early
+        # filler.
+        ok_strong = [c for c in out if c["check"]["ok"] and c["confidence"] != "low"]
+        ok_low = [c for c in out if c["check"]["ok"] and c["confidence"] == "low"]
+        keep = set(map(id, ok_strong[:MAX_CANDIDATES]
+                       + ok_low[:max(0, MAX_CANDIDATES - len(ok_strong))]))
+    return [c for c in out if not c["check"]["ok"] or id(c) in keep], review
 
 
 # --------------------------------------------------------------- image audit
@@ -1068,12 +1162,14 @@ _PRINT_LOCK = threading.Lock()
 
 
 def _images_for_place(p: dict, trip: dict, bbox, langs: list[str],
-                      dry: bool, recheck: bool) -> tuple[dict, str | None]:
+                      dry: bool, recheck: bool) -> tuple[dict, str | None, bool]:
     """One place's whole image pass, run on a worker thread: verify what's
     on the page, collect if needed, and (when it had nothing) adopt a
-    verified `high` candidate. Returns its audit record and the URL written,
-    if any. Touches only this place's own dict; the caller does the merging,
-    so the audit keeps places.json order however the threads finish."""
+    verified `high` candidate. Returns its audit record, the URL written if
+    any, and whether the place's `image_gallery` flag changed — the caller
+    needs both kinds of change to know places.json is worth rewriting.
+    Touches only this place's own dict; the caller does the merging, so the
+    audit keeps places.json order however the threads finish."""
     existing = [i for i in (p.get("images") or []) if isinstance(i, dict)]
     # Verify what's already on the page — a dead URL is an audit-worthy
     # failure, not a silent skip.
@@ -1091,14 +1187,18 @@ def _images_for_place(p: dict, trip: dict, bbox, langs: list[str],
 
     needs_collect = recheck or not existing or broken
     if not needs_collect:
+        # Nothing was re-collected, so there is no fresh evidence to re-tier
+        # on. The flag already sitting on the place *is* the last run's
+        # evidence, so it is what the record reports.
         return {"name": p.get("name", ""),
                 "checked": _now_iso(),
+                "review": "glance" if p.get("image_gallery") is True else "full",
                 "written": None,
-                "candidates": existing_checked}, None
+                "candidates": existing_checked}, None, False
 
     with _PRINT_LOCK:
         print(f"  → {p.get('name')} …", flush=True)
-    cands = collect_candidates(p, trip, bbox, langs, existing)
+    cands, review = collect_candidates(p, trip, bbox, langs, existing)
     written = None
     if not existing and not dry:
         best = next((c for c in cands
@@ -1107,12 +1207,26 @@ def _images_for_place(p: dict, trip: dict, bbox, langs: list[str],
             p["images"] = [{"url": best["url"], "credit": best["credit"],
                             "source_url": best["source_url"]}]
             written = best["url"]
+    # The tier, persisted on the place: the template opens a runtime "more
+    # photos" gallery for places whose single image is source-corroborated.
+    # Written and *cleared* here, so a --recheck that drops a place out of
+    # the tier can never leave a stale flag promising a gallery the evidence
+    # no longer supports.
+    flagged = False
+    if not dry:
+        had = p.get("image_gallery")
+        if review == "glance":
+            p["image_gallery"] = True
+        else:
+            p.pop("image_gallery", None)
+        flagged = p.get("image_gallery") != had
 
     ok_n = sum(1 for c in cands if (c["check"] or {}).get("ok"))
     bad_n = len(cands) - ok_n
     tag = ("✓ high→written" if written
            else ("existing broken" if broken and existing else "awaiting review"))
-    lines = [f"  {p.get('name'):<24} {ok_n} candidate(s), {bad_n} failed  [{tag}]"]
+    lines = [f"  {p.get('name'):<24} {ok_n} candidate(s), {bad_n} failed  "
+             f"[{review}; {tag}]"]
     for c in cands:
         chk = c["check"] or {}
         mark = "·" if chk.get("ok") else "✗"
@@ -1124,14 +1238,16 @@ def _images_for_place(p: dict, trip: dict, bbox, langs: list[str],
 
     return {"name": p.get("name", ""),
             "checked": _now_iso(),
+            "review": review,
             "written": written,
-            "candidates": cands}, written
+            "candidates": cands}, written, flagged
 
 
 def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
     """Candidate pipeline. Writes places.json only for places that had no
-    image and produced a verified `high` candidate; every place touched gets
-    an image-audit.json record for the visual review pass. Incremental by
+    image and produced a verified `high` candidate, plus the `image_gallery`
+    flag for whichever places earned the glance tier; every place touched
+    gets an image-audit.json record for the visual review pass. Incremental by
     default: places whose existing image still verifies are left alone
     (recorded, not re-collected) unless --recheck."""
     trip = doc.get("trip", {})
@@ -1141,7 +1257,8 @@ def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
     audit = load_audit(trip_dir)
 
     n_missing = sum(1 for p in doc["places"] if not p.get("images"))
-    print(f"Images: candidate pipeline (max {MAX_CANDIDATES}/place; "
+    print(f"Images: candidate pipeline (1/place when the identity families "
+          f"vouch for it, else max {MAX_CANDIDATES}; "
           f"{n_missing} place(s) without images"
           f"{', full recheck' if recheck else ''}; {IMAGE_WORKERS} workers)")
 
@@ -1156,7 +1273,7 @@ def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
                 print(f"  ✗ {p.get('name')}: {type(exc).__name__}: {exc}"
                       f" — skipped, its audit entry is left as it was",
                       file=sys.stderr, flush=True)
-            return None, None
+            return None, None, False
 
     with ThreadPoolExecutor(max_workers=IMAGE_WORKERS,
                             thread_name_prefix="img") as ex:
@@ -1166,17 +1283,30 @@ def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
     # key order and its one-shot write are what the visual review agent and
     # --apply-image-review read.
     wrote = 0
-    for p, (rec, written) in zip(doc["places"], results):
+    flagged = 0
+    glance = 0
+    for p, (rec, written, flag_change) in zip(doc["places"], results):
         if rec is None:
             continue
         audit["places"][p.get("id") or p.get("name") or "?"] = rec
+        if rec.get("review") == "glance":
+            glance += 1
         if written:
             wrote += 1
+        if flag_change:
+            flagged += 1
 
+    # The tier split is what the visual pass budgets against, so it is
+    # printed rather than left to be counted out of the audit by hand.
+    done = sum(1 for rec, _, _ in results if rec is not None)
+    print(f"  tiers: {glance} glance / {done - glance} full"
+          f"{f'; {flagged} image_gallery flag change(s)' if flagged else ''}")
     if not dry:
         save_audit(trip_dir, audit)
         print(f"  audit → {trip_dir / AUDIT_NAME}")
-    return wrote
+    # Flag changes count as filled items: they are places.json edits, and the
+    # caller only writes the file when something changed.
+    return wrote + flagged
 
 
 # ------------------------------------------------------- apply image review
@@ -1249,7 +1379,8 @@ def apply_image_review(path: str, patch_path: str) -> int:
     for rv in reviews:
         rec = audit["places"].setdefault(
             rv["id"], {"name": by_id[rv["id"]].get("name", ""),
-                       "checked": _now_iso(), "written": None, "candidates": []})
+                       "checked": _now_iso(), "review": "full",
+                       "written": None, "candidates": []})
         cand_by_url = {c.get("url"): c for c in rec.get("candidates", [])}
         for url in (rv.get("accepted") or []):
             c = cand_by_url.get(url)
@@ -1262,11 +1393,14 @@ def apply_image_review(path: str, patch_path: str) -> int:
             if c:
                 c["verdict"] = "rejected"
                 c["verdict_reason"] = rej.get("reason", "")
-        rec["review"] = {"at": _now_iso(),
-                         "accepted": rv.get("accepted") or [],
-                         "rejected": rv.get("rejected") or [],
-                         "note": rv.get("note", ""),
-                         "searched": rv.get("searched") or []}
+        # `review` is the tier the collector assigned; the verdicts the visual
+        # pass came back with live under their own key so the two can't
+        # overwrite each other.
+        rec["review_result"] = {"at": _now_iso(),
+                                "accepted": rv.get("accepted") or [],
+                                "rejected": rv.get("rejected") or [],
+                                "note": rv.get("note", ""),
+                                "searched": rv.get("searched") or []}
 
     _atomic_write_json(Path(path), doc)
     save_audit(trip_dir, audit)
