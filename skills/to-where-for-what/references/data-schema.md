@@ -320,6 +320,7 @@ Without these three fields, stage D can only improvise.
 "images": [
   { "url": "https://…", "credit": "© Osaka City", "source_url": "https://…" }
 ],
+"image_gallery": true,
 "sources": [
   { "title": "Official site · hours", "url": "https://…" }
 ]
@@ -329,6 +330,13 @@ Without these three fields, stage D can only improvise.
   main anti-hallucination gate — **a place without sources is rejected as P0**.
 - `images` optional. Every image needs a `credit`. The page hides broken images
   via `onerror`; `validate.py --check-links` flags dead links.
+- `image_gallery` optional, **written by `enrich.py --images`, never by hand**.
+  `true` marks a place whose image the identity families vouched for (the
+  audit's `review: "glance"` tier, see
+  [research-playbook.md](research-playbook.md)), which is what lets the page
+  offer a runtime "more photos" gallery there. Absence is the only way to say
+  no — `false` or any other value is a P1 asking you to delete the field, and
+  a `--recheck` that drops a place out of the tier removes it for you.
 
 ### User choices (written back by the page; the AI must not pre-fill)
 
@@ -546,6 +554,7 @@ Scheduling checks (only when `itinerary` exists):
 - **The `run` window doesn't overlap the trip at all** — the event is over, or
   hasn't started; keep it out of the list or say so in `trip.note`
 - `local_language ≠ output_language` but `name_local` missing
+- `image_gallery` present with any value other than `true` — delete the field
 - Two places with nearly identical coordinates (<25 m), likely duplicates
 - `verified_at` more than 30 days old
 - Last place of a trip day missing `last_entry` (needs route.md to judge; checked in stage D)

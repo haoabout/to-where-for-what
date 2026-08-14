@@ -353,11 +353,11 @@ preventing "arrived to find it under renovation".
 ### Images: the candidate pipeline runs first, then the visual pass decides
 
 `enrich.py --images` no longer stops at the first hit. Per place it collects
-up to **2 verified, deduplicated candidates** across the source families
-below — every candidate is fetched with a real streaming `GET` (2xx + image
-MIME + magic bytes; og:image URLs routinely 404, and some CDNs serve an HTML
-error page with 200) — grades each by identity confidence, and records
-everything in `image-audit.json` next to `places.json`:
+**verified, deduplicated candidates** across the source families below —
+every candidate is fetched with a real streaming `GET` (2xx + image MIME +
+magic bytes; og:image URLs routinely 404, and some CDNs serve an HTML error
+page with 200) — grades each by identity confidence, and records everything
+in `image-audit.json` next to `places.json`:
 
 - `high` — exact identity: Wikipedia exact-title/redirect lead image, or a
   Wikidata P18 whose entity matches **both** name and bbox. Only these are
@@ -385,11 +385,52 @@ the same reason from the other side — it can be a logo, a campaign banner,
 or a news photo of an event at the venue (measured: Siam Paragon), and no
 filename filter catches a clean-named news photo.
 
+#### Two tiers: the effort follows the evidence, not the place count
+
+Scanning all seven families for every place, then eyeballing every candidate,
+was measured as most of A3's wall-clock and dollar cost — and for the places
+that were easy to find, it bought nothing. So the collector splits the trip
+in two, using evidence it already has rather than a prediction:
+
+- **Easy (`review: "glance"` in the audit)** — the two identity families run
+  first, and if they produce a live, corroborated `high` the place stops
+  there with that single candidate. The five remaining (and slower) families
+  never run. The place also gets `"image_gallery": true` in `places.json`,
+  which is how the template knows it may offer a runtime "more photos"
+  gallery for it.
+- **Hard (`review: "full"`)** — everything else: no corroborated hit, every
+  `category: "event"` (its identity is the activity, and a `high` on a name
+  segment is the venue's facade), and any place whose name resolves to
+  several Wikidata entities inside the bbox — one name, two temples, and the
+  "corroboration" corroborates nothing. Full seven-family scan, still capped
+  at 2 candidates, and the full visual review.
+
+Measured on that same Osaka trip, the split came out **28 glance / 19 full**
+and cut the collected candidates from 107 to 66 — the saving that matters is
+the visual pass, where 28 of 47 places drop to one thumbnail and no hand
+searching. Collection wall time barely moves: a glance place still pays for
+the two identity families, and the run's critical path is the slow official
+sites that only full-tier places visit anyway.
+
+The tier only decides *cost*, never *trust*. A glance place is not exempt
+from review, it is reviewed cheaply: cross-tabbing the Osaka run's 47 places
+against the visual pass's verdicts, `medium` candidates were rejected 79% of
+the time — those places need every pair of eyes — while `high` candidates
+were still wrong about 10% of the time, in three coarse ways (the photo shows
+the neighbor, the holdings instead of the building, an interior instead of
+the landmark) that a contact-sheet glance catches without a per-image deep
+dive. The tier split therefore appears in the delivery disclosure, not just
+in the audit.
+
 Existing images aren't trusted either: each run re-verifies them as
 `existing` candidates, and a dead URL triggers fresh collection — but an
 existing image is **never auto-replaced**; that swap belongs to the visual
-pass. Every failure (404, 429, non-image, decode, identity mismatch) lands
-in the audit instead of being silently swallowed.
+pass. An image already on the page can only earn the glance tier if a
+corroborating source turns up that exact image; an unvouched-for existing
+image stays in the full tier, and `--recheck` clears its `image_gallery`
+flag rather than leaving a stale promise behind. Every failure (404, 429,
+non-image, decode, identity mismatch) lands in the audit instead of being
+silently swallowed.
 
 The visual pass (the A3 image subagent, or you) reads `places.json` +
 `image-audit.json`, judges the candidates, and hands back

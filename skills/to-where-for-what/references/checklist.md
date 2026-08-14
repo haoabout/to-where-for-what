@@ -163,6 +163,11 @@ Without these, the user forms wrong expectations:
 - [ ] **If the model has no vision capability**: say that images passed text
   checks only, not visual review — a wrong-looking photo spotted while
   filtering is worth reporting; swapping is cheap
+- [ ] **How the images were reviewed** — the places whose photo a source
+  vouched for (`review: "glance"` in `image-audit.json`) got an identity
+  spot-check, not a per-image deep review; only the rest were audited one by
+  one. Give the split as a count, so a wrong-looking photo reads as
+  something to report rather than something already ruled out
 - [ ] **Which festivals fall in the window, and what the public holidays do**
   — or, explicitly, that none do. Without the explicit "none", the user can't
   tell a quiet fortnight from an unchecked one

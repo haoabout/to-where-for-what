@@ -8,13 +8,29 @@ template below, fill every `<placeholder>`.
 
 Unlike the stage-A search agents, this one is spawned **once, always, in the
 background** — right after `enrich.py --coords --images` finishes. The script
-has already collected up to 2 verified candidates per place into
-`image-audit.json` (only exact-identity `high` hits were provisionally
-written to `places.json`; every `medium`/`low` candidate waits), so the
-agent's job is **judging**, not searching: look at the candidates, pick the
-right one or reject them all, and only then search by hand. Backgrounding it
-means the slowest part of A3 stops blocking the main line: you fix
-coordinate misses and run `--transit` while it works.
+has already collected the candidates into `image-audit.json` (only
+exact-identity `high` hits were provisionally written to `places.json`; every
+`medium`/`low` candidate waits), so the agent's job is **judging**, not
+searching: look at the candidates, pick the right one or reject them all, and
+only then search by hand. Backgrounding it means the slowest part of A3 stops
+blocking the main line: you fix coordinate misses and run `--transit` while it
+works.
+
+The script also sorts every place into one of two review tiers and records it
+as `review` on that place's audit entry. **The tier decides how much of the
+agent's attention the place gets** — spending the same effort everywhere was
+measured as most of A3's cost, and most of it bought nothing:
+
+- `review: "glance"` — the identity families vouched for the one image the
+  place carries (Wikipedia exact title, or a bbox-checked Wikidata P18 whose
+  label matches the name). Exactly one candidate. These are wrong ~10% of the
+  time, in three coarse ways a contact sheet catches instantly, so they get a
+  glance and no hand searching.
+- `review: "full"` — nothing vouched for it: no corroborated hit, or an
+  event (its identity is the activity, never the venue), or a name that
+  resolves to several entities inside the bbox. Up to 2 candidates, all of
+  them unproven — `medium` candidates were rejected 79% of the time — so
+  these get the full contract, hand searching included.
 
 Before spawning, the main conversation:
 
@@ -48,8 +64,10 @@ After the agent returns:
    A rejected patch changes nothing; fix the reported errors and rerun.
 3. Delete the patch file, then continue A3: `validate.py --check-links` →
    build.
-4. If the report says verification was text-only, carry that into the
-   delivery notes (checklist.md has the phrasing).
+4. Carry the report's tier split into the delivery notes — the `glance`
+   places got an identity check, not a per-image deep review, and the user
+   should hear that. Same for a report that says verification was text-only.
+   checklist.md has the phrasing for both.
 
 No subagent capability (plain chat, Codex)? Do the same work yourself in the
 main conversation, by the same playbook rules.
@@ -71,9 +89,33 @@ main conversation, by the same playbook rules.
 > visual pass decides" through "No vision capability? Verify textually, and
 > say so" — that is the contract for this task.
 >
-> `image-audit.json` holds up to 2 verified candidates per place, each with
-> `source`, `confidence` (high/medium/low/existing), `matched_title`, and a
-> network check. Your job, per place:
+> `image-audit.json` holds each place's candidates — `source`, `confidence`
+> (high/medium/low/existing), `matched_title`, a network check — and a
+> `review` field that is either `"glance"` or `"full"`. **Read `review`
+> first: it decides how much work that place is owed.** Split the places into
+> the two groups and work them separately; do not give a `glance` place the
+> `full` treatment, and never the reverse.
+>
+> **`review: "glance"` places — one question, no searching.** A source
+> already vouched for the identity of the single candidate, which is the
+> image on the page. Tile them into contact sheets (a dozen or more per
+> sheet) and ask only *is this the right place?* Three failure modes account
+> for essentially all the errors, and all three are visible at thumbnail
+> size:
+>
+> - the photo shows a **neighbor** — the building next door, the station the
+>   district is named after;
+> - the photo shows the place's **holdings or contents** rather than the
+>   place — a museum's star painting, a shop's product close-up;
+> - the photo is an **interior** where the place is an exterior landmark, or
+>   the reverse.
+>
+> Anything that looks like the place, stays. Anything that trips one of the
+> three: **drop it and move on** — emit a patch with `"images": []` and a
+> reason. You have **no obligation to hand-search a replacement** for these;
+> spending the search budget here is exactly what this tier exists to avoid.
+>
+> **`review: "full"` places — the whole contract, per place:**
 >
 > 1. **Look at the candidates** — fetch each candidate URL whose check
 >    passed and look at it: does it show *this* place (for events: the
@@ -120,6 +162,6 @@ main conversation, by the same playbook rules.
 > by hand. Every image needs an honest `credit` (the Commons API's
 > `extmetadata` carries artist and license).
 >
-> When done, reply with: how many places reviewed / images accepted /
-> replaced / dropped; which places stay imageless and why; and whether
-> verification was visual or text-only.
+> When done, reply with: how many places reviewed **in each tier** / images
+> accepted / replaced / dropped; which places stay imageless and why; and
+> whether verification was visual or text-only.
