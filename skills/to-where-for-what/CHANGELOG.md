@@ -23,6 +23,48 @@ Bump rules:
 
 ---
 
+## 1.8.5 — 2026-08-14
+
+### Changed
+
+- **Image candidate collection now runs 5 places in parallel.** The 0.35s
+  politeness throttle was implemented as one global queue, so every request
+  waited behind every other request regardless of host. It is now what it
+  always meant to be: strictly serial *per host* (a per-host lock held
+  across the whole request cycle), parallel across hosts. The HTTP cache
+  gained an in-flight map so a URL requested by several places at once hits
+  the wire exactly once. Measured on the Osaka run (47 places,
+  `--images --recheck`): 11m15s → 4m26s with a byte-identical
+  `image-audit.json`. Nominatim (`--coords`) and Overpass (`--transit`)
+  don't go through this path and stay serial.
+- **A dead domain now costs one lesson, not one per URL.** The per-URL
+  stop-loss re-paid 2 × 12s timeouts for every candidate URL on the same
+  unreachable host — five official-site images on one dead domain cost two
+  minutes. Two consecutive transport-layer failures (OSError only: timeouts,
+  DNS, resets) now condemn the host for the rest of the process; later
+  requests return `host-dead:<first error>` without touching the wire, and
+  that reason lands in `image-audit.json` as usual. Any HTTP response at
+  all — a 404 included — clears the streak, so a flaky moment cannot
+  blacklist a live site.
+
+### Fixed
+
+- **Official-site images with non-ASCII filenames are fetchable again.**
+  urllib raises `UnicodeEncodeError` before a single packet leaves for URLs
+  whose path carries raw Japanese (glico.com's `og:image`, among five real
+  losses on the Osaka run). `http_get` now percent-encodes the path and
+  query up front (`%` kept safe so already-encoded URLs aren't double
+  encoded), before cache and in-flight dedup, so the cache key matches what
+  goes on the wire.
+
+### Notes for updaters
+
+- No schema, template, or contract change; `image-audit.json` output is
+  identical on unchanged inputs, just produced faster. Existing
+  `places.json` files validate as before.
+
+---
+
 ## 1.8.4 — 2026-08-14
 
 ### Fixed
