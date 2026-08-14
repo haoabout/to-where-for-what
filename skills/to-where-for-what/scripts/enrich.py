@@ -290,6 +290,28 @@ def _publish(url: str, res: dict | None) -> None:
         ev.set()
 
 
+def _ascii_url(url: str) -> str:
+    """urllib refuses to send a URL whose path holds raw non-ASCII: Request
+    dies with UnicodeEncodeError before a single packet leaves. Measured on
+    the Osaka run, 5 of 9 failing candidates were exactly this — official-site
+    photos with Japanese filenames (glico.com's og:image among them) that
+    would otherwise have been usable. Percent-encode the path and query,
+    keeping '%' in the safe set so already-encoded %XX sequences pass through
+    untouched instead of being double-encoded. A non-ASCII hostname still
+    fails as before; none has been seen in the wild here."""
+    try:
+        url.encode("ascii")
+        return url
+    except UnicodeEncodeError:
+        p = urllib.parse.urlsplit(url)
+        safe = "/%:@&=+$,~"
+        return urllib.parse.urlunsplit(
+            (p.scheme, p.netloc,
+             urllib.parse.quote(p.path, safe=safe),
+             urllib.parse.quote(p.query, safe=safe),
+             urllib.parse.quote(p.fragment, safe=safe)))
+
+
 def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
              timeout: int = 12) -> dict:
     """Streaming GET, first `cap` bytes only. Never HEAD — several official
@@ -298,6 +320,9 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
     failure after retries, "status" on any HTTP response including 4xx. A
     request to a host the breaker has condemned comes back immediately as
     error "host-dead:<the error that first broke it>"."""
+    # Encoding happens before _claim so the cache / in-flight key is the
+    # same string that goes on the wire.
+    url = _ascii_url(url)
     cached, mine = _claim(url)
     if not mine:
         return cached
