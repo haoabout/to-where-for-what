@@ -3170,6 +3170,12 @@ en: {
   closedAllTrip:"Closed for your entire trip",
   closedOn:"Closed {d}", closedWeekly:"Closed {days}", listSep:", ",
   confSched:"Scheduled for {d} — closed that day",
+  /* A limited run (festival, pop-up, exhibition run) is not a closure: on the
+     other days the place isn't shut, it isn't happening at all. */
+  runOnly:"On {d} only", runEnded:"Ended on {d}", runStarts:"Not on until {d}",
+  runMiss:"Not on during your trip — runs {r}",
+  runDays:"During your trip, on {d} only", runWindow:"Runs {r}",
+  confRun:"Scheduled for {d} — not on that day",
   bookingRequired:"Booking required", bookingRecommended:"Booking recommended",
   fUnverified:"Official info couldn't be verified", fPartial:"Info only partially verified",
   vbBlocked:"Official information for this place couldn't be reached",
@@ -3378,6 +3384,12 @@ zh: {
   closedAllTrip:"行程期间全程闭馆",
   closedOn:"{d}闭馆", closedWeekly:"{days}闭馆", listSep:"、",
   confSched:"已排进 {d}，当天闭馆",
+  /* 限期举办（节庆、快闪、限期展览）不是闭馆：其余日子不是「关着门」，
+     是根本没有这回事，措辞必须区分开。 */
+  runOnly:"仅 {d} 举办", runEnded:"已于 {d} 结束", runStarts:"{d} 才开始",
+  runMiss:"行程期间不举办，举办期 {r}",
+  runDays:"行程内仅 {d} 举办", runWindow:"举办期 {r}",
+  confRun:"已排进 {d}，当天不举办",
   bookingRequired:"必须预约才能进", bookingRecommended:"建议预约",
   fUnverified:"官方信息未能核实", fPartial:"信息仅部分核实",
   vbBlocked:"这个地点的官方信息没能查到",
@@ -3769,14 +3781,50 @@ function dayWd(n){
   const day = ITIN.find(d => d.n === n);
   return day && day.date ? ((new Date(day.date + "T00:00:00").getDay() + 6) % 7) + 1 : null;
 }
+
+/* The limited run window of a festival, pop-up or limited-run exhibition.
+   Deliberately tolerant of a one-sided window: research often pins only the
+   opening date of a season-long show, and half a window still rules out half
+   the mistakes. A backwards window is treated as no window — validate.py
+   rejects it at P0, and guessing which end was meant would invent a fact.
+   ISO dates compare correctly as strings, so no Date objects are involved and
+   no timezone can shift a boundary by a day. */
+function runWin(p){
+  const r = p && p.run;
+  if(!r || typeof r !== "object") return null;
+  const iso = v => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : "";
+  const start = iso(r.start), end = iso(r.end);
+  if(!start && !end) return null;
+  if(start && end && end < start) return null;
+  return { start, end };
+}
+const runsOn = (w, iso) => !((w.start && iso < w.start) || (w.end && iso > w.end));
+/* Dates inside the trip render as MM-DD like the rest of the page, but a run
+   window in another year keeps its year — "ended on 11-03" would read as last
+   week for something a year gone. */
+const TRIP_YEAR = String((TRIP.dates || {}).start || "").slice(0, 4);
+const runDate = iso => iso.slice(0, 4) === TRIP_YEAR ? iso.slice(5) : iso;
+const runLabel = w => w.start && w.end
+  ? (w.start === w.end ? runDate(w.start) : `${runDate(w.start)}–${runDate(w.end)}`)
+  : (w.start ? `${runDate(w.start)}–` : `–${runDate(w.end)}`);
+
 function dayConflict(p, n){
   if(!p || isLodging(p)) return null;
   if(p.status && p.status !== "open")
     return { renovating:T.stRenovating, seasonal_closed:T.stSeasonal, permanently_closed:T.stPermanent }[p.status] || p.status;
+  const day = ITIN.find(d => d.n === n);
   const wd = dayWd(n);
   if(wd && Array.isArray(p.closed_days) && p.closed_days.includes(wd)){
-    const day = ITIN.find(d => d.n === n);
     return tf("closedOn", { d: `${day.date.slice(5)}(${WD_NAMES[wd]})` });
+  }
+  /* Outside its window the place isn't closed, it isn't on — and which side
+     of the window the day falls on is the part the user acts upon, so each
+     side gets its own wording instead of one flat "outside the run". */
+  const w = runWin(p);
+  if(w && day && day.date && !runsOn(w, day.date)){
+    if(w.start && w.start === w.end) return tf("runOnly", { d: runDate(w.start) });
+    if(w.end && day.date > w.end) return tf("runEnded", { d: runDate(w.end) });
+    return tf("runStarts", { d: runDate(w.start) });
   }
   return null;
 }
@@ -3811,6 +3859,36 @@ function flags(p){
       if(wd && cd.includes(wd)){
         const day = ITIN.find(d => d.n === s.n);
         out.push({ cls:"f-danger", txt:tf("confSched", { d: `${day.date.slice(5)}(${WD_NAMES[wd]})` }) });
+      }
+    }
+  }
+  // Limited run window: same three-step shape as the closure block above, but
+  // it answers a different question. closed_days says "shut that weekday";
+  // run says "this only exists between these dates", which is why a window
+  // missing the trip entirely is fatal rather than merely inconvenient.
+  const rw = runWin(p);
+  if(rw && DAYS.length){
+    const on = DAYS.filter(d => runsOn(rw, d.iso));
+    if(!on.length){
+      out.push({ cls:"f-danger", txt:tf("runMiss", { r: runLabel(rw) }) });
+    }else if(on.length < DAYS.length){
+      out.push({ cls:"f-warn", txt:tf("runDays",
+        { d: on.map(d => `${d.iso.slice(5)}(${WD_NAMES[d.wd]})`).join(T.listSep) }) });
+    }
+  }else if(rw){
+    // No trip dates to compare against; the window is still worth stating.
+    out.push({ cls:"f-info", txt:tf("runWindow", { r: runLabel(rw) }) });
+  }
+  // Already scheduled outside the window — named per day, for the same reason
+  // confSched is: one of two scheduled days may fall inside the run.
+  if(rw){
+    const seen = new Set();
+    for(const s of schedOf(p.id)){
+      if(seen.has(s.n)) continue;
+      seen.add(s.n);
+      const day = ITIN.find(d => d.n === s.n);
+      if(day && day.date && !runsOn(rw, day.date)){
+        out.push({ cls:"f-danger", txt:tf("confRun", { d: day.date.slice(5) }) });
       }
     }
   }
