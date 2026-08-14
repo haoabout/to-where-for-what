@@ -941,6 +941,31 @@ main.tight{padding-bottom:var(--ab-h,64px)}
    stand-in for a photo we don't have. */
 .media-fb svg{color:color-mix(in srgb,var(--ink-3) 40%,var(--line-2))}
 
+/* Photos fetched at read time (see "Runtime photos" in the script). The chip
+   rides ON the photo rather than sitting under it as a caption: a line of
+   text below a tile reads as the photo's title, and this one is a disclaimer.
+   Dashed, which is the same "we could not confirm this" language .verify-box
+   speaks in. Built from the palette tokens rather than a hardcoded scrim, so
+   it stays this page's chip and not a generic overlay; the near-opaque paper
+   fill is what keeps it legible over a photo of any brightness. */
+.shot-auto{
+  font-size:10.5px;line-height:1.35;padding:2px 7px;border-radius:99px;
+  background:color-mix(in srgb,var(--paper) 88%,transparent);color:var(--ink-3);
+  border:1px dashed color-mix(in srgb,var(--ink-3) 45%,transparent);
+}
+.media .shot-auto,.dk-media .shot-auto{
+  position:absolute;left:8px;bottom:8px;z-index:2;max-width:calc(100% - 16px);
+}
+/* The stand-in for "we looked and there is nothing" — quieter than the
+   category label above it, which is a fact about the place rather than an
+   apology about the page. */
+.shot-none{font-size:11.5px;color:var(--ink-3);opacity:.72}
+/* In the list tile the note simply joins the category label under the mark.
+   The deck's band is 280px of empty paper and its fallback column centres a
+   single 44px mark in it, so the note is pinned to the band's foot instead —
+   trailing the mark by 100-odd pixels of nothing read as a layout accident. */
+.dk-media .shot-none{position:absolute;left:0;right:0;bottom:11px;text-align:center}
+
 .hd{display:flex;align-items:flex-start;gap:8px;margin-top:12px}
 .nmw{flex:1;min-width:0}
 /* The name and the local name reserve a fixed two-line / one-line block, so
@@ -1357,7 +1382,10 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
    dialog's floor mid-scroll). Dropping it hands .dlg-f the same scrollport
    .dlg-h already sticks to. */
 .dlg-b{padding:17px 20px 0}
-.dlg-b h4{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.9px;color:var(--ink-3);margin:20px 0 8px}
+/* .gal>h4 is named explicitly because the gallery also lives in a deck card,
+   outside any .dlg-b, and a section heading that changes size depending on
+   which surface it landed on is a bug the reader would have to explain. */
+.dlg-b h4,.gal>h4{font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.9px;color:var(--ink-3);margin:20px 0 8px}
 .dlg-b h4:first-child{margin-top:0}
 .dlg-b p{margin:0 0 10px;font-size:14px;color:var(--ink-2)}
 /* The card clamps .pitch to three lines and — measured on the Osaka trip — 40%
@@ -1378,9 +1406,38 @@ dialog::backdrop{background:rgba(20,16,12,.5);backdrop-filter:blur(3px)}
    420px would already be most of the dialog. width:auto + max-width makes
    the element box hug the image, so the border-radius rounds the photo
    itself, not a letterbox around it. */
-.dlg-img{max-width:100%;width:auto;max-height:min(48vh,420px);
+/* .dlg-shot>img covers the runtime stand-in, which is created by script and
+   carries no class of its own — the host styles whatever image lands in it,
+   which is what lets one resolver serve three very different surfaces. */
+.dlg-img,.dlg-shot>img{max-width:100%;width:auto;max-height:min(48vh,420px);
   border-radius:9px;margin:0 auto 14px;display:block}
 .credit{font-size:11px;color:var(--ink-3);margin:-9px 0 15px}
+/* No photo to hang a corner chip on here, so the disclaimer becomes a line
+   under the image, in the same slot and rhythm as a real photo's credit. */
+.dlg-shot .shot-auto{display:block;width:fit-content;margin:-9px auto 15px}
+.dlg-shot .shot-none{display:block;text-align:center;margin:0 0 14px}
+
+/* ── "More photos": thumbnail strip, and the one it was clicked into ── */
+/* scroll-margin, because opening a photo scrolls this section to the top of
+   whichever container it is in, and in the dialog that top is underneath the
+   sticky header — the strip would slide behind its own heading. */
+.gal{margin-bottom:16px;scroll-margin-top:62px}
+.gal-src{font:400 11px/1 var(--sans);text-transform:none;letter-spacing:0;color:var(--ink-3)}
+.gal-thumbs{display:flex;gap:7px;flex-wrap:wrap}
+.gal-t{
+  flex:0 0 auto;width:84px;height:62px;padding:0;overflow:hidden;
+  border:1px solid var(--line);border-radius:7px;background:var(--fill);
+}
+.gal-t img{width:100%;height:100%;object-fit:cover;display:block}
+.gal-t[aria-pressed=true]{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.gal-hero{display:block;max-width:100%;max-height:min(46vh,400px);
+  margin:9px auto 0;border-radius:9px}
+.gal-note{font-size:11.5px;color:var(--ink-3)}
+/* Inside a deck card the strip shares its row with nothing else and the card
+   is narrower than the dialog, so the thumbs come down a size. The source
+   note does not shrink with them — it is the part that must stay readable. */
+.dk-card .gal{padding:0 6px}
+.dk-card .gal-t{width:66px;height:48px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:7px 15px;font-size:13.5px}
 .kv dt{color:var(--ink-3)}
 .kv dd{margin:0;color:var(--ink-2)}
@@ -3198,6 +3255,14 @@ en: {
   bkNone:"No booking needed", aboutMin:"~{n} min", close:"Close",
   stubDetail:"You added this place on the map; hours, tickets and other details haven't been researched yet. The AI will complete them next time it works on this trip.",
   photoAdvice:"Photo tips", practicalInfo:"Practical info", sources:"Sources",
+  /* Runtime photos. "Unverified" is the load-bearing word: these were picked
+     by a search engine while the page was being read, and must never be
+     mistaken for the image a human checked at build time. */
+  shotAuto:"Auto-searched, unverified", shotNone:"No photo",
+  galTitle:"More photos", galSrc:"auto-searched on Commons",
+  galLoading:"Loading photos…", galEmpty:"No photos found",
+  galFail:"Photos couldn't be loaded — this needs a connection",
+  galOpen:"Show photo {n} larger",
   schedRemove:"Remove from Day {n}", schedAdd:"Add to Day {n}",
   quick:["Too far","Too crowded","Not interested","Not enough time","Too expensive","Been there","Closed that day","Same as elsewhere"],
   whyNotTitle:"Why not {name}?",
@@ -3412,6 +3477,13 @@ zh: {
   bkNone:"无需预约", aboutMin:"约 {n} 分钟", close:"关闭",
   stubDetail:"你在地图上手动添加的地点，开放时间、门票等信息还没研究。下次让 AI 继续规划时，它会自动补全这里。",
   photoAdvice:"拍摄建议", practicalInfo:"实用信息", sources:"信息来源",
+  /* 运行时补的图。「未核验」是这几个字里最要紧的一个：它是读页面的当下由
+     搜索引擎挑出来的，不能和构建时人工核过的那张混为一谈。 */
+  shotAuto:"自动搜索，未核验", shotNone:"暂无图片",
+  galTitle:"更多照片", galSrc:"来自 Commons 自动搜索",
+  galLoading:"正在加载照片…", galEmpty:"没有找到照片",
+  galFail:"照片没能加载，需要联网",
+  galOpen:"看第 {n} 张大图",
   schedRemove:"从第 {n} 天移出", schedAdd:"加进第 {n} 天",
   quick:["太远了","人太多","不感兴趣","时间不够","门票太贵","去过了","那天不开门","和别处重复"],
   whyNotTitle:"为什么给{name}标 no？",
@@ -4090,17 +4162,218 @@ const CAT_ICON = {
    hollow circle the map uses for "unrated" */
 const catIcon = (c, n) => icon(CAT_ICON[c] || `<circle cx="8" cy="8" r="5.2" ${SVG_ST}/>`, n);
 
+/* ═══════════════════════════════════════════════════════════════════
+   Runtime photos (Wikimedia Commons)
+
+   Two gaps the build side cannot close. A place may have no verified photo
+   at all, and a URL that was alive when the trip was built can be dead by
+   the time the trip is read — the Osaka delivery shipped with two images
+   whose hosts closed the connection, which the reader met as an empty tile
+   and a console error. So the page asks Commons for a stand-in at read time.
+
+   What comes back was chosen by a search engine, not by a person, so it is
+   never allowed to pass for the curated image: every runtime photo carries
+   the "auto-searched, unverified" chip, and nothing here ever writes into
+   places.json. Events are excluded outright — a plausible venue photo under
+   a festival listing misleads harder than an empty tile does, because the
+   reader has no way to tell it isn't the event.
+
+   One request per place, shared by the fallback and the gallery (same query,
+   same limit) and cached for the session, so a place looked at in the deck,
+   then in the dialog, then in the list still costs one round trip. Failures
+   are evicted rather than cached: a page opened on a train with no signal
+   must be able to succeed once the signal is back.
+   ═══════════════════════════════════════════════════════════════════ */
+const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
+/* The file namespace is full of SVG diagrams, PDFs and TIFFs. Only the three
+   formats every browser draws are of any use as a photo. */
+const SHOT_MIME = /^image\/(jpeg|png|webp)$/;
+const shotCache = new Map();
+
+/* name_local first: Commons catalogues its files under the local name far
+   more often than the traveller's-language one, and the destination is what
+   separates one Kiyomizu-dera from the next. Both fall back, so a place with
+   no local name and a trip with no local destination name still search. */
+const shotQuery = p => [p.name_local || p.name,
+  TRIP.destination_local || TRIP.destination || ""].filter(Boolean).join(" ");
+
+async function commonsShots(p){
+  const q = shotQuery(p);
+  if(shotCache.has(q)) return shotCache.get(q);
+  const run = (async () => {
+    const u = new URL(COMMONS_API);
+    u.search = new URLSearchParams({
+      action:"query", generator:"search", gsrsearch:q, gsrnamespace:"6", gsrlimit:"8",
+      /* One width serves the stand-in, the thumbnail strip and the enlarged
+         view alike, and it has to: upload.wikimedia.org only serves the
+         thumbnail sizes it has been asked to render, so hand-editing the
+         width in the returned URL to save bytes on the strip earns a 400
+         (measured — every width but the one the API produced was refused). */
+      prop:"imageinfo", iiprop:"url|mime", iiurlwidth:"1000",
+      /* origin=* is what makes this work from file:// as well as http: the
+         API answers an anonymous cross-origin request with an open
+         Access-Control-Allow-Origin. Without it the browser eats the reply
+         and every trip page opened by double-click loses the feature. */
+      origin:"*", format:"json",
+    });
+    const r = await fetch(u);
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    /* query.pages is keyed by page id and therefore unordered; `index`
+       carries the search ranking, and the top hit is the one worth showing. */
+    return Object.values((j && j.query && j.query.pages) || {})
+      .sort((a, b) => (a.index || 0) - (b.index || 0))
+      .map(pg => (pg.imageinfo || [])[0])
+      .filter(ii => ii && ii.thumburl && SHOT_MIME.test(ii.mime || ""))
+      .map(ii => ii.thumburl);
+  })().catch(e => { shotCache.delete(q); throw e; });
+  shotCache.set(q, run);
+  return run;
+}
+
+/* Every surface that shows a place photo — the list tile, the deck's photo
+   band, the dialog's hero — wraps it in a [data-shot] host. One resolver
+   then serves all three: it appends a bare <img>, and the host's own CSS
+   decides how that image is shaped. */
+function shotNone(host){
+  host.dataset.shotState = "none";
+  if(host.querySelector(".shot-none")) return;
+  (host.querySelector(".media-fb, .dk-media-fb") || host)
+    .insertAdjacentHTML("beforeend", `<span class="shot-none">${esc(T.shotNone)}</span>`);
+}
+
+function resolveShot(host){
+  if(host.dataset.shotState) return;      // already tried on this node
+  host.dataset.shotState = "wait";
+  const p = PLACES.find(x => x.id === host.dataset.shot);
+  if(!p || p.category === "event"){ shotNone(host); return; }
+  commonsShots(p).then(list => {
+    if(!list.length){ shotNone(host); return; }
+    const img = new Image();
+    img.alt = p.name;
+    img.onload = () => {
+      /* Same shape sort the deck gives its own photos; .tall is only styled
+         inside the deck band, so setting it elsewhere is inert. The chip is
+         attached here rather than up front so that a stand-in which itself
+         fails to load never leaves its disclaimer behind alone. */
+      if(img.naturalWidth < img.naturalHeight * 1.2) img.classList.add("tall");
+      host.insertAdjacentHTML("beforeend", `<span class="shot-auto">${esc(T.shotAuto)}</span>`);
+      host.dataset.shotState = "auto";
+    };
+    img.onerror = () => { img.remove(); host.dataset.shotState = ""; shotNone(host); };
+    img.src = list[0];
+    host.appendChild(img);
+  }).catch(() => { host.dataset.shotState = ""; shotNone(host); });
+}
+
+/* Inline in the markup, like the deck's onload next door: the handler has to
+   ride every innerHTML rebuild, and an attached listener would not.
+   The credit line goes with the image it credits — left behind, it would end
+   up captioning the stand-in with the dead photo's rights holder. */
+function shotFail(img){
+  const host = img.closest("[data-shot]");
+  img.remove();
+  if(!host) return;
+  const cr = host.querySelector(".credit");
+  if(cr) cr.remove();
+  resolveShot(host);
+}
+
+/* Deferred until the tile is near the viewport. A 47-place list would
+   otherwise open with 47 searches at Commons, most of them for cards the
+   reader never scrolls to. The dialog passes `now`: it is one photo, the
+   reader is looking straight at it, and its host is inside a <dialog> that
+   the observer would only report once showModal() has run. */
+const shotObs = "IntersectionObserver" in window ? new IntersectionObserver(entries => {
+  for(const e of entries){
+    if(!e.isIntersecting) continue;
+    shotObs.unobserve(e.target);
+    resolveShot(e.target);
+  }
+}, { rootMargin:"250px" }) : null;
+
+function wireShots(root, now){
+  for(const host of (root || document).querySelectorAll("[data-shot]")){
+    if(host.dataset.shotState || host.querySelector("img")) continue;
+    if(now || !shotObs) resolveShot(host);
+    else shotObs.observe(host);
+  }
+}
+
+/* ── "More photos" ──
+   Opt-in per place: enrich sets image_gallery on the ones whose image search
+   found the subject beyond doubt. The field is normally absent, and absent
+   means this renders nothing and fetches nothing. */
+function galleryHTML(p){
+  if(p.image_gallery !== true) return "";
+  return `<section class="gal" data-gal="${esc(p.id)}">
+    <h4>${esc(T.galTitle)} <span class="gal-src">${esc(T.galSrc)}</span></h4>
+    <div class="gal-body"><div class="gal-note">${esc(T.galLoading)}</div></div>
+  </section>`;
+}
+
+/* Filled when the panel is opened (dialog) or when the card reaches the top
+   of the deck — never for the whole trip at once, and never for the two
+   cards waiting behind. Everything after the first look is served from
+   shotCache, including the dialog repainting itself after a schedule edit. */
+function wireGallery(root, p){
+  const sec = root.querySelector(".gal");
+  if(!sec || sec.dataset.gal !== p.id || sec.dataset.galState) return;
+  sec.dataset.galState = "wait";
+  const body = sec.querySelector(".gal-body");
+  const note = txt => { body.innerHTML = `<div class="gal-note">${esc(txt)}</div>`; };
+  commonsShots(p).then(list => {
+    const shots = list.slice(0, 4);
+    sec.dataset.galState = "done";
+    if(!shots.length){ note(T.galEmpty); return; }
+    body.innerHTML = `<div class="gal-thumbs">${shots.map((s, i) =>
+      `<button type="button" class="gal-t" data-i="${i}" aria-pressed="false"
+        aria-label="${esc(tf("galOpen", { n: i + 1 }))}"><img src="${esc(s)}" alt="" loading="lazy"></button>`
+      ).join("")}</div>`;
+    /* The big view is a second image under the strip, not an overlay: the
+       deck card and the dialog are both already scroll containers with their
+       own escape key, and a lightbox on top of a <dialog> would have to fight
+       both. Clicking the open thumb again closes it — which is also what the
+       pressed state is telling you. */
+    body.querySelector(".gal-thumbs").onclick = e => {
+      const b = e.target.closest(".gal-t");
+      if(!b) return;
+      const open = b.getAttribute("aria-pressed") === "true";
+      for(const x of body.querySelectorAll(".gal-t")) x.setAttribute("aria-pressed", "false");
+      const old = body.querySelector(".gal-hero");
+      if(old) old.remove();
+      if(open) return;
+      b.setAttribute("aria-pressed", "true");
+      const hero = new Image();
+      hero.className = "gal-hero";
+      hero.alt = p.name;
+      /* Both hosts are scroll containers, and in a deck card the strip sits
+         a long way down one: left alone, the enlarged photo opens entirely
+         below the fold and the click reads as dead. The section, not the
+         photo — bringing the strip along keeps the other three reachable
+         and the same thumb clickable again to close. */
+      hero.onload = () => sec.scrollIntoView({ block:"start", behavior:REDUCED.matches ? "auto" : "smooth" });
+      hero.onerror = () => { hero.remove(); note(T.galFail); };
+      hero.src = shots[+b.dataset.i];
+      body.appendChild(hero);
+    };
+  }).catch(() => { sec.dataset.galState = ""; note(T.galFail); });
+}
+
 /* The category mark is rendered *underneath* every tile, image or not, and the
-   photo is layered over it. A broken image URL then needs nothing but
-   this.remove() — no className rewriting, no SVG markup smuggled through an
+   photo is layered over it. A broken image URL then needs nothing but a
+   remove() — no className rewriting, no SVG markup smuggled through an
    inline onerror attribute (which would have to survive both HTML-attribute
-   and JS-string quoting). Costs a few bytes of markup per photo tile. */
+   and JS-string quoting). Costs a few bytes of markup per photo tile.
+   data-shot rides on the tile whether or not there is an image: it is the
+   handle the runtime fallback needs, both for the tile that never had one
+   and for the tile whose photo just died under the reader. */
 function media(p){
   const im = (p.images || [])[0];
   const label = CATMAP[p.category] || "";
-  return `<div class="media">
+  return `<div class="media" data-shot="${esc(p.id)}">
     <div class="media-fb">${catIcon(p.category, 44)}${label ? `<span>${esc(label)}</span>` : ""}</div>
-    ${im && im.url ? `<img src="${esc(im.url)}" alt="${esc(p.name)}" loading="lazy" onerror="this.remove()">` : ""}
+    ${im && im.url ? `<img src="${esc(im.url)}" alt="${esc(p.name)}" loading="lazy" onerror="shotFail(this)">` : ""}
   </div>`;
 }
 
@@ -4262,6 +4535,10 @@ function render(){
       </section>`;
     }).join("");
   }
+  // Fresh nodes every rebuild, so the tiles that need a stand-in are handed
+  // back to the observer here. Repeat work is free: what it asks for is
+  // already in shotCache.
+  wireShots($("#groups"));
   updateProgress();
   // A choice changed in the list must recolor the map markers immediately —
   // that's the whole point of the views living in one page: no AI
@@ -4582,12 +4859,20 @@ function openDetail(id, from){
       <button class="x" data-close aria-label="${esc(T.close)}">${xmark()}</button>
     </div>
     <div class="dlg-b">
-      ${im && im.url ? `<img class="dlg-img" src="${esc(im.url)}" alt="${esc(p.name)}" onerror="this.remove()">
-        ${im.credit ? `<div class="credit">${esc(im.credit)}</div>` : ""}` : ""}
+      <div class="dlg-shot" data-shot="${esc(p.id)}">
+        ${im && im.url ? `<img class="dlg-img" src="${esc(im.url)}" alt="${esc(p.name)}" onerror="shotFail(this)">
+          ${im.credit ? `<div class="credit">${esc(im.credit)}</div>` : ""}` : ""}
+      </div>
+      ${galleryHTML(p)}
       ${detailBodyHTML(p)}
       ${prepDlgHTML(p)}
       <div class="dlg-f">${schedBtn(p)}${pickHTML(p)}</div>
     </div>`;
+  // Photo work starts as the panel is built: the hero is looked at directly,
+  // so it resolves eagerly, and the gallery is the reason it is lazy at all —
+  // four photos per place is a download nobody asked for until they open one.
+  wireShots($("#dlg-inner"), true);
+  wireGallery($("#dlg-inner"), p);
   dlgFrom(from);
   const dlg = $("#dlg");
   dlg.dataset.place = p.id;   // who is on show — the A/S/D handler keys off this
@@ -8478,9 +8763,9 @@ const DECK = (() => {
        cover would reduce those to a sliver of their middle. Inline like the
        onerror next to it: the handler must ride the markup through every
        innerHTML rebuild. */
-    return `<span class="dk-media">
+    return `<span class="dk-media" data-shot="${esc(p.id)}">
       <span class="dk-media-fb">${catIcon(p.category, 44)}</span>
-      ${im && im.url ? `<img src="${esc(im.url)}" alt="" loading="lazy" onerror="this.remove()"
+      ${im && im.url ? `<img src="${esc(im.url)}" alt="" loading="lazy" onerror="shotFail(this)"
         onload="if(this.naturalWidth < this.naturalHeight * 1.2) this.classList.add('tall')">` : ""}
       ${label ? `<span class="dk-cat">${esc(label)}</span>` : ""}
     </span>`;
@@ -8512,12 +8797,22 @@ const DECK = (() => {
           <div class="dk-name">${esc(p.name)}${loc}</div>
           <div class="dk-facts">${facts}</div>
         </div>
+        ${depth === 0 ? galleryHTML(p) : ""}
         <div class="dlg-b dk-detail">${detailBodyHTML(p)}</div>
       </div>`;
     if(depth > 0){   // the loose-pile look; the top card always lies straight
       const s = scatter(p.id, 6);
       el.style.transform = `translate(${s.ox}px,${s.oy + depth*7}px) rotate(${(rot != null ? rot : s.rot).toFixed(1)}deg)`;
     }
+    /* This is the surface the choice is actually made on, so it gets the same
+       photo treatment the dialog does — a dead URL here costs a decision, not
+       just a picture. The gallery is built for the front card only (the two
+       behind are blank stock anyway, and render() rebuilds the stack on every
+       commit, so the next card gets its own as it arrives); the fallback
+       observer covers all three, which is 2 requests of read-ahead for cards
+       the reader is about to see. */
+    wireShots(el);
+    if(depth === 0) wireGallery(el, p);
     return el;
   }
 
@@ -8665,7 +8960,9 @@ const DECK = (() => {
       if(e.button !== 0) return;   // primary button/touch only
       // Links in the sources list must stay clickable: pointer capture would
       // re-target the click, so a press that starts on one never becomes a drag.
-      if(e.target.closest("a")) return;
+      // Gallery thumbs are the same case — the click that opens a photo would
+      // otherwise be swallowed by the capture and read as a tiny throw.
+      if(e.target.closest("a,.gal-t")) return;
       // The maybe-drag (downwards) is mouse-only: on touch that axis IS the
       // scroll. Mouse wheels scroll, so the mouse keeps all four directions.
       vAllowed = e.pointerType === "mouse";
