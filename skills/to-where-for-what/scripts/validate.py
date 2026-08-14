@@ -315,6 +315,18 @@ def check_place(p, idx, doc, rep: Report) -> None:
                 f"verify.state={vstate} exempts {sorted(excused)} from the required check"
                 + (f"; of those, {got} actually have values" if got else "; all are empty"))
 
+    # "Couldn't verify" and "confirmed operating" can't both be true. The page
+    # won't catch it — status="open" and an empty status both fall through
+    # warnOf() to the same "unverified" chip — but places.json is the single
+    # truth that stage D, the verify subagent and the exported guide.md all
+    # read, and there it stands as a confirmed fact nobody confirmed. This is
+    # the one machine-checkable corner of the playbook's "never guess status"
+    # rule; the rest still rests on discipline.
+    if vstate in ("blocked", "partial") and p.get("status") == "open":
+        rep.add("P1", where,
+                f'verify.state={vstate} but status="open" — nothing confirmed it. '
+                "Leave status empty; the exemption above already allows that.")
+
     # Enums
     for field, allowed in (("tier", TIERS), ("scale", SCALES),
                            ("status", STATUSES), ("booking", BOOKINGS)):

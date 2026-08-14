@@ -237,6 +237,20 @@ def main() -> int:
     case("verified grants no exemption from required fields",
          lambda d: d["places"][1].update(verify={"state": "verified"}, hours=None),
          "P0", "missing required field hours")
+    # Measured on a real stage-A run (2026-08-14): a subagent that honestly
+    # flagged 光の教会 as unverifiable still wrote status="open" beside the
+    # flag. The page can't show the contradiction, so the validator has to.
+    case("blocked while claiming status=open",
+         lambda d: blocked(d, status="open"), "P1", 'status="open" — nothing confirmed it')
+    case("partial while claiming status=open",
+         lambda d: d["places"][1].update(
+             verify={"state": "partial", "note": "只查到营业时间", "check": ["票价"]},
+             status="open"),
+         "P1", 'status="open" — nothing confirmed it')
+    case("blocked with status left empty is fine",
+         lambda d: blocked(d, status=None), "P1", '!nothing confirmed it')
+    case("status=open with no verify block is fine",
+         lambda d: d["places"][1].update(status="open"), "P1", '!nothing confirmed it')
 
     print("\nitinerary · scheduling result")
     case("a clean schedule should produce no P0",
