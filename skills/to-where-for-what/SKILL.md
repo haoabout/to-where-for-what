@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 1.8.5
+version: 1.8.6
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---

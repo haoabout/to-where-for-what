@@ -23,6 +23,60 @@ Bump rules:
 
 ---
 
+## 1.8.6 — 2026-08-14
+
+### Added
+
+- **`run: {start, end}` — a limited-run window for festivals, pop-ups and
+  limited-run exhibitions.** Found on a live Osaka trip: a two-day matsuri
+  (Sep 12–13) dragged onto Sep 14 raised no warning, because the conflict
+  machinery only knew `status` and `closed_days` — and a two-day festival
+  has no weekly closure day at all; its dates lived only in prose. The
+  window is now structured: scheduling a day outside it is a P0 (same
+  severity as scheduling on a closure day), a window that misses the trip
+  entirely is a P1, and the page's day rows and cards say "ended on 09-13" /
+  "not on until 09-20" / "on 09-13 only" in both UI languages. Outside its
+  window a limited-run place isn't *shut*, it isn't *happening* — the
+  wording keeps that distinction.
+- **Runtime photo fallback and a "more photos" gallery.** A verified image
+  that dies after delivery (two did, measured, on the Osaka run) or a place
+  with no image no longer leaves a broken tile: the page searches Wikimedia
+  Commons in the viewer's browser and shows a stand-in — always chipped
+  "auto-searched, unverified", never disguised as a reviewed photo. Places
+  the collection pass marked `image_gallery: true` additionally get a lazy,
+  session-cached 4-thumb gallery in the dialog and on the front deck card —
+  where the want/maybe/skip call is actually made. Events never auto-fill:
+  a random venue photo under a festival is worse than no photo. Offline,
+  everything degrades to a quiet "no photo" line.
+
+### Changed
+
+- **Image collection and visual review now tier by find-evidence, not
+  uniformly.** Measured on the Osaka audit: `medium` candidates were
+  rejected by the visual pass 79% of the time (eyes stay), but corroborated
+  `high` hits still carried ~10% real errors — neighbor landmarks, interior
+  shots, a museum's holdings instead of the museum. So: a place whose two
+  identity families (Wikipedia exact, Wikidata) produce a live corroborated
+  `high` keeps that one candidate and skips the five slow families
+  (official-site crawling included); everything else — no `high`, every
+  event, and any name resolving to several in-bbox Wikidata entities — gets
+  the full scan, still capped at 2 candidates. The audit records
+  `review: "glance" | "full"`; the visual pass gives glance places one
+  contact-sheet look with no hand-search duty and spends its full
+  discipline on the hard tier. Osaka: 28 glance / 19 full, audit candidates
+  107 → 66. The ambiguity guard caught 藤田美術館 — whose Wikidata `high`
+  really was a photo of its holdings — on its first run.
+
+### Notes for updaters
+
+- Both new fields (`run`, `image_gallery`) are optional and additive:
+  existing `places.json` files validate byte-for-byte as before, and the
+  template treats their absence as "no window / no gallery".
+  `image-audit.json` gains a `review` key per place; its former verdict
+  block is now `review_result` (nothing in the repo read it by name).
+
+---
+
 ## 1.8.5 — 2026-08-14
 
 ### Changed
