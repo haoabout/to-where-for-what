@@ -23,6 +23,27 @@ Bump rules:
 
 ---
 
+## 1.8.4 — 2026-08-14
+
+### Fixed
+
+- **A place can no longer be "unverifiable" and "open" at the same time.**
+  Measured on a stage-A comparison run: a subagent honestly flagged
+  `光の教会` as unverifiable — the church's site carries no visitor
+  information and its blog's last word on tours is a COVID-era suspension —
+  and then wrote `status: "open"` next to that flag. The page cannot show
+  the contradiction (`warnOf()` sends `status="open"` and an empty status
+  down the same branch, both landing on the "unverified" chip), so it
+  reached `places.json` unchallenged — and that file, not the page, is what
+  stage D, the verify subagent and the exported `guide.md` all read. A
+  `verify.state` of `blocked` or `partial` alongside `status: "open"` is now
+  a P1; leaving `status` empty was already permitted by the same
+  exemption that lets `hours` and `ticket` be empty. This is the one
+  machine-checkable corner of the playbook's "never guess `status`" rule —
+  the rest still rests on discipline.
+
+---
+
 ## 1.8.3 — 2026-08-14
 
 ### Changed
