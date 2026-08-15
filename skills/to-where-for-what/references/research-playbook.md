@@ -19,8 +19,9 @@ to it:
 - [Festivals and public holidays](#festivals-and-public-holidays-are-a-destination-level-check)
   — the one check that belongs to the dates, not to a place
 - [Search strategy](#search-strategy) — sources hierarchy, two pages per
-  place, snippets are not a source, unverifiable ≠ delete, fake official
-  domains, exhibition runs, hidden gems, micro-spots
+  place (plus a third for venues with no permanent collection), snippets are
+  not a source, unverifiable ≠ delete, fake official domains, exhibition runs,
+  hidden gems, micro-spots
 - [Anti-hallucination](#anti-hallucination) — `sources` hard gate, never
   guess `status`, image sourcing (Wikimedia: API only), no-vision fallback
 - [Getting coordinates](#getting-coordinates) — scripts do this, not you
@@ -230,6 +231,38 @@ the text for words like `休館` `改修` `工事` `リニューアル` `closed`
 `renovation` (use the local language's equivalents). When you find a notice,
 check whether its dates overlap the trip.
 
+#### A third page when the venue has no permanent collection
+
+Two pages catch a closure that someone **announced**. A between-exhibition gap
+is not announced, because from the venue's side it isn't an event — it's the
+absence of one.
+
+Measured across five stage-A runs of the same task (2026-08-15). The Abeno
+Harukas Art Museum's homepage read normally — "next: Andrew Wyeth, opening
+10/3". Its visitor-info page read normally — "Tue–Fri 10:00–20:00". Neither
+carried the word 休館. But the previous show closed 9/9 and the next opens
+10/3, so 9/10–10/2 is a hole, and the trip sat inside it. Four runs caught it.
+The fifth followed this rule to the letter, read "open 10:00–20:00", and wrote
+`status: "open"` — a place the user would have travelled to and found shut,
+while the card said it was operating. That run broke no rule. The rule was
+short.
+
+The visitor-info page gives you the **rule** ("closed during changeovers");
+only the exhibition-schedule page gives you the **dates**. Answering "can I go
+on the 15th" needs both, and then a subtraction — which is why reading two
+pages carefully cannot get you there.
+
+**When a venue has no permanent collection, fetch its exhibition schedule too**
+(`展覧会スケジュール` / `これからの展覧会` / "exhibitions" / "what's on"), and
+compare the current run's end date and the next run's start date against the
+trip days. A gap covering the trip is `status: "seasonal_closed"` — not `open`.
+
+Two tells that a venue has no permanent collection, either one is enough:
+its admission is priced per exhibition with no separate collection ticket, or
+its visitor-info page lists 展示替期間 / "changeover period" among the closed
+days. Venues that do have a permanent collection stay open through a
+changeover; there the gap costs a special exhibition, not the visit.
+
 ### Search snippets are not a source
 
 **Only an actually fetched page counts.** Observed: for Tekijuku's admission, a
@@ -292,8 +325,10 @@ For museums and galleries, beyond the regular opening info, check **what's on
 during the trip**:
 
 - Does the special exhibition's run cover the trip days?
-- Is it in a **between-exhibitions gap** (previous show closed, next not open —
-  only the permanent collection, or the whole venue shut)?
+- Is it in a **between-exhibitions gap**? For a venue with no permanent
+  collection this closes the whole place, and it is invisible on the two
+  pages you already fetched — see
+  [A third page when the venue has no permanent collection](#a-third-page-when-the-venue-has-no-permanent-collection).
 - Is the special exhibition **timed-entry / lottery**, and has the lottery
   already closed?
 
@@ -666,6 +701,9 @@ face is backlit at noon".
       including "nothing significant on" — is in `trip.note`
 - [ ] Every place has `sources` with URLs actually visited
 - [ ] Every `status` was confirmed; none filled in as `open` on assumption
+- [ ] Every venue with no permanent collection had its exhibition schedule
+      checked against the trip days — a changeover gap reads as `open` on the
+      homepage and the visitor-info page alike
 - [ ] `closed_days` agrees with the `closed` text
 - [ ] Every limited-run place (festival, pop-up, exhibition run) carries `run`
 - [ ] Every micro-spot has a `parent_id`
