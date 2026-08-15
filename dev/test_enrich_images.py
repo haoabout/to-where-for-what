@@ -105,7 +105,7 @@ def run_pipeline(places: list[dict], net: FakeNet, tmp: Path,
     old_get, old_sleep = enrich.http_get, enrich.time.sleep
     enrich.http_get, enrich.time.sleep = net.get, lambda *_: None
     enrich._HTTP_CACHE.clear()
-    enrich._DOMAIN_LAST.clear()
+    enrich._DOMAINS.clear()
     try:
         out = io.StringIO()
         old_stdout, sys.stdout = sys.stdout, out
@@ -121,6 +121,14 @@ def run_pipeline(places: list[dict], net: FakeNet, tmp: Path,
 
 def cands(audit: dict, pid: str) -> list[dict]:
     return audit["places"][pid]["candidates"]
+
+
+def rec(audit: dict, pid: str) -> dict:
+    """The place's audit record — `written` is the per-place answer to "was an
+    image adopted", which fill_images' return value no longer is on its own:
+    since 32eedfb it counts every places.json edit, image_gallery flips
+    included."""
+    return audit["places"][pid]
 
 
 # -------------------------------------------------------------------- cases
@@ -142,9 +150,16 @@ def case_composite_name(tmp: Path) -> None:
     p = place(name="大邮政大楼与 TCDC 曼谷", name_en="Grand Postal Building & TCDC Bangkok")
     doc, audit, wrote = run_pipeline([p], net, tmp)
     got = doc["places"][0].get("images") or []
+    r = rec(audit, "bkk-x01")
+    # 一次写图 + 一次 image_gallery 置位 = 2 处 places.json 改动。
     check("composite name reaches the GPO redirect and writes high",
-          wrote == 1 and got and got[0]["url"].endswith("gpo-960.jpg"),
-          f"wrote={wrote} images={got}")
+          wrote == 2 and r["written"] == "https://upload.wikimedia.org/gpo-960.jpg"
+          and got and got[0]["url"].endswith("gpo-960.jpg"),
+          f"wrote={wrote} written={r['written']} images={got}")
+    check("corroborated high lands in the glance tier and flags the gallery",
+          r["review"] == "glance" and doc["places"][0].get("image_gallery") is True
+          and len(r["candidates"]) == 1,
+          f"review={r['review']} cands={len(r['candidates'])}")
     c = next((c for c in cands(audit, "bkk-x01") if c["source"] == "wikipedia"), None)
     check("audit records matched_title from the redirect target",
           bool(c) and c["confidence"] == "high"
@@ -275,8 +290,21 @@ def case_event_priority(tmp: Path) -> None:
 
 
 def case_openverse_last(tmp: Path) -> None:
-    """Openverse 排最后:官网与 Wikipedia 候选在前;凑满 3 张后根本不查询。"""
+    """Openverse 排最后:官网与 Wikipedia 候选在前;凑满上限后根本不查询。
+
+    身份两可(同名多个 Wikidata 实体)的地点拿不到 glance 档,整条链因此
+    照旧跑完 —— 这正是分档后仍需验证来源顺序的场景。"""
     net = FakeNet()
+    # 两个同名实体都落在 bbox 内 → ambiguous,glance 档被否掉;只给 P373
+    # 不给 P18,免得 wikidata 家族自己先把上限占满。
+    net.on("wikidata.org", "wbsearchentities",
+           json_body={"search": [{"id": "Q1"}, {"id": "Q2"}]})
+    net.on("wikidata.org", "wbgetentities", json_body={"entities": {
+        eid: {"labels": {"en": {"value": "Test Place"}}, "claims": {
+            "P625": [{"mainsnak": {"datavalue": {"value": {
+                "longitude": 100.5, "latitude": 13.75}}}}],
+            "P373": [{"mainsnak": {"datavalue": {"value": f"Cat{eid}"}}}]}}
+        for eid in ("Q1", "Q2")}})
     net.on("en.wikipedia.org", "pageimages", urllib.parse.quote_plus("Test Place"),
            json_body=pageimages("TP.jpg", "Test Place"))
     net.on("commons.wikimedia.org", "TP.jpg",
@@ -293,9 +321,11 @@ def case_openverse_last(tmp: Path) -> None:
     p = place(sources=[{"title": "官网", "url": "https://official.example/"}])
     _, audit, _ = run_pipeline([p], net, tmp)
     srcs = [c["source"] for c in cands(audit, "bkk-x01") if c["check"]["ok"]]
+    check("ambiguous identity denies the glance tier",
+          rec(audit, "bkk-x01")["review"] == "full",
+          f"review={rec(audit, 'bkk-x01')['review']}")
     check("wikipedia and official fill the cap before openverse",
-          len(srcs) == enrich.MAX_CANDIDATES and "openverse" not in srcs,
-          f"sources={srcs}")
+          srcs == ["wikipedia", "official-meta"], f"sources={srcs}")
     check("openverse not even queried once the cap is reached",
           not any("openverse" in u for u in net.log))
 
@@ -321,7 +351,7 @@ def case_retry_429(tmp: Path) -> None:
     enrich.urllib.request.urlopen = fake_urlopen
     enrich.time.sleep = lambda s: sleeps.append(s)
     enrich._HTTP_CACHE.clear()
-    enrich._DOMAIN_LAST.clear()
+    enrich._DOMAINS.clear()
     try:
         res = enrich.http_get("https://throttled.example/x.jpg")
     finally:
@@ -390,8 +420,14 @@ def case_existing_flow(tmp: Path) -> None:
     check("broken existing image: failure recorded, new candidates collected",
           any(c["source"] == "existing" and not c["check"]["ok"] for c in b)
           and fresh, f"cands={[(c['source'], c['check']) for c in b]}")
+    # 失效地点这一轮拿到了被印证的 high,于是升进 glance 档并置 image_gallery
+    # ——那是 places.json 的一处改动(wrote 计入),但图本身仍归视觉复核决定。
     check("broken existing image is never auto-replaced",
-          wrote == 0 and doc["places"][1]["images"][0]["url"].endswith("dead.webp"))
+          rec(audit, "bkk-a")["written"] is None
+          and rec(audit, "bkk-b")["written"] is None
+          and doc["places"][1]["images"][0]["url"].endswith("dead.webp")
+          and wrote == 1 and doc["places"][1].get("image_gallery") is True,
+          f"wrote={wrote}")
 
 
 def case_generic_redirect(tmp: Path) -> None:
