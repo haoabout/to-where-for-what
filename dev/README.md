@@ -5,6 +5,32 @@ the validator and the local save server, and a **probe** for the
 browser-capability boundary the template's save path depends on. None of this
 is part of the skill itself; `npx skills add` does not install them.
 
+**Acceptance rule — this is not optional.** Any change under
+`skills/to-where-for-what/scripts/` or to `assets/template-trip.html` must have
+all three suites run and green *before* it is committed. They reach no outside
+network and take seconds; a suite that fails is either a regression to fix or an
+assertion whose contract the change deliberately replaced — say which, in the
+commit.
+
+```bash
+python3 dev/test_enrich_images.py
+python3 dev/test_validate.py
+python3 dev/test_server.py
+```
+
+## test_enrich_images.py
+
+Regression tests for `enrich.py`'s image candidate pipeline — identity grading,
+family order and the candidate cap, the glance/full tiering, the run cache and
+dedupe, 429 backoff, and `--apply-image-review`'s atomic merge. No network: all
+HTTP is stubbed at `enrich.http_get`, and the retry/method cases one level
+deeper at `urllib.request.urlopen`. Run after any change to the image pipeline
+or to the audit contract the visual review pass reads.
+
+```bash
+python3 dev/test_enrich_images.py
+```
+
 ## test_validate.py
 
 Regression tests for `scripts/validate.py` — corrupt the data deliberately,
