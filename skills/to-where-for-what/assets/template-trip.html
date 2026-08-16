@@ -1738,6 +1738,41 @@ pre.code{
 .dleg:hover{background:var(--paper-2);color:var(--ink-2)}
 .dleg svg{flex:none;opacity:.85}
 .dleg .lg-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* The thing on a leg row that says the row opens something. Pushed to the
+   row's end by auto margin rather than a second flex track, so the text
+   still gets every pixel the row has left and the 18px row height is
+   untouched (the svg is 10px, display:block, inside an 18px line box).
+   Pinned to --ink-3 instead of inheriting, so it does not turn red on .err
+   or bold up with .lg-w — the affordance is the same affordance whatever
+   the leg's state is, and every state's row opens the same mode menu. */
+.dleg .lg-cv{margin-inline-start:auto;flex:none;display:flex;color:var(--ink-3);opacity:0}
+/* Hidden by opacity, never display:none or removal: the row must reserve
+   the same 10px whether or not the chevron is showing, or the leg text
+   would reflow (and re-ellipsis) under the pointer. Three ways to reveal
+   it, and none of them is optional:
+     :hover           — the pointer is on the row and asking what it does;
+     :focus-visible   — otherwise a keyboard user, who cannot hover, would
+                        never once see it;
+     [aria-expanded]  — with the menu open the arrow must not vanish out
+                        from under the pointer that just moved off the row,
+                        and it stays in its flipped state while open.
+   Known and accepted: a touch screen fires none of the first two, so the
+   hint does not exist on a phone. That is a deliberate departure from
+   .d-del-day below, which buys itself back with an @media (hover:none)
+   rule — here the row is quiet by preference, and the desktop hover is
+   where the discovery is expected to happen. */
+.dleg:hover .lg-cv,.dleg:focus-visible .lg-cv,.dleg[aria-expanded="true"] .lg-cv{opacity:1}
+/* The row's own aria-expanded is already maintained on every open/close
+   (both paths re-render through renderDays), so the flip needs no second
+   piece of state to keep in sync. */
+.dleg[aria-expanded="true"] .lg-cv{transform:rotate(180deg)}
+/* Additive, per the reduce discipline near the end of the stylesheet: the
+   rotation and the reveal both still happen, only the tweening is opt-in.
+   (Opacity alone produces no motion and would be safe either way; it rides
+   along here so the two halves of one gesture cannot fall out of step.) */
+@media (prefers-reduced-motion:no-preference){
+  .dleg .lg-cv{transition:transform .15s ease,opacity .12s}
+}
 /* A stale leg still shows its mode, never its numbers (see legRowHTML): the
    fade says "this is no longer current" while the icon keeps the row from
    collapsing into an unexplained grey line. */
@@ -7534,6 +7569,22 @@ const MAP = (() => {
   const LEG_ICON = { foot:"walk", car:"car", transit:"bus" };
   const legModeLabel = m => T[m === "car" ? "legCar" : m === "transit" ? "legTransit" : "legFoot"];
 
+  /* Disclosure chevron at the end of every leg row. Two deliberate choices:
+     — Drawn, not typed. Same self-drawn stroke() grid as the mode icons and
+       up/down/del, for the reason spelled out at the ICON set: ▾/▼/▶ are not
+       in the font stack this page ships with, so a character would hand its
+       weight and colour to whatever the machine substitutes, next to line
+       icons that are all currentColor at one stroke weight.
+     — Decoration, not a control. .dleg is itself the <button>, and HTML
+       forbids a button inside a button; nesting one would also split one
+       affordance into two tab stops for a single action. The row already
+       carries aria-haspopup, aria-expanded and a full aria-label, so a
+       screen reader is told everything this glyph tells a sighted reader —
+       which is exactly what makes aria-hidden correct here rather than lossy.
+     Every state gets one, including .stale and .err and transit: they all
+     open the same mode menu. */
+  const LEG_CHEV = `<span class="lg-cv">${stroke("M4.5 6.4 8 9.9l3.5-3.5", 10)}</span>`;
+
   /* The words on one leg row, by state — kept apart from the markup so the
      same sentence can also become the row's aria-label and its title.
      `error` deliberately reads nothing off ent.leg: a leg can fail before it
@@ -7580,7 +7631,7 @@ const MAP = (() => {
       : ICON[LEG_ICON[mode] || "walk"](11);
     return `<button class="dleg${cls}" type="button" data-leg-day="${dayN}" data-leg-i="${pr.i}"
         aria-haspopup="true" aria-expanded="${open}" title="${esc(aria)}" aria-label="${esc(aria)}"
-        >${icon}<span class="lg-t">${esc(txt)}</span></button>`
+        >${icon}<span class="lg-t">${esc(txt)}</span>${LEG_CHEV}</button>`
       + (open ? legMenuHTML(dayN, pr, mode) : "");
   }
 
