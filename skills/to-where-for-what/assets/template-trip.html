@@ -1221,7 +1221,7 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 .actionbar a{color:var(--canvas-accent)}
 .actionbar .hint{color:var(--canvas-ink-3)}
-/* .lnk is the quiet text button ("Manual save…", day-column actions). Its
+/* .lnk is the quiet text button ("More ways to save", day-column actions). Its
    --ink-3 was tuned for paper and lands at 3.8:1 down here. */
 .actionbar .lnk{color:var(--canvas-ink-3)}
 .actionbar .lnk:hover{background:var(--accent-soft);color:var(--ink)}
@@ -1234,11 +1234,50 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 }
 .actionbar-in .btn{padding:5px 13px;font-size:12.5px}
 /* The status text fills the remaining width, pushing the fold-out area and
-   "Manual save…" all the way right. When expanded, the buttons land on the
-   same row and the bar keeps its height — placed right of the link they'd
-   wrap and double it. */
+   "More ways to save" all the way right. When expanded, the buttons land on
+   the same row — placed right of the link they'd wrap and double it. */
 .actionbar-in .hint{margin-inline-start:0;text-align:start;flex:1 1 auto}
-.more-box{display:flex;gap:8px}
+/* The fold-out. Each route is a column — the button, and under it one weak
+   line saying when you would reach for it. Without that line the three are
+   just three verbs with no situation attached, and the user has to guess
+   which one their case is; they are a ladder of fallbacks (server → the
+   browser's own file write → a short code pasted to the AI), not three ways
+   of doing the same thing.
+   Deliberately per-entry rather than a fixed block of three rows: the
+   fold-out holds two entries under file:// and three under the local server
+   (Save now is moved in by layoutActionbar), so each caption has to travel
+   with its own button or the two would fall out of register. */
+.more-box{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
+.mb-i{display:flex;flex-direction:column;gap:3px;min-width:0;max-width:23ch}
+/* .mb-i's display would beat the [hidden] attribute — #mb-save ships in the
+   markup but must stay gone under file://, where there is no server to
+   save to. */
+.mb-i[hidden]{display:none}
+/* 10px, the quietest step on the page: a caption for the button above it,
+   never a second label competing with it.
+   NOT #hint, which belongs to setSaveState and reports what is happening to
+   the file right now. These say what a button would do — permanent text; a
+   state machine writing into the same element would erase them. */
+.mb-why{font-size:10px;line-height:1.35;color:var(--canvas-ink-3)}
+/* Copying the digest is not a save at all — it hands the trip over to the AI,
+   which then writes the file. One rule is the whole signal that the fold-out
+   holds two kinds of thing, and it is why the button sits last. */
+.mb-hand{border-inline-start:1px solid var(--canvas-line);padding-inline-start:8px}
+/* The entry link carries a chevron now (see the moreBtn note in the i18n
+   table for why the ellipsis had to go). Same drawing and same discipline as
+   the leg row's .lg-cv: it is its own flex item so the label keeps its own
+   box, and the flip is driven off the button's own aria-expanded, which
+   setMoreOpen already maintains — no second piece of state.
+   Unlike .lg-cv it is always visible: this link has no hover-quiet contract
+   to keep, and it is the only thing on it that says the words open something.
+   The rotation tweens only where motion is welcome, per the reduce discipline
+   at the end of this sheet. */
+#more{gap:4px}
+#more .mv-cv{flex:none;display:flex}
+#more[aria-expanded="true"] .mv-cv{transform:rotate(180deg)}
+@media (prefers-reduced-motion:no-preference){
+  #more .mv-cv{transition:transform .15s ease}
+}
 .btn{
   border:1px solid var(--line);background:var(--card);color:var(--ink);
   padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;
@@ -3262,10 +3301,25 @@ pre.code{
     <button class="btn primary" id="save">Save choices &amp; schedule</button>
     <div class="hint" id="hint" aria-live="polite"></div>
     <div class="more-box" id="more-box" hidden>
-      <button class="btn" id="download">Download places.json</button>
-      <button class="btn" id="copy">Copy for AI…</button>
+      <!-- Empty until layoutActionbar moves the one #save node in (server
+           only) — the caption ships with the slot so the two cannot drift. -->
+      <div class="mb-i" id="mb-save" hidden>
+        <span class="mb-why" id="why-save">Write to places.json right now, without waiting for auto-save</span>
+      </div>
+      <div class="mb-i">
+        <button class="btn" id="download">Download places.json</button>
+        <span class="mb-why" id="why-download">Use when the browser can't write files directly, or to keep a backup copy</span>
+      </div>
+      <!-- .mb-hand: everything above writes the file; this one hands the trip
+           to the AI and lets it write. Different kind, hence the rule. -->
+      <div class="mb-i mb-hand">
+        <button class="btn" id="copy">Copy trip digest (for the AI)</button>
+        <span class="mb-why" id="why-copy">Copies a trip digest to paste to the AI, so it can update the file and continue the guide</span>
+      </div>
     </div>
-    <button class="lnk" id="more" aria-expanded="false">Manual save…</button>
+    <!-- Label and chevron are separate spans: applyStaticI18n writes the
+         label with textContent, which would otherwise take the svg with it. -->
+    <button class="lnk" id="more" aria-expanded="false"><span id="more-t">More ways to save</span><span class="mv-cv"></span></button>
   </div>
 </div>
 
@@ -3331,7 +3385,29 @@ en: {
   msqPh:"Add a place…", msqAria:"Search for a place and add it to the trip",
   msqGo:"Search", transit:"Transit",
   saveBtn:"Save choices & schedule", saveNow:"Save now",
-  downloadBtn:"Download places.json", copyBtn:"Copy for AI…", moreBtn:"Manual save…",
+  downloadBtn:"Download places.json",
+  /* Named for what it produces, not for the gesture: "Copy for AI…" said
+     nothing about what lands on the clipboard, and sat among two save
+     buttons as if it were a third one. It isn't — it is the handover. */
+  copyBtn:"Copy trip digest (for the AI)",
+  /* Was "Manual save…". Two separate faults, both fixed by these words:
+     — the ellipsis. Right beside a status line that says "Saving…", a
+       trailing "…" reads as a verb in progress, not as "opens more". The
+       one place on this page where "…" is unambiguous is a *state*, so the
+       affordance had to give it up and say "there is more here" some other
+       way — the chevron, which also flips when it opens, something a static
+       label never did.
+     — "Manual save". It contradicted the line to its left ("changes save
+       automatically, no need to save by hand") and mislabelled its own
+       contents, one of which is not a save. "More ways to save" adds to what
+       the status line says instead of arguing with it. */
+  moreBtn:"More ways to save",
+  /* One sentence each, unconditional: what the button does is the same
+     whether or not a server is running, and a caption that changed under
+     the user would only make them re-read it. */
+  whySaveNow:"Write to places.json right now, without waiting for auto-save",
+  whyDownload:"Use when the browser can't write files directly, or to keep a backup copy",
+  whyCopy:"Copies a trip digest to paste to the AI, so it can update the file and continue the guide",
   scaleSpot:"photo stop, 5–15 min", scale30:"~30 min", scale12:"1–2 h",
   scale23:"2–3 h", scaleHalf:"half a day", scaleFull:"a full day",
   stRenovating:"Under renovation", stSeasonal:"Seasonally closed", stPermanent:"Permanently closed",
@@ -3586,7 +3662,24 @@ zh: {
   msqPh:"搜索想去的地点…", msqAria:"搜索地点并添加到行程",
   msqGo:"搜索", transit:"地铁",
   saveBtn:"保存选择和日程", saveNow:"立即保存",
-  downloadBtn:"下载 places.json", copyBtn:"复制给 AI…", moreBtn:"手动保存…",
+  downloadBtn:"下载 places.json",
+  // 按「产出什么」命名，不按动作:「复制给 AI…」没说清剪贴板里到底是什么,
+  // 而且夹在两个保存按钮里像是第三种保存——它不是,它是交接。
+  copyBtn:"复制行程摘要（发给 AI）",
+  // 原文案「手动保存…」两处毛病,这行一并改掉:
+  // — 省略号。左边状态行会写「保存中…」,同一条 bar 上再出现一个「…」结尾的
+  //   词,会被读成进行时而不是「点开还有」。这一页上「…」唯一不含糊的用法是
+  //   *状态*,所以入口得换个方式表达「这里还有东西」——即 chevron,它展开时
+  //   还会翻转,静态标签从来给不出这个反馈。
+  // — 「手动保存」四个字。它跟左边那句「改动自动写回,不用手动保存」正面打架,
+  //   而且框里第三个按钮根本不是保存。「更多保存方式」是在状态行之上做补充,
+  //   不是跟它对着说。
+  moreBtn:"更多保存方式",
+  // 每个按钮一句,不按有无服务分支:按钮做的事本来就一样,说明文案随环境变只会
+  // 让人重读一遍。
+  whySaveNow:"不等自动保存，现在就写回 places.json",
+  whyDownload:"浏览器不能直接写文件时用它替代保存，也可当副本备份",
+  whyCopy:"复制一段行程摘要，粘贴给 AI 让它更新文件、继续写攻略",
   scaleSpot:"打卡点 5-15 分钟", scale30:"约 30 分钟", scale12:"1-2 小时",
   scale23:"2-3 小时", scaleHalf:"半天", scaleFull:"一整天",
   stRenovating:"修缮中", stSeasonal:"季节性关闭", stPermanent:"已永久关闭",
@@ -5476,15 +5569,27 @@ addEventListener("visibilitychange", () => { if(document.hidden) flushOnExit(); 
 
 /* Under the local server none of these three buttons is needed — changes
    write back automatically; only file:// needs them. "Save now" folds into
-   "Manual save…" too: left outside, it permanently prompts the user to do
-   something the system already does for them, which only breeds doubt about
-   whether saving happened. It's the same #save node, not a copy — so label
-   and disabled state can't drift apart in two places. */
+   "More ways to save" too: left outside, it permanently prompts the user to
+   do something the system already does for them, which only breeds doubt
+   about whether saving happened. It's the same #save node, not a copy — so
+   label and disabled state can't drift apart in two places. It moves into
+   #mb-save rather than straight into the box, so it arrives with its caption
+   already attached and in the right order. */
 function layoutActionbar(){
   const box = $("#more-box"), save = $("#save"), more = $("#more");
+  /* Drawn here rather than written into the static markup so it goes through
+     the one stroke() writer every other line icon on this page uses — weight
+     and cap style cannot drift from the leg row's chevron, which is the same
+     path at the same size. aria-hidden comes with stroke(): the button
+     already carries aria-expanded, so to a screen reader this glyph is a
+     repeat, not information. */
+  const cv = more && more.querySelector(".mv-cv");
+  if(cv) cv.innerHTML = stroke("M4.5 6.4 8 9.9l3.5-3.5", 10);
   if(SERVED){
     save.classList.remove("primary");
-    box.prepend(save);
+    const slot = $("#mb-save");
+    slot.prepend(save);
+    slot.hidden = false;
   }
   more.onclick = () => setMoreOpen(box.hidden);
 }
@@ -5494,10 +5599,17 @@ function setMoreOpen(open){
   if(!box || !more) return;
   box.hidden = !open;
   more.setAttribute("aria-expanded", String(open));
+  /* The bar's height is what --ab-h is measured from, and --ab-h is the
+     bottom padding of <main>, the map's height and where the toast and the
+     page-nav sit. The fold-out is two lines tall now that every button
+     carries a caption, so opening it moves that number by more than a
+     button's height — re-measure instead of leaving the collapsed value in
+     place until the next resize. */
+  scheduleLayout();
 }
 
 /* On auto-save failure, surface the button itself. A hint teaching the user
-   to "click Manual save… → Save now" describes a path — the right move is to
+   to "click More ways to save → Save now" describes a path — the right move is to
    put the thing to click in front of them. */
 function revealSaveBtn(){
   if(!SERVED) return;
@@ -10595,7 +10707,12 @@ function applyStaticI18n(){
   txt("#save", T.saveBtn);
   txt("#download", T.downloadBtn);
   txt("#copy", T.copyBtn);
-  txt("#more", T.moreBtn);
+  // #more-t, not #more: the chevron is a sibling span and textContent on the
+  // button itself would delete it.
+  txt("#more-t", T.moreBtn);
+  txt("#why-save", T.whySaveNow);
+  txt("#why-download", T.whyDownload);
+  txt("#why-copy", T.whyCopy);
 }
 
 /* The compact title. CSS cannot ask "does this name still hold one line?", and
@@ -10759,7 +10876,7 @@ function boot(){
 }
 
 /* The header's height varies with width (the subtitle wraps) and the action
-   bar's height varies with the "Manual save…" fold-out, so both need
+   bar's height varies with the "More ways to save" fold-out, so both need
    re-measuring. layoutMap reads offsetHeight before writing CSS variables, so
    during a window drag every resize event would force a synchronous layout —
    coalesced into the next frame, at most one computation per frame. */
