@@ -1799,6 +1799,26 @@ pre.code{
   padding:5px 8px;font:inherit;font-size:11.5px;color:var(--ink-2);width:100%;
 }
 .legmenu .legnote::placeholder{color:var(--ink-3)}
+/* The caveat mark on the transit item. Deliberately has no colour of its
+   own: it inherits the button's currentColor and so tracks the item through
+   rest / hover / checked exactly like the bus icon on its left. Not
+   --danger, and this is the whole point of the mark — transit is a valid
+   choice that the page fully supports, it just cannot route it. A red mark
+   on a legal option reads as "you picked wrong", which is a different (and
+   false) message from "here is what this option does".
+   Negative start margin trims .legmenu button's 6px gap down to 3px so the
+   mark hangs off the word it qualifies instead of floating mid-row; the row
+   is a full-width flex line with room to spare, so nothing else moves.
+   cursor:help, matching .ditem .conf and .dfoot — the two other things on
+   this page whose entire job is to be hovered. */
+.legmenu .lg-hi{display:flex;flex:none;margin-inline-start:-3px;cursor:help}
+/* Small print under the note field: the touch path. A phone fires neither
+   hover nor focus-visible, so the title above simply does not exist there —
+   but tapping "transit" is exactly the moment the explanation is needed, and
+   the field appears at that moment anyway. 10px/--ink-3 is the aside step
+   .dfoot already uses in this column. Last child of the menu's flex column,
+   so the existing 3px gap places it; no margin of its own. */
+.legmenu .lg-nh{font:500 10px/1.45 var(--sans);color:var(--ink-3)}
 .dhead .d-del-day{opacity:0;margin-inline-start:4px}
 /* :focus-within as well as :hover, and it is not optional here. opacity
    composites the focus ring along with the button, so a keyboard user could
@@ -3406,7 +3426,16 @@ en: {
   legNoRoute:"transit, no note",
   legMenuAria:"Transport for this leg",
   legRowAria:"Transport to {name}: {txt}. Change the mode.",
-  legTransitPh:"Line / transfer note",
+  /* An example, not a description of the field. "Line / transfer note" told
+     someone who already knew what to write what they already knew, and told
+     someone who expected a route planner nothing at all. A concrete line and
+     a concrete pair of stations shows the shape of the answer in one glance. */
+  legTransitPh:"e.g. Midosuji Line, Umeda → Hommachi",
+  /* One sentence, three carriers (see legMenuHTML): the title on the menu
+     item's mark, that item's aria-label, and the small print under the note
+     field. Says the limit and the way around it in the same breath — "there
+     is no data" alone leaves the user holding a mode they now distrust. */
+  legTransitHint:"There's no open transit data to use — plan it in a transit app and note the line here",
   /* Three combinations, three keys. Gluing "Walk 3.2 km" and "drive 18 min"
      together at runtime needs a separator and a decision about what to do
      when one half is missing — in every language separately. Whole
@@ -3645,7 +3674,10 @@ zh: {
   legNoRoute:"公交（未填线路）",
   legMenuAria:"这一段的交通方式",
   legRowAria:"到{name}的交通：{txt}。可切换方式。",
-  legTransitPh:"线路、换乘备注",
+  // 例子而非字段说明，理由见英文表同处注释。
+  legTransitPh:"例：御堂筋线 梅田→本町",
+  // 一句话三处接力（菜单项标记的 title、该项 aria-label、备注框下的小字）。
+  legTransitHint:"公交方式没有开放数据，页面无法做公交规划——可以使用其他 App 查好后把线路记在这里",
   // 三种组合三个 key，理由见英文表同处注释。
   legDayFoot:"步行 {km} km · 车程 {min} 分",
   legDayFootOnly:"步行 {km} km",
@@ -7130,6 +7162,19 @@ const MAP = (() => {
     // bus: tall body, one window band, two wheels below the skirt
     bus:  (n = 11) => stroke("M3.1 11.6V3.5a1 1 0 0 1 1-1h7.8a1 1 0 0 1 1 1v8.1M2.4 11.6h11.2M3.1 6.6h9.8",
       n, '<circle cx="5.4" cy="12.7" r="1.1"/><circle cx="10.6" cy="12.7" r="1.1"/>'),
+    /* Circled exclamation — "there is something to know about this option".
+       Drawn here rather than typed as ⓘ / ❗ / U+26A0 for the reason above:
+       those are emoji-presentation code points on several platforms, and a
+       colour glyph is precisely what a mark that must follow currentColor
+       cannot be. Same stroke() grid and weight as the three modes, so at 10px
+       beside an 11px bus it reads as one family.
+       The dot needs stroke="none" explicitly. MARK_ICON.warn's dot gets away
+       with omitting it because icon() puts no stroke on the <svg>; stroke()
+       does put stroke="currentColor" there, so an unqualified filled circle
+       would inherit it and swell to roughly twice the stem's width. */
+    info: (n = 11) => stroke("M8 5v3.7", n,
+      '<circle cx="8" cy="8" r="5.8"/>'
+      + '<circle cx="8" cy="11.15" r=".85" fill="currentColor" stroke="none"/>'),
   };
 
   /* Unscheduled dots are uniformly 14px. Yes/maybe used to be 22px, making
@@ -7640,18 +7685,52 @@ const MAP = (() => {
      one is in force. Transit additionally gets the note field, because
      transit *is* the note — there is no open timetable behind it, so the
      line the user writes down is the entire content of that leg. */
+  /* "Transit" was being read as "the page can look up buses for me". It
+     cannot — there is no open timetable behind it — and the user only found
+     that out after picking it and meeting an empty text box. T.legTransitHint
+     is that news, delivered three times over because three kinds of reader
+     arrive by three different routes and no single carrier reaches all of
+     them:
+       — a native title on a mark inside the menu item, for the pointer;
+       — the same sentence folded into that item's aria-label, so a screen
+         reader hears it *before* choosing rather than after;
+       — the same sentence again as small print under the note field, for
+         touch, which has no hover and so can never see the title.
+     Why the mark is a passive <span> and not a control: the menu item is a
+     <button>, and an interactive element nested inside it is an a11y fault —
+     a second tab stop and an ambiguous click target on top of one radio
+     choice. .ditem .conf set this precedent already ("hover is a shortcut,
+     touch takes another road"), and the third carrier above is that road.
+     Why the native title and not a drawn tooltip like .conf's: .day-col is
+     an overflow scroll container, and this menu sits at the column's left
+     inset with an item barely wider than its text — a positioned ::after has
+     been clipped by that container before (see the note at .ditem .conf).
+     The native tooltip is painted by the browser outside the document and
+     cannot be clipped. Its ~1.5s delay is the price, and it is affordable
+     here precisely because this is the one carrier of three that is allowed
+     to be slow.
+     The join is " · ", the same neutral separator legRowTxt already uses to
+     put a mode label in front of a status phrase in both locales — so the
+     sentence stays a single translatable key with no glue key beside it. */
   function legMenuHTML(dayN, pr, mode){
     const L = pr.ent.leg;
     const note = (L && L.note) || "";
-    const btn = m => `<button role="menuitemradio" aria-checked="${m === mode}"
-        data-legmode="${m}" data-leg-day="${dayN}" data-leg-i="${pr.i}"
-        >${ICON[LEG_ICON[m]](11)}<span>${esc(legModeLabel(m))}</span></button>`;
+    const btn = m => {
+      const cav = m === "transit";
+      return `<button role="menuitemradio" aria-checked="${m === mode}"
+        data-legmode="${m}" data-leg-day="${dayN}" data-leg-i="${pr.i}"`
+        + (cav ? ` aria-label="${esc(legModeLabel(m) + " · " + T.legTransitHint)}"` : "")
+        + `>${ICON[LEG_ICON[m]](11)}<span>${esc(legModeLabel(m))}</span>`
+        + (cav ? `<span class="lg-hi" title="${esc(T.legTransitHint)}">${ICON.info(10)}</span>` : "")
+        + `</button>`;
+    };
     return `<div class="addmenu legmenu" role="menu" aria-label="${esc(T.legMenuAria)}"
         data-leg-day="${dayN}" data-leg-i="${pr.i}">`
       + LEG_MODES.map(btn).join("")
       + (mode === "transit"
          ? `<input class="legnote" type="text" value="${esc(note)}"
               placeholder="${esc(T.legTransitPh)}" aria-label="${esc(T.legTransitPh)}">`
+           + `<div class="lg-nh">${esc(T.legTransitHint)}</div>`
          : "")
       + `</div>`;
   }
