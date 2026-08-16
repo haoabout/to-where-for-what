@@ -3302,6 +3302,9 @@ en: {
   bmNoDark:"The “{label}” basemap has no dark version (baked raster images) — switch to Simple or Standard",
   bmLightnessLock:"Basemap lightness can't be switched in the current fallback mode",
   loadFail:"failed to load: ",
+  // Transport legs. Only the model layer's message lives here for now; the
+  // schedule column's labels arrive with its controls.
+  legAllFail:"The routing service couldn't be reached — the lines stay straight. Try again later.",
   osmOffline:"Opened from a local file, the browser sends no Referer, and OSM's raster tiles return an “Access blocked” image (HTTP 200). Open via build.py --serve to unlock.",
   osmOk:"Official OpenStreetMap basemap",
   osmFail:"OSM returned blocked tiles (the ~7KB “Access blocked” image); disabled",
@@ -3517,6 +3520,8 @@ zh: {
   bmNoDark:"「{label}」底图没有深色版（瓦片是烘焙好的图片），切到简约或标准底图即可使用",
   bmLightnessLock:"当前降级模式下无法切换底图明暗",
   loadFail:"加载失败：",
+  // 逐段交通。这里只放模型层用到的一条，日程列的文案随控件一起加。
+  legAllFail:"路径服务没能连上，线路暂时保持直线，稍后再试。",
   osmOffline:"本地文件打开时浏览器不发送 Referer，OSM 官方瓦片会返回一张写着「Access blocked」的图片（HTTP 状态码仍是 200）。用 build.py --serve 以 http 打开即可解锁。",
   osmOk:"OpenStreetMap 官方底图",
   osmFail:"探测到 OSM 返回封禁瓦片（约 7KB 的「Access blocked」图），已停用",
@@ -5065,7 +5070,29 @@ function payload(){
 
    choice=null entries ride along too: clearing a rating is also a change,
    and dropping them would make it impossible to undo. */
-function patch(){
+/* The itinerary with every leg geometry stripped — the beacon's second
+   attempt, see flushOnExit. Routed geometries are the one part of a leg
+   that has no upper bound (one per leg, hundreds of bytes each), and they
+   are pure cache: the page redraws a missing one as a straight line and a
+   regeneration restores it. The numbers, the mode and the user's note are
+   never dropped, because nothing can rebuild those.
+
+   The key is **deleted, not set to null** — null is what a transit leg's
+   geometry legitimately is, so a nulled key would be indistinguishable
+   from "this leg has no shape by nature" and the server would merge it in
+   as the truth. An absent key is an absent key. */
+function leanItin(list){
+  return (list || []).map(d => Object.assign({}, d, {
+    places: (d.places || []).map(e => {
+      if(!e || !e.leg || !("geometry" in e.leg)) return e;
+      const leg = Object.assign({}, e.leg);
+      delete leg.geometry;
+      return Object.assign({}, e, { leg });
+    }),
+  }));
+}
+
+function patch(lean){
   return JSON.stringify({
     patch: 1,
     // In the body, not the URL: sendBeacon can't set headers, and a token in
@@ -5074,7 +5101,7 @@ function patch(){
     // Slot 3 (prep) mirrors the 4-wide localStorage tuple. null means "not
     // checked" and the server clears the flag — unticking is also a change.
     choices: PLACES.map(p => [p.id, p.choice || null, p.choice_reason || "", p.prep || null]),
-    itinerary: DATA.itinerary || [],
+    itinerary: lean ? leanItin(DATA.itinerary) : (DATA.itinerary || []),
     // Always send the full set, not just "the new ones" — the server dedupes
     // by id, naturally idempotent, so the page needn't track "which ones are
     // already on disk" (get that state wrong once and a point is lost).
@@ -5261,13 +5288,23 @@ async function runAuto(){
 /* Changes still inside the 3s debounce when the tab closes: a fetch would be
    killed along with the page. sendBeacon is the only request that reliably
    goes out during unload. */
+/* Two attempts, in that order, because of the 64KB wall documented above:
+   the full patch first (routed geometries and all — that is the version
+   worth keeping), and only if the browser refuses it, the same patch with
+   the geometries stripped. The measured history is the whole argument: the
+   122KB full document returned false rather than throwing and the user's
+   tab-close edits vanished silently. Leg geometries are the one part of
+   this payload that grows without a ceiling, and also the only part that
+   can be rebuilt from scratch — so they are what gets sacrificed to keep
+   the schedule, the modes and the notes. */
 function flushOnExit(){
   if(!SERVED || STANDALONE || !autoDirty) return;
   try{
     // false means it didn't go out (over limit / blocked) — never clear
     // dirty in that case
-    if(navigator.sendBeacon("/__save__?now=1",
-        new Blob([patch()], { type:"application/json" }))) autoDirty = false;
+    const send = body => navigator.sendBeacon("/__save__?now=1",
+      new Blob([body], { type:"application/json" }));
+    if(send(patch()) || send(patch(true))) autoDirty = false;
   }catch(e){ /* nothing more we can do; localStorage still holds a copy */ }
 }
 addEventListener("pagehide", flushOnExit);
@@ -6242,6 +6279,434 @@ const MAP = (() => {
   }
   addEventListener("resize", fitChips);
 
+  /* ═══════════════ Transport legs ═══════════════
+     A day's route line only ever said "this order". "Generate transport"
+     asks a router for the road the walk or the drive actually takes, and
+     stores the answer on the arriving entry (`places[i].leg`, contract in
+     references/data-schema.md).
+
+     Three layers, deliberately separated so each can be reasoned about
+     alone: geometry maths (decode / distance), the segment model (pure
+     functions over ITIN, no I/O, no DOM), and the OSRM client plus its
+     driver (the only place that touches the network or writes back).
+     routeData() below consumes the model and nothing else — with no leg
+     data anywhere it reproduces its former output exactly. */
+
+  /* ---------- Polyline6 decoder ----------
+     Google's Encoded Polyline, at 1e6 precision. The format: each
+     coordinate is a delta from the previous one, zigzag-encoded (sign in
+     bit 0), then split into 5-bit chunks, little-endian, every chunk but
+     the last ORed with 0x20, each finally offset by 63 into printable
+     ASCII.
+
+     Hand-written rather than pulled in: this is twenty lines that will
+     never change (the format is frozen), against a ~200-line dependency
+     that would also owe an entry in vendor/ and its README — a standing
+     maintenance and provenance cost for something we can read in full on
+     one screen.
+
+     The 1e6 divisor is strictly paired with `geometries=polyline6` in the
+     request (see osrmLeg). Change one and the other must change with it,
+     or every route lands 10× off the coast.
+
+     No encoder on purpose: nothing needs one. Straight-line fallbacks are
+     built from the two endpoint coordinates directly, and what OSRM
+     returns is stored as the original string, never re-serialized. */
+  function decodePoly6(str){
+    const out = [];
+    const n = str ? str.length : 0;
+    let i = 0, lat = 0, lon = 0;
+    while(i < n){
+      let shift = 0, result = 0, b;
+      do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; }
+      while(b >= 0x20 && i < n);
+      lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+      shift = 0; result = 0;
+      do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; }
+      while(b >= 0x20 && i < n);
+      lon += (result & 1) ? ~(result >> 1) : (result >> 1);
+      out.push([lon / 1e6, lat / 1e6]);
+    }
+    return out;
+  }
+
+  /* Equirectangular approximation, metres, on {lon, lat} objects.
+     Two consumers only: the "under 2km → walk" default-mode heuristic and
+     the ≤12m "same spot, don't call the router" test. Both are thresholds
+     someone picked by feel; at city scale this approximation is off by
+     less than 0.3%, i.e. far inside the arbitrariness of the thresholds
+     themselves. Haversine would be more correct and equally meaningless
+     here. */
+  function legMeters(a, b){
+    const R = 6371008.8, rad = Math.PI / 180;
+    const la1 = a.lat * rad, la2 = b.lat * rad;
+    const x = (b.lon - a.lon) * rad * Math.cos((la1 + la2) / 2);
+    const y = la2 - la1;
+    return Math.sqrt(x * x + y * y) * R;
+  }
+
+  /* ---------- Segment model (pure) ---------- */
+
+  /* Six decimals ≈ 0.1m — finer than any coordinate in the file is
+     meaningful, so the signature never changes for a reason the user
+     didn't cause. */
+  const fx = v => v.toFixed(6);
+
+  /* What "this leg is still the leg we routed" means, in one string.
+     Both ids and both coordinates, in order — A→B and B→A are different
+     journeys (one-way streets, and the arrows on the map say so).
+     Deliberately NOT included: mode (switching walk↔drive must not read as
+     "the schedule changed"; setLegMode re-fetches on its own) and the day
+     number (moving a whole day earlier doesn't move any of its roads). */
+  const legSig = (a, b) =>
+    `${a.id}|${b.id}|${fx(a.coord.lon)},${fx(a.coord.lat)}|${fx(b.coord.lon)},${fx(b.coord.lat)}`;
+
+  /* The day's routable subsequence, as legs. Same rule routeData has
+     always used: entries whose place has no coordinates are skipped
+     entirely — they neither break the chain nor carry a leg. The leg hangs
+     on the *arriving* entry, so the first stop of the day never has one,
+     and `i` is that entry's real index in d.places (not the index within
+     the filtered subsequence) so callers can address it after the skips.
+     Lodging is an ordinary node: a day departs from the hotel and returns
+     to it, and those are two real journeys. */
+  function legPairs(d){
+    const out = [];
+    const list = (d && d.places) || [];
+    let prev = null;
+    for(let i = 0; i < list.length; i++){
+      const ent = list[i];
+      const p = BY_ID[ent && ent.id];
+      if(!geo(p)) continue;
+      if(prev) out.push({ i, a:prev, b:p, ent, sig:legSig(prev, p) });
+      prev = p;
+    }
+    return out;
+  }
+
+  /* Failures live in memory only, never on disk. Written down, a failed
+     leg would either need an `err` field the schema doesn't have, or it
+     would be indistinguishable from "never generated" — and if we cached
+     the failure it would count as settled and never be retried. A reload
+     is the cheapest possible "try again". */
+  const LEG_ERR = new Set();
+
+  /* Six states, and the order of the tests is the definition — read it
+     top to bottom:
+       error   this run already failed on exactly this segment
+       none    never generated
+       stale   the schedule moved under it; numbers no longer describe it
+       fresh   transit — no numbers to go stale, the note is the content
+       nogeom  numbers are real, the shape is missing
+       fresh   everything present
+     `nogeom` exists for one reason: the sendBeacon path may drop geometry
+     to fit 64KB (see leanItin). The distance and duration in that leg were
+     genuinely measured, so they must keep being shown at full strength —
+     unlike `stale`, where they describe a journey nobody is taking any
+     more. Only the map falls back to a straight line, and the leg counts
+     as outstanding so a regeneration will restore the shape. Honesty is
+     the whole difference between the two states.
+     Note a zero-length leg (endpoints under 12m apart, synthesized without
+     a request) also has geometry null and therefore reads as `nogeom`; it
+     re-synthesizes for free on every run, so it stays permanently
+     outstanding. Harmless but visible — flagged rather than special-cased,
+     because the order above is a contract. */
+  function legState(ent, sig){
+    if(LEG_ERR.has(sig)) return "error";
+    const L = ent && ent.leg;
+    if(!L) return "none";
+    if(L.sig !== sig) return "stale";
+    if(L.mode === "transit") return "fresh";
+    if(!L.geometry) return "nogeom";
+    return "fresh";
+  }
+
+  /* OSRM snaps to the road network, so a routed line starts and ends at
+     the nearest road, not at the marker — up to some tens of metres away,
+     and at city zoom that gap between the line and the dot reads as a
+     bug. Stitch the real endpoints back on when they're more than 5m off
+     (below that the join is invisible and an extra vertex is just noise).
+
+     This runs at decode time rather than on the response because what we
+     store is OSRM's original polyline6 string — there is no encoder to
+     fold the extra points back into it, and doing it here means the
+     stitching also survives a reload. */
+  const LEG_SNAP_M = 5;
+  function stitchLeg(g, a, b){
+    if(!g.length) return g;
+    const s = g[0], e = g[g.length - 1];
+    if(legMeters({ lon:s[0], lat:s[1] }, a.coord) > LEG_SNAP_M) g.unshift([a.coord.lon, a.coord.lat]);
+    if(legMeters({ lon:e[0], lat:e[1] }, b.coord) > LEG_SNAP_M) g.push([b.coord.lon, b.coord.lat]);
+    return g;
+  }
+
+  /* The drawable shape of one leg. Anything short of a fresh geometry
+     falls back to the straight line the page has always drawn — never to
+     nothing, and never to a stale road. */
+  function legCoords(pair){
+    const L = pair.ent && pair.ent.leg;
+    if(L && L.geometry && legState(pair.ent, pair.sig) === "fresh"){
+      const g = stitchLeg(decodePoly6(L.geometry), pair.a, pair.b);
+      if(g.length >= 2) return g;
+    }
+    return [[pair.a.coord.lon, pair.a.coord.lat], [pair.b.coord.lon, pair.b.coord.lat]];
+  }
+
+  /* Per-day totals for the day footer: metres on foot, seconds in a car,
+     and how many legs those came from. Only legs whose numbers currently
+     describe the schedule are counted (fresh or nogeom — see legState);
+     a stale leg's numbers belong to a journey that no longer exists.
+     Transit contributes nothing by construction: no open timetable, so
+     its dist/dur are null and any total including it would be a guess
+     dressed as a measurement. */
+  function dayLegTotals(d){
+    let footM = 0, carS = 0, n = 0;
+    for(const pr of legPairs(d)){
+      const s = legState(pr.ent, pr.sig);
+      if(s !== "fresh" && s !== "nogeom") continue;
+      const L = pr.ent.leg;
+      if(L.mode === "transit") continue;
+      if(L.mode === "foot" && typeof L.dist_m === "number") footM += L.dist_m;
+      if(L.mode === "car"  && typeof L.dur_s  === "number") carS  += L.dur_s;
+      n++;
+    }
+    return { footM, carS, n };
+  }
+
+  /* Everything a generation run would work on, whole trip, day order then
+     segment order — which is also the order the user reads the column in,
+     so progress moves top to bottom. */
+  function legTodo(){
+    const out = [];
+    for(const d of ITIN){
+      for(const pr of legPairs(d)){
+        const s = legState(pr.ent, pr.sig);
+        if(s === "none" || s === "stale" || s === "nogeom" || s === "error")
+          out.push(Object.assign({ day:d, state:s }, pr));
+      }
+    }
+    return out;
+  }
+
+  /* ---------- OSRM client ----------
+     FOSSGIS's public OSRM, one instance per profile. Measured: the profile
+     word in the URL path is decorative — every instance answers /foot/,
+     /driving/, /car/ and /walking/ alike, and it is the *host path segment*
+     (routed-foot vs routed-car) that decides. Same request to both, same
+     1.34km pair: routed-foot 1073s, routed-car 180s. So the profile word
+     is kept honest for anyone reading a request in the network panel,
+     while the instance is what actually selects the profile. */
+  const OSRM_BASE = {
+    foot:"https://routing.openstreetmap.de/routed-foot",
+    car: "https://routing.openstreetmap.de/routed-car",
+  };
+  const OSRM_PROFILE = { foot:"foot", car:"driving" };
+  // The three values `leg.mode` may take (validate.py holds the same list).
+  const LEG_MODES = ["foot", "car", "transit"];
+  /* No published rate limit exists for these instances, so this is a
+     courtesy interval by analogy with Nominatim's 1/s: one request at a
+     time, 800ms apart. */
+  const LEG_GAP = 800;
+  const LEG_TIMEOUT = 12000;
+  const LEG_ZERO_M = 12;
+
+  /* One request, one leg.
+     overview=simplified, never full: measured on this trip's pairs, a
+     simplified geometry is 53–168 characters (the 168 is a 50km drive),
+     while full runs 2–12KB per leg. Sixty legs at full would add ~240KB to
+     a places.json that is 125KB in total — the file the AI re-reads on
+     every run. Simplified keeps the whole feature under a rounding error.
+     steps/annotations off for the same reason; alternatives off because
+     there is no UI to choose among them.
+     Returns OSRM's geometry string untouched — see stitchLeg for why the
+     endpoint fix-up happens at decode time instead. */
+  async function osrmLeg(mode, a, b, signal){
+    const base = OSRM_BASE[mode] || OSRM_BASE.foot;
+    const prof = OSRM_PROFILE[mode] || "foot";
+    const u = new URL(`${base}/route/v1/${prof}/`
+      + `${a.coord.lon},${a.coord.lat};${b.coord.lon},${b.coord.lat}`);
+    u.search = new URLSearchParams({
+      overview:"simplified", geometries:"polyline6",
+      alternatives:"false", steps:"false", annotations:"false",
+    });
+    /* Two ways to give up — the run being aborted and this one request
+       taking too long — funnelled into one controller, because fetch takes
+       exactly one signal. */
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), LEG_TIMEOUT);
+    const onAbort = () => ac.abort();
+    if(signal){
+      if(signal.aborted) ac.abort();
+      else signal.addEventListener("abort", onAbort);
+    }
+    try{
+      const r = await fetch(u, { signal:ac.signal });
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      if(j.code !== "Ok" || !j.routes || !j.routes.length)
+        throw new Error("OSRM " + (j.code || "no route"));
+      const rt = j.routes[0];
+      return { dist_m:Math.round(rt.distance), dur_s:Math.round(rt.duration),
+               geometry:rt.geometry || null };
+    }finally{
+      clearTimeout(timer);
+      if(signal) signal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  /* ---------- Generation driver ---------- */
+
+  /* Non-null exactly while a run is in flight. Also the re-entry lock:
+     calling again during a run aborts it rather than starting a second.
+     Sixty legs at 800ms is about 48 seconds — a button that can be
+     stopped is far better than one disabled for 48 seconds, and two
+     concurrent runs would fight over the same entries. */
+  let legRun = null;
+  /* Shared by the run loop and by single-leg re-fetches, so switching a
+     mode mid-run can't slip an extra request inside the interval. */
+  let legLastAt = 0;
+  async function legPace(){
+    const wait = LEG_GAP - (Date.now() - legLastAt);
+    if(wait > 0) await new Promise(r => setTimeout(r, wait));
+    legLastAt = Date.now();
+  }
+
+  /* Under 2km, walk. It is the honest default for a city trip built out of
+     museums and shopping streets, and being wrong is one click to fix —
+     whereas defaulting everything to driving quietly turns a walkable day
+     into a taxi itinerary. */
+  const legDefaultMode = pr => legMeters(pr.a.coord, pr.b.coord) < 2000 ? "foot" : "car";
+
+  /* Produce one leg object. Two cases never reach the network: two stops
+     within 12m of each other (the same building's entrance and its café —
+     a router would return a 3m walk down a service road, and asking is
+     rude), and transit, which has no open timetable to ask. */
+  async function legMake(pr, mode, note, signal){
+    // Transit is tested first: it is a choice the user made, and it stays
+    // that choice even for two stops in the same building.
+    if(mode === "transit")
+      return { mode:"transit", dist_m:null, dur_s:null, geometry:null, sig:pr.sig, note:note || "" };
+    if(legMeters(pr.a.coord, pr.b.coord) <= LEG_ZERO_M)
+      return { mode:"foot", dist_m:0, dur_s:0, geometry:null, sig:pr.sig, note:note || "" };
+    await legPace();
+    const r = await osrmLeg(mode, pr.a, pr.b, signal);
+    return { mode, dist_m:r.dist_m, dur_s:r.dur_s, geometry:r.geometry, sig:pr.sig, note:note || "" };
+  }
+
+  /* The signature this entry would have *right now*. The user can drag the
+     column while a run is in flight, and a result computed for the old
+     neighbour must not be written onto the new one — that would be a road
+     between two places nobody is travelling between, labelled fresh.
+     Identity, not index: entries are objects and survive a splice. */
+  function legReSig(day, ent){
+    for(const pr of legPairs(day)) if(pr.ent === ent) return pr.sig;
+    return null;
+  }
+
+  /* commit()'s quiet sibling. commit() rebuilds the whole schedule column;
+     called once per leg inside the loop that is m full DOM rebuilds, which
+     steals focus and makes the page unusable for the length of the run.
+     Persistence is all the loop actually needs — the visible repaint is
+     the caller's business, and commit() runs once at the end. */
+  function legCommit(){
+    saveLocal();
+    scheduleAuto();
+  }
+
+  /* Generate every outstanding leg, serially.
+     Serial, not parallel: it's a free public service, and the whole point
+     of LEG_GAP is not to hammer it. One failure never stops the run (the
+     fetchNormals rule — one bad year must not destroy the average); the
+     failed signature is remembered in memory so the run doesn't retry it,
+     and the map keeps that leg as a straight line. */
+  async function runLegGen(){
+    if(legRun){ legRun.abort(); return; }
+    const todo = legTodo();
+    if(!todo.length) return;
+    const ac = new AbortController();
+    legRun = { abort:() => ac.abort(), done:0, total:todo.length };
+    // Within one run the same pair may appear twice (a place visited twice
+    // in a day, or two days sharing a hop). Keyed by mode too: the same
+    // endpoints routed on foot and by car are two different answers.
+    const seen = new Map();
+    let attempted = 0, failed = 0;
+    try{
+      for(const t of todo){
+        if(ac.signal.aborted) break;
+        const old = t.ent.leg;
+        // A leg that already has a mode keeps it — regenerating a stale
+        // leg must not silently undo the user's walk/drive/transit choice.
+        // Only a leg that never had one gets the heuristic.
+        const mode = old && LEG_MODES.includes(old.mode) ? old.mode : legDefaultMode(t);
+        const note = (old && old.note) || "";
+        const key = mode + "|" + t.sig;
+        try{
+          let leg = seen.get(key);
+          if(!leg){
+            if(mode !== "transit" && legMeters(t.a.coord, t.b.coord) > LEG_ZERO_M) attempted++;
+            leg = await legMake(t, mode, "", ac.signal);
+            seen.set(key, leg);
+          }
+          if(ac.signal.aborted) break;
+          // Recomputed here, not trusted from the task: see legReSig.
+          if(legReSig(t.day, t.ent) !== t.sig) continue;
+          t.ent.leg = Object.assign({}, leg, { note });
+          LEG_ERR.delete(t.sig);
+        }catch(e){
+          if(ac.signal.aborted) break;
+          failed++;
+          LEG_ERR.add(t.sig);
+          console.warn("leg routing failed:", t.sig, e);
+        }
+        legRun.done++;
+        refreshRoute();
+        legCommit();
+      }
+    }finally{
+      legRun = null;
+      commit();
+      if(attempted > 0 && failed >= attempted) toast(T.legAllFail);
+    }
+  }
+
+  // A run holds no state worth saving, and its requests would be killed
+  // with the page anyway; aborting lets the finally block run commit()
+  // before flushOnExit reads the data.
+  addEventListener("pagehide", () => { if(legRun) legRun.abort(); });
+
+  /* Switch one leg's mode.
+     foot/car write a placeholder immediately (so the row shows the new
+     mode at once rather than after a round trip) and then re-fetch that
+     one leg, sharing the run's pacing clock. Transit sends nothing: there
+     is no open timetable behind it, the numbers stay null, and the user's
+     note is the content — so it is complete the moment it is written, and
+     any note already there is carried over. */
+  async function setLegMode(dayN, i, mode){
+    const d = ITIN.find(x => x.n === dayN);
+    if(!d) return;
+    const pr = legPairs(d).find(x => x.i === i);
+    if(!pr) return;
+    const ent = pr.ent, note = (ent.leg && ent.leg.note) || "";
+    LEG_ERR.delete(pr.sig);
+    if(mode === "transit"){
+      ent.leg = { mode:"transit", dist_m:null, dur_s:null, geometry:null, sig:pr.sig, note };
+      commit();
+      return;
+    }
+    // Empty sig = "stale" until the answer lands, which is exactly what it
+    // is: the mode is the user's, the numbers aren't measured yet.
+    ent.leg = { mode, dist_m:null, dur_s:null, geometry:null, sig:"", note };
+    commit();
+    try{
+      const leg = await legMake(pr, mode, note);
+      if(legReSig(d, ent) !== pr.sig) return;      // dragged away meanwhile
+      ent.leg = leg;
+    }catch(e){
+      LEG_ERR.add(pr.sig);
+      console.warn("leg routing failed:", pr.sig, e);
+    }
+    commit();
+  }
+
   /* ═══════════════ Route lines ═══════════════
      Connect each day's points in array order, in that day's color. Detours
      become visible at a glance — a zigzag like "Nakanoshima → Nanko → Umeda
@@ -6254,16 +6719,33 @@ const MAP = (() => {
      appearing twice in one day folds the line back to it — correct, since
      you really do go back. */
   const ROUTE_SRC = "route-src";
-  const R_LAYERS = [...DAY_DASH.map((_, i) => "route-line-" + i), "route-dir"];
+  const LEG_HL_SRC = "leg-hl-src";
+  const R_LAYERS = [...DAY_DASH.map((_, i) => "route-line-" + i), "route-dir", "leg-hl"];
+  const EMPTY_FC = { type:"FeatureCollection", features:[] };
 
+  /* The day's line is now the day's legs laid end to end, each leg either a
+     routed road or the straight segment it always was (legCoords decides).
+     At the joins the following leg's first point is dropped — it is the
+     previous leg's last point, and a duplicated vertex makes round line
+     caps double up into a visible blob.
+
+     Nothing below the geometry changes: the properties (n / colour / arrow
+     / cur) are byte for byte the old ones, so the six dash layers, their
+     modulo filter and the arrow layer need no edit at all. And with no leg
+     data anywhere, every legCoords call returns [a, b] and the seed-plus-
+     tails walk reproduces the old point list exactly — "zero difference
+     before generating" is a property of the shape of this loop, not
+     something to verify by eye. */
   function routeData(){
     const feats = [];
     for(const d of ITIN){
-      const pts = (d.places || [])
-        .map(e => BY_ID[e && e.id])
-        .filter(p => geo(p))
-        .map(p => [p.coord.lon, p.coord.lat]);
-      if(pts.length < 2) continue;      // one point can't form a line
+      const pairs = legPairs(d);
+      if(!pairs.length) continue;       // fewer than two routable points can't form a line
+      const pts = [[pairs[0].a.coord.lon, pairs[0].a.coord.lat]];
+      for(const pr of pairs){
+        const c = legCoords(pr);
+        for(let k = 1; k < c.length; k++) pts.push(c[k]);
+      }
       const colour = dayColor(d.n);
       feats.push({ type:"Feature",
         // No selection (curDay null) = no focus: every line is "current",
@@ -6282,6 +6764,27 @@ const MAP = (() => {
     let fresh = false;
     for(const d of ITIN) fresh = ensureArrow(m, dayColor(d.n)) || fresh;
     if(!m.getSource(ROUTE_SRC)) m.addSource(ROUTE_SRC, { type:"geojson", data:routeData() });
+
+    /* Leg highlight: pointing at one segment in the schedule column lights
+       up that stretch of road. Added *before* the day lines so it sits
+       underneath them — a wide, translucent glow the dashed day line then
+       runs down the middle of. Drawn over the top instead it would smear
+       the line's own colour and hide the dash pattern, i.e. destroy the
+       two channels that say which day this is.
+       Solid, round-capped, one width step above the day line, and 35%
+       opacity: loud enough to find at a glance, quiet enough that the
+       basemap underneath stays readable. It carries its own colour so the
+       glow is the day's colour, not a generic accent. */
+    if(!m.getSource(LEG_HL_SRC)) m.addSource(LEG_HL_SRC, { type:"geojson", data:EMPTY_FC });
+    if(!m.getLayer("leg-hl")) m.addLayer({
+      id:"leg-hl", type:"line", source:LEG_HL_SRC,
+      layout:{ "line-cap":"round", "line-join":"round" },
+      paint:{
+        "line-color":["get","colour"],
+        "line-width":["interpolate",["linear"],["zoom"], 10,6, 17,14],
+        "line-opacity":0.35,
+      },
+    });
 
     /* One line layer per dash pattern rather than one for all days.
        line-dasharray is the one paint property here that cannot be
@@ -6409,6 +6912,34 @@ const MAP = (() => {
     }
   }
 
+  /* Light up one leg. Called from hover and from focus, i.e. potentially
+     dozens of times a second and from a keyboard walk down the column —
+     so it stays a setData on an existing source (no layer churn) and is
+     wrapped like every other map call here: a highlight failing must never
+     take the page with it. */
+  function legHighlight(dayN, i){
+    if(st.engine !== "maplibre" || !st.map) return;
+    try{
+      const src = st.map.getSource(LEG_HL_SRC);
+      if(!src || !src.setData) return;
+      const d = ITIN.find(x => x.n === dayN);
+      const pr = d && legPairs(d).find(x => x.i === i);
+      if(!pr){ src.setData(EMPTY_FC); return; }
+      src.setData({ type:"FeatureCollection", features:[{
+        type:"Feature",
+        properties:{ colour:dayColor(d.n) },
+        geometry:{ type:"LineString", coordinates:legCoords(pr) } }] });
+    }catch(e){ console.warn("failed to highlight the leg:", e); }
+  }
+
+  function legHighlightClear(){
+    if(st.engine !== "maplibre" || !st.map) return;
+    try{
+      const src = st.map.getSource(LEG_HL_SRC);
+      if(src && src.setData) src.setData(EMPTY_FC);
+    }catch(e){ console.warn("failed to clear the leg highlight:", e); }
+  }
+
   /* ---------- marker ---------- */
   /* ---------- The dots' two-layer encoding ----------
      Fill = which day, ring = yes/maybe/no, number = position within the day.
@@ -6426,10 +6957,27 @@ const MAP = (() => {
   /* The lodging icon house() was hoisted to the top level — the guide view's
      checklist uses the same one, and two hand-drawn SVGs would eventually
      diverge. */
+  /* The three transport modes are drawn here for the same reason the
+     direction arrow is drawn on a canvas rather than typed as "▶": a
+     glyph we don't ship is a glyph that may not exist. 🚶🚗🚌 would also
+     hand their colour and their proportions to whatever emoji font the
+     machine happens to have, next to line icons that are all currentColor
+     at one stroke weight — measured on the arrow, that gamble simply
+     loses. Same stroke() helper, same 16×16 grid, so they sit at the same
+     optical weight as up/down/del. */
   const ICON = {
     up:   stroke("M8 12.5V4M4.2 7.8 8 4l3.8 3.8"),
     down: stroke("M8 3.5V12M4.2 8.2 8 12l3.8-3.8"),
     del:  stroke("M4.5 4.5l7 7M11.5 4.5l-7 7"),
+    // walking figure: head, torso, forward leg, trailing leg, one arm
+    walk: (n = 11) => stroke("M9.4 6 7.3 8.9l2 1.7.6 3.2M9.4 6l2.3 1.7.6 2.2M9.4 6 6.6 7.1 5.4 9.4M9.3 10.6 6.9 13.9",
+      n, '<circle cx="9" cy="2.9" r="1.6"/>'),
+    // car from the side: cabin sloping onto the bonnet line, two wheels
+    car:  (n = 11) => stroke("M2.4 11V8.1l1.7-3.4a1.2 1.2 0 0 1 1.1-.7h5.6a1.2 1.2 0 0 1 1.1.7l1.7 3.4V11M6.2 11h3.6M2.6 8.2h10.8",
+      n, '<circle cx="4.6" cy="11.1" r="1.3"/><circle cx="11.4" cy="11.1" r="1.3"/>'),
+    // bus: tall body, one window band, two wheels below the skirt
+    bus:  (n = 11) => stroke("M3.1 11.6V3.5a1 1 0 0 1 1-1h7.8a1 1 0 0 1 1 1v8.1M2.4 11.6h11.2M3.1 6.6h9.8",
+      n, '<circle cx="5.4" cy="12.7" r="1.1"/><circle cx="10.6" cy="12.7" r="1.1"/>'),
   };
 
   /* Unscheduled dots are uniformly 14px. Yes/maybe used to be 22px, making
@@ -7818,6 +8366,10 @@ const MAP = (() => {
   return { init, refresh, onShow, fitAll, ensureDays:autoItinerary,
            curDay:() => st.curDay, toggleDay:toggleInCurDay,
            exportCSV:() => save(toCSV(), "places.csv", "text/csv;charset=utf-8"),
+           // TEMP: the schedule column's "generate transport" controls are
+           // not wired yet; these two make the model layer drivable from the
+           // console so it can be verified on its own. Remove with the UI.
+           _legGen:runLegGen, _legTodo:legTodo,
            _st:st };
 })();
 
