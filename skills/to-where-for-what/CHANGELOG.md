@@ -23,6 +23,94 @@ Bump rules:
 
 ---
 
+## 1.9.0 — 2026-08-16
+
+### Added
+
+- **"Generate transport" — one button at the top of the day plan turns a
+  visit order into actual routes.** Until now the day plan knew the order and
+  nothing else: whether two points are a 300 m stroll or a 900 m walk around a
+  river was invisible, and that is exactly what you want to know while
+  rearranging a day. Pressing the button routes every leg in the trip through
+  the FOSSGIS OSRM instances — walking under 2 km, driving above, per leg — and
+  each leg becomes a row between the two stops showing time and distance, with
+  a daily total under the day. Any leg can be switched to walking, driving or
+  transit from a small menu on its row. Transit gets no route and no numbers:
+  there is no open timetable to route against, so it keeps a dashed line and
+  the note the user writes on it, which is the honest representation. Reorder a
+  day and its legs go stale on the spot — grey rows, straight lines again, and
+  the button offers "update transport (n legs)". Everything degrades: a failed
+  leg shows ⚠ and falls back to a straight line, a total failure raises a
+  toast, and nothing that worked before stops working. Measured on a 3-day
+  Osaka trip: 9 legs in ~7 s; pressing the button again mid-run aborts and
+  keeps what finished; "update (5 legs)" issued 4 requests because the fifth
+  was transit.
+- **The map draws the real path, and legs light up as you point at them.**
+  Each day's line is now assembled from the routed legs rather than drawn
+  point-to-point (123 and 86 coordinates on a sample where the straight version
+  had 9 and 9), and hovering or tabbing a leg row glows that leg on the map.
+  Route colors, arrows, dash animation and the day filter are untouched, and
+  with no legs routed the line is byte-for-byte the one 1.8.6 drew.
+- **`itinerary[].places[].leg` — the routed leg, stored per arriving entry.**
+  `{mode, dist_m, dur_s, geometry, sig, note}`, contract in
+  [data-schema.md](references/data-schema.md). **Page-written: the AI must not
+  fill it in**, least of all `sig`, which is the page's own record of which two
+  coordinates the numbers were computed for. Geometry rides along as an encoded
+  polyline6 at roughly 310 bytes per leg (16 legs added 4,962 B to a 126 KB
+  `places.json`; a 60-leg trip extrapolates to ~18 KB), which is why the
+  requests ask for `overview=simplified` — `overview=full` measured 2–12 KB per
+  leg, 240 KB over the same 60.
+
+### Changed
+
+- **A walking time the page routed is no longer an "estimate" in the guide.**
+  Stage D's rule was that every walking leg gets marked "estimate", because the
+  alternative was intuition. A `leg` written by the page is not intuition — a
+  routing engine answered a query for those two exact coordinates, the same
+  class of fact as a transit-planner result — so
+  [route-design.md](references/route-design.md) now lets those numbers into the
+  table unmarked, on three conditions: name OSM routing as the source, say it
+  is not a timetable, and keep public transport entirely under the
+  item-by-item official lookups (the page never routes transit). A leg with no
+  `leg`, or one the page shows as stale, is an estimate again. The delivery
+  checklist gains the matching disclosure: page numbers and timetable numbers
+  sit on the same page and look alike.
+- **The day plan's drag handling now counts entries, not DOM children.** Leg
+  rows live between the items, so SortableJS's `newIndex` stopped meaning
+  "position among places"; reorder positions are computed from the `.ditem`
+  predecessors instead. The full drag matrix (11 cases) was retested before and
+  after generating transport, comparing the array written back against the DOM
+  order captured at drop.
+
+### Notes for updaters
+
+- `leg` is optional and additive: existing `places.json` files validate
+  byte-for-byte as before, `SCHEMA_VERSION` is unchanged, and a page with no
+  legs behaves exactly as it did in 1.8.6. The validator gained P0/P1/P2 checks
+  for the new field (`dev/test_validate.py` 77 → 94 cases,
+  `dev/test_server.py` 15 → 18).
+- **`geometry` is a cache, not a fact.** When the browser saves on exit via
+  `sendBeacon`, a payload over 64 KB is refused, so the page retries with the
+  geometry keys stripped. A leg that comes back without geometry still shows
+  its real time and distance and simply draws straight until the next update —
+  it is a designed state, not corruption, and re-running the button heals it.
+  Deleting geometry by hand is safe for the same reason.
+- **The short-code channel carries no legs.** A pasted `D1 D2 …` code encodes
+  the schedule only; when you rewrite `itinerary` from a code, do not drop the
+  `leg` objects already on disk.
+- **These numbers come from route planning, not timetables.** A duration
+  answers "how long does this take", never "when does the next one leave", and
+  transit is never routed at all. State this when you deliver — it is now on
+  the pre-delivery disclosure list.
+- **It depends on a free public service.** Routing goes to FOSSGIS's OSRM
+  instances at `routing.openstreetmap.de` (no key, CORS open, works from
+  `file://`), throttled to one request every 800 ms with a 12 s timeout. It can
+  be slow, rate-limited or gone; every failure falls back to a straight line
+  and the rest of the page is unaffected. `dev/osrm-probe.html` tells you
+  whether the service or your code is at fault.
+
+---
+
 ## 1.8.6 — 2026-08-14
 
 ### Added
