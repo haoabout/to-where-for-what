@@ -335,10 +335,24 @@ by drag or ↑↓; the map links each day's points in visit order — detours
 visible at a glance; a place may repeat across or within days; `+` in the
 day-plan header adds "Day 0").
 
+Once a day is roughly in shape, one button at the top of the day plan
+**generates the transport**: every leg is routed through OSM routing (walking
+under 2 km, driving above, switchable per leg) and drawn on the map as the real
+path instead of a straight line, with time and distance on each leg and a daily
+total. Transit legs are not routed — there is no open timetable — so they stay a
+dashed line carrying the user's own note. Reordering a day marks its legs stale;
+the button then offers to update them.
+
 **Don't tell the user to hit save.** Under a `--serve` server, changes
 auto-write to `places.json` after a few idle seconds (status at the page
 bottom). Only `file://` needs the "Save choices & schedule" button; browsers
 without direct write fall back to "Download JSON" or "Copy code".
+
+**Don't press "generate transport" for them either.** Like filtering and
+scheduling, it is a stage-B/C action taken in the browser on an arrangement the
+user considers settled — running it from your side routes an itinerary they may
+be about to change, and its numbers are page-written data (`leg`), never
+something you fill in by hand.
 
 In a pasted code, `+ ? -` lines are choices, `D1 D2 …` lines the schedule
 (**in-line order = route order**, parentheses are notes). Update `choice` and

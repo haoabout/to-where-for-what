@@ -1,8 +1,9 @@
 # dev/ — development-time verification tools
 
 Verification tools kept for whoever works on the skill: regression suites for
-the validator and the local save server, and a **probe** for the
-browser-capability boundary the template's save path depends on. None of this
+the validator and the local save server, and **probes** for the two outside
+boundaries the template depends on — the browser capability its save path
+needs, and the public routing service its transport feature calls. None of this
 is part of the skill itself; `npx skills add` does not install them.
 
 **Acceptance rule — this is not optional.** Any change under
@@ -103,3 +104,26 @@ The protocol affects **something else entirely**: `file://` sends no
 `Referer`, so the official OSM raster tiles are unavailable (see the map
 sections under `skills/to-where-for-what/references/`). The two dimensions must
 be judged separately.
+
+## osrm-probe.html
+
+Health check for the outside service behind "generate transport": the FOSSGIS
+public OSRM instances at `routing.openstreetmap.de`. It hardcodes one Osaka
+segment and asks `routed-foot` and `routed-car` for it with the exact query the
+template sends, printing HTTP status, the body's `code`, distance/duration,
+geometry length and the decoded endpoints.
+
+**Not a regression test** — it reaches the network on purpose, so it is
+deliberately outside the three commands above. Open it when the feature
+misbehaves and you need to know whether the code broke or the service did.
+
+```bash
+open dev/osrm-probe.html
+```
+
+Baseline (2026-08-16, Chromium, `file://`): both profiles HTTP 200 / `code: Ok`;
+same 4.5 km segment comes back as 3604.6 s on foot and 523.2 s by car —
+distinct profiles, not one instance answering twice. `overview=simplified` +
+`polyline6` yields 228 chars / 49 points (foot) and 112 chars / 21 points (car).
+The car route's endpoints snap up to a few hundred metres onto the nearest
+drivable road, which is why the template stitches the real markers back on.

@@ -69,6 +69,11 @@ jump between them. "Export PDF" goes through the browser's print dialog. A
   Both vector basemaps come as a light/dark pair, switched from the map's own
   corner button — the page around it is a fixed light canvas with a dot
   matrix and paper surfaces on top, and has no theme switch of its own
+- **Transport**: one click at the top of the day plan routes every leg through
+  OSM routing (walking or driving, switchable per leg) and draws it on the map
+  as the real path, with each leg's time and distance in the list and a daily
+  total. Transit legs get no route — no open timetable exists — so they stay a
+  dashed line plus whatever note you write on them
 - **Weather**: fetched live from Open-Meteo in the browser. A real forecast
   within 16 days; beyond that it falls back to 8-year historical averages,
   clearly labeled
@@ -151,13 +156,20 @@ choice; it's asked once on first use and recorded in the preferences file.
 
 ## Development
 
+Changing anything under `skills/to-where-for-what/scripts/` or
+`assets/template-trip.html` means running all three suites, green, before you
+commit. They reach no network and take seconds.
+
 ```bash
-python3 dev/test_validate.py                          # validator regression (43 cases)
+python3 dev/test_enrich_images.py   # image candidate pipeline
+python3 dev/test_validate.py        # data-contract validator
+python3 dev/test_server.py          # build.py --serve local save server
+
 python3 skills/to-where-for-what/scripts/build.py <trip-dir> --serve
 ```
 
 `dev/` holds development-time material (regression tests, capability probes)
-and isn't part of the install.
+and isn't part of the install; see [dev/README.md](dev/README.md).
 
 For local development a symlink is convenient — edits take effect immediately:
 

@@ -177,6 +177,14 @@ Without these, the user forms wrong expectations:
 - [ ] **Transit-line quality varies by city** — lines and official colors come
   from OSM's `colour` tag; where a city lacks them the map falls back to
   auto-assigned colors and says so in the legend
+- [ ] **The page's own transport numbers are route planning, not a timetable**
+  — the per-leg walk/drive times the "generate transport" button produces come
+  from an OSM routing engine: real queries, so real numbers, but they answer
+  "how long does this take", never "when does the next one leave". The guide's
+  transit table is the timetable-backed one; sitting in the same page they look
+  alike, and only saying so keeps them apart. Mention too that the button calls
+  a free public service, so it can be down or slow — legs it can't route fall
+  back to a straight line and lose nothing else
 - [ ] How many places remain **undecided** — want another look?
 - [ ] **First trip only**: if `preferences.md` is still mostly placeholders,
   offer — don't push — "two minutes now to fill the interest weights, and the

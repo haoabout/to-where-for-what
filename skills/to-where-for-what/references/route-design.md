@@ -237,6 +237,32 @@ weeks away.
 legs) get an explicit "**estimate**" in the cell — never let them blend in with
 verified numbers.
 
+#### Legs the page already routed
+
+If the user ran "generate transport" on the page, each walking or driving leg
+carries a `leg` in `places.json` with a real distance and duration. **Those are
+looked-up numbers, not estimates** — an OSM routing engine answered a query for
+those exact two coordinates, the same class of fact as a Yahoo! Transit result.
+You may take them into the table and the timeline, and the "estimate" marking
+above is relaxed for exactly these legs: a walking time that came from a routing
+query is not a guess and must not be labelled as one.
+
+What does not relax:
+
+- **Say where the number came from.** Cite it as OSM routing, and say plainly
+  that it is **not a timetable** — a routing engine models a person moving over
+  the network, so a duration answers "how long does this take" and never "when
+  does the next one leave". Keep it distinguishable from the transit rows,
+  which carry a planner's real departures.
+- **Public transport is untouched by this.** The page never routes transit —
+  no open timetable exists to route against, and a transit leg holds nothing but
+  the user's own note. Lines, transfer stations, transfer counts, durations and
+  fares still come from the item-by-item official lookups above, with no
+  exception.
+- **A leg with no `leg`, or one the page shows as stale, gives you nothing.**
+  Read the data, don't assume the button was pressed; a number you cannot point
+  at in `places.json` is an estimate again, and marked as one.
+
 **Use the station people will actually start from.** "From Nakanoshima to
 Umeda" sounds like one fact, but from Yodoyabashi at the island's east end it's
 a 2-minute direct ride on the Midōsuji line, while from Keihan Nakanoshima

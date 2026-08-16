@@ -42,6 +42,7 @@ npx skills add haoabout/to-where-for-what
 ## 页面里有什么
 
 - **地图**：OSM 矢量底图（两个独立数据源互为备份）+ 从 OSM 获取的**地铁线路与车站，使用官方线路配色**。两套矢量底图各有明暗两版，由地图右上角开关切换；页面本身为固定浅色底 + 点阵纹理 + 纸面层，不提供独立的明暗切换
+- **交通**：在日程列顶部点一次，即可用 OSM 路径规划逐段算出步行 / 驾车路线（每段可单独切换），按真实路径画在地图上，段行显示耗时与距离，日盒底部给出当日合计。公交段不做路由——没有开放时刻表可用——只保留一条虚线和你自己写的备注
 - **天气**：浏览器端实时拉取 Open-Meteo。16 天内为预报，超出范围回退到过去 8 年同期均值并明确标注
 - **导出**：CSV（可直接导入 Google My Maps）、KML；攻略按 A4 分页，经浏览器打印导出 PDF
 - **降级链**：矢量 → 光栅 → 无 WebGL 时用 Leaflet → 全部失效时静态散点图
@@ -88,12 +89,17 @@ npx skills add haoabout/to-where-for-what
 
 ## 开发
 
+改动 `skills/to-where-for-what/scripts/` 或 `assets/template-trip.html` 后，提交前必须跑全套三份测试并保持全绿。三者全程不联网，秒级完成。
+
 ```bash
-python3 dev/test_validate.py                          # 校验器回归（43 个用例）
+python3 dev/test_enrich_images.py   # 图片候选管线
+python3 dev/test_validate.py        # 数据契约校验器
+python3 dev/test_server.py          # build.py --serve 本地保存服务
+
 python3 skills/to-where-for-what/scripts/build.py <行程目录> --serve
 ```
 
-`dev/` 为开发期内容（回归测试、能力探针），不参与安装。
+`dev/` 为开发期内容（回归测试、能力探针），不参与安装，详见 [dev/README.md](dev/README.md)。
 
 本机开发建议使用软链接，修改即时生效：
 

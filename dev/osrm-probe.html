@@ -1,0 +1,68 @@
+<meta charset="utf-8">
+<title>OSRM (FOSSGIS) dependency probe</title>
+<!--
+  What this is: a health check for an OUTSIDE dependency, not a regression test.
+  The template's "generate transport" feature routes every segment through the
+  FOSSGIS public OSRM instances (routing.openstreetmap.de) — no key, CORS "*",
+  works from file://. Nothing in the repo can test that: it is someone else's
+  server, and dev/'s three suites are deliberately network-free.
+
+  So when the feature misbehaves six months from now, the first question is
+  "did my code break, or did the service change?" — open this file (double-click
+  is enough) and read the answer off the page. It hardcodes one Osaka segment
+  and asks both profiles for it with the exact query the template sends.
+  It is NOT part of the three commands in CLAUDE.md and never will be.
+-->
+<style>
+ body{margin:0;font:13px/1.7 ui-monospace,SFMono-Regular,monospace;background:#111;color:#ddd;padding:16px}
+ .ok{color:#7f7} .no{color:#f77} .warn{color:#fd7}
+ h2{font:600 13px system-ui;color:#8cf;margin:16px 0 4px}
+</style>
+<h2>FOSSGIS OSRM probe — Osaka Station → Osaka Castle, both profiles</h2>
+<div id="out">calling…</div>
+<script>
+const A = [135.495951, 34.702485];   // JR Osaka Station
+const B = [135.525893, 34.687315];   // Osaka Castle keep
+const Q = '?overview=simplified&geometries=polyline6&alternatives=false&steps=false&annotations=false';
+const O = document.getElementById('out');
+const row = (k, v, cls='') => `<div><span style="display:inline-block;width:230px">${k}</span><span class="${cls}">${v}</span></div>`;
+
+// polyline6 decoder, same shape as the template's: zigzag varint over 5-bit
+// chunks, 1e6 scale (must match geometries=polyline6 in the query above).
+function decodePoly6(s){
+  const out=[]; let i=0, lat=0, lon=0;
+  while(i < s.length){
+    for(let j=0;j<2;j++){
+      let r=0, sh=0, b;
+      do { b = s.charCodeAt(i++) - 63; r |= (b & 0x1f) << sh; sh += 5; } while(b >= 0x20);
+      const d = (r & 1) ? ~(r >> 1) : (r >> 1);
+      if(j===0) lat += d; else lon += d;
+    }
+    out.push([lon/1e6, lat/1e6]);
+  }
+  return out;
+}
+
+async function probe(profile){
+  const url = `https://routing.openstreetmap.de/routed-${profile}/route/v1/driving/${A[0]},${A[1]};${B[0]},${B[1]}${Q}`;
+  O.innerHTML += `<h2>routed-${profile}</h2>`;
+  const t0 = performance.now();
+  try {
+    const r = await fetch(url);
+    const j = await r.json().catch(() => ({}));
+    const g = j.routes && j.routes[0] && j.routes[0].geometry || '';
+    const p = g ? decodePoly6(g) : [];
+    O.innerHTML +=
+      row('HTTP status', r.status, r.ok ? 'ok' : 'no') +
+      row('body .code', j.code || '(none)', j.code === 'Ok' ? 'ok' : 'no') +
+      row('distance / duration', j.routes ? `${j.routes[0].distance} m / ${j.routes[0].duration} s` : '—') +
+      row('geometry chars', g.length, g.length ? 'ok' : 'no') +
+      row('decoded points', p.length) +
+      row('first / last point', p.length ? `${p[0]} … ${p[p.length-1]}` : '—', 'warn') +
+      row('round trip', Math.round(performance.now() - t0) + ' ms', 'warn');
+  } catch (e) {
+    O.innerHTML += row('FAILED', `${e.name}: ${e.message}`, 'no');
+  }
+}
+(async () => { O.innerHTML = ''; await probe('foot'); await probe('car'); })();
+</script>
