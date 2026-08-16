@@ -69,6 +69,13 @@ KNOWN_TRIP_FIELDS = {
     "theme_hue",
 }
 
+# itinerary[].places[] — the entry, not the place. Same reasoning as
+# KNOWN_PLACE_FIELDS: the page renders exactly these, so anything else is
+# content that silently disappears.
+KNOWN_ENTRY_FIELDS = {"id", "note", "booked", "leg"}
+KNOWN_LEG_FIELDS = {"mode", "note", "dist_m", "dur_s", "geometry", "sig"}
+LEG_MODES = {"foot", "car", "transit"}
+
 # Required, and must not be an empty string
 REQUIRED_STR = ["id", "name", "category", "area", "hours", "closed",
                 "ticket", "pitch", "detail"]
@@ -621,6 +628,81 @@ def check_cross(doc, rep: Report) -> None:
 WEEK_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
+# One thing this function deliberately does NOT do: decide whether a leg is out
+# of date. sig is a fact the page owns — it recomputes it from the live
+# coordinates at render time and compares. Reimplementing that here would store
+# the same fact twice, and the day someone changes the coordinate precision or
+# the join character the two copies start fighting: the validator would call
+# fresh legs stale, or worse, stale ones fresh. Whether a segment still matches
+# its endpoints is the page's call; the validator only checks the shape, and
+# uses coordinates alone to tell which entry is the day's first routable one.
+def _check_leg(leg, ewhere: str, rep: Report, is_first: bool) -> None:
+    """Validate one itinerary entry's leg (how the user got to this point)."""
+    if not isinstance(leg, dict):
+        rep.add("P0", ewhere,
+                f"leg must be an object {{mode, dist_m, dur_s, geometry, sig, note}}, "
+                f"got {type(leg).__name__}")
+        return
+
+    # ---- P0
+    mode = leg.get("mode")
+    if not (isinstance(mode, str) and mode in LEG_MODES):
+        rep.add("P0", ewhere,
+                f"leg.mode={mode!r} is invalid; mode must be one of foot / car / transit")
+
+    for f in ("dist_m", "dur_s"):
+        v = leg.get(f)
+        if v is None:
+            continue
+        # bool is an int subtype in Python, and True would sail through as 1
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            rep.add("P0", ewhere, f"leg.{f} must be a number or null, got {v!r}")
+        elif v < 0:
+            rep.add("P0", ewhere, f"leg.{f} must not be negative, got {v!r}")
+
+    g = leg.get("geometry")
+    if g is not None and not isinstance(g, str):
+        rep.add("P0", ewhere,
+                f"leg.geometry must be an encoded polyline6 string or null, "
+                f"got {type(g).__name__}")
+
+    if "sig" in leg and not isinstance(leg["sig"], str):
+        rep.add("P0", ewhere, f"leg.sig must be a string, got {leg['sig']!r}")
+
+    # ---- P1
+    if "sig" not in leg:
+        rep.add("P1", ewhere,
+                "leg has no sig — the page compares sig against the current endpoints to "
+                "decide whether the route still holds, so a leg without one always reads as "
+                "已变动 / changed: it renders greyed with a straight line and the user is asked "
+                "to generate transport again. Let the page write the leg instead of hand-editing it")
+
+    if mode == "transit" and any(leg.get(f) is not None
+                                 for f in ("dist_m", "dur_s", "geometry")):
+        rep.add("P1", ewhere,
+                "mode=transit carries dist_m / dur_s / geometry — there is no open timetable "
+                "behind a transit leg, so the page shows none of these numbers and draws only a "
+                "dashed line. Set them to null; put what to ride into note")
+
+    # ---- P2
+    if mode == "transit" and _blank(leg.get("note")):
+        rep.add("P2", ewhere,
+                "mode=transit with an empty note — a transit leg is drawn as a bare dashed line, "
+                "so without a note it can't say which line or which train to take")
+
+    if is_first:
+        rep.add("P2", ewhere,
+                "leg on the day's first routable entry — a leg describes the trip *to* a point, "
+                "and the first one connects nothing, so the page ignores it; drop the field")
+
+    unknown = set(leg) - KNOWN_LEG_FIELDS
+    if unknown:
+        rep.add("P2", ewhere,
+                f"leg has fields outside the contract: {sorted(unknown)} — the page won't render them "
+                f"and the content is silently lost. If a new field is truly needed, change "
+                f"data-schema.md and validate.py first")
+
+
 def check_itinerary(doc, rep: Report) -> None:
     """Validate the scheduling result, itinerary.
 
@@ -671,6 +753,20 @@ def check_itinerary(doc, rep: Report) -> None:
         if not entries:
             rep.add("P1", dwhere, f"{label} has no places at all")
 
+        # Which entry starts the day's routable subsequence. The page routes
+        # over the entries that have usable coordinates and skips the rest, so
+        # a point with no coord is not the "first" one even when it is listed
+        # first — and the entry that follows it legitimately carries a leg.
+        first_routable = None
+        for ei, ent in enumerate(entries):
+            if not (isinstance(ent, dict) and isinstance(ent.get("id"), str)):
+                continue
+            c = _dict(by_id.get(ent["id"])).get("coord")
+            if isinstance(c, dict) and isinstance(c.get("lon"), (int, float)) \
+                    and isinstance(c.get("lat"), (int, float)):
+                first_routable = ei
+                break
+
         for ei, ent in enumerate(entries):
             ewhere = f"{dwhere}.places[{ei}]"
             if not isinstance(ent, dict) or not ent.get("id") or not isinstance(ent["id"], str):
@@ -682,6 +778,17 @@ def check_itinerary(doc, rep: Report) -> None:
             # the place: two scheduled visits are two bookings.
             if "booked" in ent and not isinstance(ent["booked"], bool):
                 rep.add("P0", ewhere, f"booked must be a boolean, got {ent['booked']!r}")
+            # leg: how the user travelled from the previous routable point to
+            # this one. Page-written by "generate transport"; optional, so
+            # older files simply have none.
+            if "leg" in ent:
+                _check_leg(ent["leg"], ewhere, rep, is_first=(ei == first_routable))
+            unknown_ent = set(ent) - KNOWN_ENTRY_FIELDS
+            if unknown_ent:
+                rep.add("P2", ewhere,
+                        f"entry has fields outside the contract: {sorted(unknown_ent)} — the page "
+                        f"won't render them and the content is silently lost. If a new field is "
+                        f"truly needed, change data-schema.md and validate.py first")
             p = by_id.get(pid)
             if p is None:
                 rep.add("P0", ewhere, f"id {pid!r} does not exist in places")

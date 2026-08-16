@@ -102,6 +102,30 @@ def hotel(doc: dict, **kw) -> dict:
     return h
 
 
+def leg(**kw) -> dict:
+    """A well-formed leg, overridable field by field. The sig matches the two
+    baseline coordinates, but nothing in the validator recomputes it — the page
+    owns that comparison (see the block comment above _check_leg)."""
+    d = {"mode": "foot", "dist_m": 1840, "dur_s": 1420, "geometry": "abc",
+         "sig": "os-001|os-002|135.525900,34.687300|135.491400,34.691400",
+         "note": ""}
+    d.update(kw)
+    return d
+
+
+def two_point_day(doc: dict, **kw) -> dict:
+    """A single day holding both baseline places, and returns the second entry.
+
+    A leg belongs on the *second* point of a pair: the day's first routable
+    entry has nothing to travel from, and hanging a leg there is its own P2.
+    """
+    ent = {"id": "os-002"}
+    ent.update(kw)
+    doc["itinerary"] = [{"n": 1, "date": "2026-09-12",
+                         "places": [{"id": "os-001"}, ent]}]
+    return ent
+
+
 def messages(rep: validate.Report, level: str) -> str:
     return " || ".join(m for lv, _, m in rep.items if lv == level)
 
@@ -322,6 +346,63 @@ def main() -> int:
          lambda d: (with_itinerary(d),
                     d["itinerary"][0]["places"][0].update(booked="yes")),
          "P0", "booked must be a boolean")
+
+    print("\nleg · segment-level transport (page-written)")
+    case("a well-formed leg produces no P0",
+         lambda d: two_point_day(d, leg=leg()), "P0", "")
+    case("a well-formed leg produces no leg notices either",
+         lambda d: two_point_day(d, leg=leg()), "P2", "!leg")
+    case("unknown travel mode",
+         lambda d: two_point_day(d, leg=leg(mode="bike")),
+         "P0", "mode must be one of")
+    case("dist_m written as a display string",
+         lambda d: two_point_day(d, leg=leg(dist_m="1.8km")), "P0", "dist_m")
+    case("negative dist_m",
+         lambda d: two_point_day(d, leg=leg(dist_m=-1)), "P0", "dist_m")
+    case("geometry as an array of coordinates instead of polyline6",
+         lambda d: two_point_day(d, leg=leg(geometry=[1, 2])), "P0", "geometry")
+    case("sig is not a string",
+         lambda d: two_point_day(d, leg=leg(sig=1)), "P0", "sig")
+    def no_sig(d):
+        L = leg()
+        L.pop("sig")
+        two_point_day(d, leg=L)
+    case("sig missing — the page will treat the leg as changed", no_sig, "P1", "sig")
+    case("leg written as a bare mode string",
+         lambda d: two_point_day(d, leg="foot"), "P0", "leg must be an object")
+    case("transit carrying routing numbers it can't have",
+         lambda d: two_point_day(d, leg=leg(mode="transit", dur_s=900)),
+         "P1", "transit")
+    case("transit with no note says nothing at all",
+         lambda d: two_point_day(d, leg=leg(mode="transit", dist_m=None,
+                                            dur_s=None, geometry=None)),
+         "P2", "transit")
+    case("transit with a note is quiet",
+         lambda d: two_point_day(d, leg=leg(mode="transit", dist_m=None,
+                                            dur_s=None, geometry=None,
+                                            note="御堂筋线 梅田→心斋桥")),
+         "P2", "!transit")
+    case("invented field inside leg",
+         lambda d: two_point_day(d, leg=leg(fare="¥290")), "P2", "fare")
+    case("invented field on the entry itself",
+         lambda d: two_point_day(d, mood="tired"), "P2", "mood")
+    # Guards the new entry-level allowlist against eating the two fields that
+    # were already legal — the same false-positive trap theme_hue fell into.
+    case("note and booked are contract fields, not unknown ones",
+         lambda d: two_point_day(d, note="夜景", booked=True),
+         "P2", "!outside the contract")
+    case("leg on the day's first point connects nothing",
+         lambda d: (two_point_day(d),
+                    d["itinerary"][0]["places"][0].update(leg=leg())),
+         "P2", "first routable entry")
+    # The same entry, with its coordinates taken away: it drops out of the
+    # routable subsequence entirely, so it is not the day's first routable
+    # point and must not be reported as one. An implementation that just took
+    # index 0 would fail here — which is the whole point of the case.
+    case("a point without coordinates doesn't claim the first slot",
+         lambda d: (d["places"][0].pop("coord"), two_point_day(d),
+                    d["itinerary"][0]["places"][0].update(leg=leg())),
+         "P2", "!first routable entry")
 
     # The nudge window compares against the real today, so these cases build
     # their dates relative to it; os-001 has no closure days, keeping the

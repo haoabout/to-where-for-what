@@ -146,6 +146,57 @@ def main() -> int:
         check("non-boolean checked is treated as unticked, not stored",
               s == 200 and "prep" not in disk()["places"][0])
 
+        print("\nitinerary leg round-trip (segment-level transport)")
+        # merge() replaces the itinerary wholesale and filters entries only by
+        # "does this id still exist on disk" — it does not filter entry keys.
+        # The leg feature depends on exactly that, so this case nails the
+        # currently-incidental behaviour down as contract.
+        #
+        # Why merge deliberately gets NO entry allowlist (unlike added_places'
+        # stub_fields): an allowlist that forgets a key drops user data
+        # silently, and the loss is invisible in the browser — the page keeps
+        # showing the leg from its in-memory copy until the next reload. The
+        # stub allowlist exists because stubs are new objects injected by a
+        # browser; entries are the page writing back its own state, and the
+        # line against invented keys is drawn in validate.py as a P2 instead,
+        # where it is reported rather than executed.
+        full = {"mode": "foot", "dist_m": 1840, "dur_s": 1420,
+                "geometry": "abc_defgh", "sig": "t-001|t-002|135.5,34.68",
+                "note": "沿河走"}
+        s, _ = post(base, {"patch": 1, "token": token, "choices": [],
+                           "itinerary": [{"n": 1, "date": "2026-09-12",
+                                          "places": [{"id": "t-001", "leg": full}]}]})
+        got = disk()["itinerary"][0]["places"][0].get("leg")
+        check("a complete leg round-trips key for key",
+              s == 200 and got == full, f"status={s} leg={got}")
+
+        # sendBeacon caps a payload at 64KB; over that the page re-sends a lean
+        # copy with the geometry keys deleted (deleted, not nulled — null is a
+        # legal transit value). The server must accept that shape as-is.
+        lean = {k: v for k, v in full.items() if k != "geometry"}
+        s, _ = post(base, {"patch": 1, "token": token, "choices": [],
+                           "itinerary": [{"n": 1, "date": "2026-09-12",
+                                          "places": [{"id": "t-001", "leg": lean}]}]})
+        got = disk()["itinerary"][0]["places"][0].get("leg")
+        check("the beacon-degraded leg (no geometry key) is stored as sent",
+              s == 200 and got == lean and "geometry" not in got, f"status={s} leg={got}")
+
+        # A leg is not a reason to keep an entry the AI has since deleted:
+        # the alive filter drops the whole entry, leg included.
+        s, _ = post(base, {"patch": 1, "token": token, "choices": [],
+                           "itinerary": [{"n": 1, "date": "2026-09-12",
+                                          "places": [{"id": "gone-001", "leg": full},
+                                                     {"id": "t-001"}]}]})
+        kept = disk()["itinerary"][0]["places"]
+        check("a leg on a deleted place is dropped with its entry",
+              s == 200 and kept == [{"id": "t-001"}], f"status={s} places={kept}")
+
+        # Not tested on purpose: a patch whose itinerary carries no leg wipes
+        # the legs on disk. That is the existing wholesale-replacement
+        # semantics note and booked already live under — the page always sends
+        # its complete itinerary — and page and data ship from the same build,
+        # so "old page meets new data" is not a reachable combination.
+
         print("\nsave endpoint gates")
         before = disk()
         s, r = post(base, {"patch": 1, "itinerary": [],

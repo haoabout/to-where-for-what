@@ -391,7 +391,14 @@ Stage D writes the guide by expanding this user-arranged list.
     "places": [                    // array order = visit order
       { "id": "os-h01" },                          // lodging, unnumbered
       { "id": "os-014", "booked": true },          // → shown as number 1; ticket booked
-      { "id": "os-031", "note": "night session" }, // → shown as number 2
+      { "id": "os-031", "note": "night session",   // → shown as number 2
+        "leg": {                                   // how you get here from os-014
+          "mode": "foot",
+          "dist_m": 1840, "dur_s": 1420,
+          "geometry": "yveuEqxavYbEqNvF…",         // encoded polyline6
+          "sig": "os-014|os-031|135.501200,34.669300|135.491400,34.691400",
+          "note": ""
+        } },
       { "id": "os-h01" }                           // back to the same hotel at night
     ]
   }
@@ -406,6 +413,46 @@ Stage D writes the guide by expanding this user-arranged list.
 | `places[].id` | string | ✅ | Must exist in `places[]` |
 | `places[].note` | string | | Note for this particular visit (distinguishes purposes when a place is visited twice) |
 | `places[].booked` | bool | | **Page-written** when the user ticks this visit off in the pre-departure checklist; the AI must not pre-fill. Per-visit because bookings are date-bound. Dragging the entry to another day keeps the flag (re-check the booked date yourself); removing the entry from the schedule drops it — deliberate, a date-bound booking should be re-confirmed on re-adding |
+| `places[].leg` | object | | **Page-written** when the user runs "generate transport"; the AI must not pre-fill. How the traveller reaches *this* point from the previous routable one — on the arriving entry, never as a separate day-level array (order lives only in the array, rule 1 below) |
+
+Any other key on an entry is outside the contract: the page won't render it and
+the content is silently lost (the validator reports a P2).
+
+#### `places[].leg` sub-fields
+
+| Field | Type | Required | Notes |
+|---|---|:--:|---|
+| `mode` | `foot`\|`car`\|`transit` | ✅ | Travel mode for this segment. The user switches it per segment on the page |
+| `dist_m` | number\|null | | Route distance in metres, from the routing service. Always `null` for `transit` |
+| `dur_s` | number\|null | | Route duration in seconds, from the routing service. Always `null` for `transit`. It is a routing estimate, not a timetable |
+| `geometry` | string\|null | | The route line as an encoded polyline6. A **cache**, not a fact — see rule 2 |
+| `sig` | string | | Endpoint signature `aId\|bId\|lon,lat\|lon,lat` (6 decimals, order-sensitive, no mode or day in it). The page compares it against the live coordinates to decide whether the segment is still current |
+| `note` | string | | The user's own words for this segment. The main carrier for `transit`, which has no numbers to show |
+
+Two consequences of the page routing only over the **coordinate-bearing**
+subsequence of a day:
+
+- A point without usable `coord` is skipped by the route entirely and carries
+  no leg. A leg left on such an entry is kept on disk but never drawn.
+- The day's **first** routable point has no leg — a leg describes the trip *to*
+  a point, and the first one has nothing to travel from.
+
+### The three rules for `leg`
+
+1. **Never hand-write a leg, least of all `sig`.** Get it wrong and the page
+   reads the segment as changed and greys it out; get it *right* and it is
+   worse — the page then trusts a route nobody drove, and when the coordinates
+   later move it has no way to notice. If the user wants transport on the map,
+   tell them to click "generate transport" on the page.
+2. **`geometry` is a cache, not data.** It may be missing on a leg that is
+   otherwise complete: `sendBeacon` caps a save at 64KB, and past that the page
+   re-sends without the geometry keys. That is not corruption — the numbers
+   stay true, the map falls back to a straight line for that segment, and the
+   next run refills it. Don't "repair" it by inventing a line.
+3. **The pasted short code carries no legs.** The `+ ? -` / `D1 D2 …` code
+   exists for choices and visit order only. Reading a code back updates
+   `choice` and `itinerary` order; it neither creates nor deletes legs, and
+   rebuilding from it must not drop the ones already in `places.json`.
 
 ### Why the top-level key is `itinerary`, not `days`
 
