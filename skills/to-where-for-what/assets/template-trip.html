@@ -1583,8 +1583,23 @@ pre.code{
   border:1px solid var(--line);border-radius:var(--r);background:var(--card);
   overflow-y:auto;overscroll-behavior:none;display:flex;flex-direction:column;
 }
+/* The column's pinned block: the "Schedule" header, the add-day menu it
+   opens, and the transport action row (.dc-act, which carries #leg-gen).
+   Why one sticky wrapper instead of a sticky .dc-act with its own `top`:
+   .dc-head flex-wraps to two lines once the column gets narrow (see below),
+   so every pixel value that offset could be written as is wrong at some
+   width, and measuring the header into a custom property would add a
+   ResizeObserver to keep it honest. A shared sticky parent has no offset to
+   get wrong — the browser pins the group at whatever height it happens to
+   have, wrapped or not, and mid-generation label changes ("Generating 3/12")
+   can't knock it loose either. The add menu rides along on purpose: it is
+   anchored to the "+" in the header, and a menu that scrolls away from its
+   own trigger is worse than one that stays. z-index 2 is the value .dc-head
+   used to carry — enough to sit over .ditem/.dleg and the drag artifacts in
+   the list, well under the dialogs (60+). */
+.day-col .dc-top{position:sticky;top:0;z-index:2;background:var(--paper-2)}
 .day-col .dc-head{
-  position:sticky;top:0;z-index:2;background:var(--paper-2);
+  background:var(--paper-2);
   padding:7px 10px;border-bottom:1px solid var(--line-soft);
   font:600 11px/1 var(--sans);color:var(--ink-3);letter-spacing:.6px;
   display:flex;align-items:center;gap:6px;
@@ -8118,10 +8133,10 @@ const MAP = (() => {
       // The normal flow never reaches here (autoItinerary builds from
       // trip.dates). Only a document missing both dates and days lands on
       // this fallback.
-      col.innerHTML = `<div class="dc-head">${T.schedule}
+      col.innerHTML = `<div class="dc-top"><div class="dc-head">${T.schedule}
           <button id="day-add" class="lnk" title="${esc(T.addDayTitle)}" aria-label="${esc(T.addDayTitle)}">+</button></div>`
         + (st.addOpen ? `<div class="addmenu"><button data-add="tail">${T.addFirst}</button></div>` : "")
-        + `<div class="dempty">${T.noDatesMsg}</div>`;
+        + `</div><div class="dempty">${T.noDatesMsg}</div>`;
       return;
     }
     // No day is forced anymore: null is a legal state meaning "no focus" —
@@ -8142,8 +8157,12 @@ const MAP = (() => {
         >D${d.n}<span class="c" style="${cBadge}">${dayCount(d)}</span></button>`;
     }).join("") + `</div>`;
 
+    // .dc-top wraps the header, the add menu and the leg action row so the
+    // three pin together (see .dc-top in the stylesheet for why a wrapper and
+    // not a per-row `top`). Everything below it — capsules, day boxes —
+    // scrolls underneath.
     col.innerHTML =
-      `<div class="dc-head">${T.schedule}<span class="sp">${tf("nDays", { n: ITIN.length })}</span>
+      `<div class="dc-top"><div class="dc-head">${T.schedule}<span class="sp">${tf("nDays", { n: ITIN.length })}</span>
          <span class="dmode" role="group">
            <button data-dmode="one" aria-pressed="${!st.flat}">${T.modeOne}</button><button data-dmode="all" aria-pressed="${st.flat}">${T.modeAll}</button>
          </span>
@@ -8153,6 +8172,7 @@ const MAP = (() => {
              `<button data-add="zero">${T.addZero}</button>`)
           + `<button data-add="tail">${T.addTail}</button></div>` : "")
       + legActHTML()
+      + `</div>`
       + caps
       + (st.flat ? ITIN.map(dayBox).join("")
          : st.curDay != null ? ITIN.filter(d => d.n === st.curDay).map(dayBox).join("")
