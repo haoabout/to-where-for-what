@@ -1734,6 +1734,27 @@ pre.code{
 .ditem.drag-chosen{background:var(--fill)}
 .mi.drag-ghost{opacity:.35}
 .dlist.drag-over{background:color-mix(in srgb,var(--ink) 7%,transparent)}
+
+/* Dragging a map marker into the schedule. Both the ghost and the drop
+   indicator are nodes built here, not anything borrowed from the marker: a
+   marker belongs to MapLibre, which positions it by an inline transform
+   rewritten on every frame of a pan, and the 828px drift recorded above .mk
+   is what happens when this code forgets that. */
+.mk-drag-ghost{
+  position:fixed;z-index:9999;pointer-events:none;translate:-50% -120%;
+  display:flex;align-items:center;gap:8px;padding:5px 10px;max-width:200px;
+  background:var(--card);border:1px solid var(--line);border-radius:7px;
+  box-shadow:0 3px 12px rgba(0,0,0,.24);
+  font:500 12px/1.3 var(--sans);color:var(--ink-2);
+}
+.mk-drag-ghost i{flex:none}
+.mk-drag-ghost .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The indicator is a sibling of the rows rather than an outline on one of
+   them, because what it has to say is "between these two". */
+.mk-drop-line{height:0;border-top:2px solid var(--ink);margin:0 8px;pointer-events:none}
+body.mdragging{cursor:grabbing;user-select:none}
+body.mdragging .mk{cursor:grabbing}
+
 .ditem.lod .dnm{color:var(--ink-3)}
 .dempty{padding:11px;font-size:11.5px;line-height:1.7;color:var(--ink-3);text-align:center}
 .dempty b{color:var(--ink-2);font-weight:600}
@@ -7420,14 +7441,21 @@ const MAP = (() => {
     el.setAttribute("aria-label", p.name);
     el.innerHTML = "<i></i>";
     styleDot(el, p);
+    wireMarkerDrag(el, p);
     /* Clicking a map marker = see what it is. It was once "add to / remove
        from the current day", which felt wrong in practice: on a map you
        recognize a point by its position, and the first reaction after
        recognizing it is "what is this place?", not "schedule it for today" —
        the latter is a decision made *after* looking. Scheduling still runs
-       through the pool column's dots, drag and drop, and the button at the
-       bottom of the detail dialog. */
-    el.onclick = e => { e.stopPropagation(); openDetail(p.id, el); };
+       through the pool column's dots, drag and drop, the button at the
+       bottom of the detail dialog, and dragging the marker itself. */
+    el.onclick = e => {
+      // A drag that ends back on the marker it started from still fires a
+      // click, so without this guard every abandoned drag would also open
+      // the dialog it was trying not to open.
+      if(mdrag.suppressClick) return;
+      e.stopPropagation(); openDetail(p.id, el);
+    };
     return el;
   }
 
@@ -8230,6 +8258,232 @@ const MAP = (() => {
     commit();
   }
 
+  /* ═══════════════ Dragging a marker into the schedule ═══════════════
+     The pool column has SortableJS; the map cannot. Markers are absolutely
+     positioned children of the canvas container that MapLibre moves by
+     inline transform on every frame of a pan — there is no container whose
+     child order means anything, which is the one thing Sortable needs. So
+     this is hand-rolled on Pointer Events, and it deliberately stops at the
+     moment the drop lands: applyDrop({fromDay:null, …}) is the same entry
+     point the pool column's drops use, so leg invalidation, autosave and
+     repaint all come along for free.
+
+     Two limits, both chosen rather than inherited:
+     — Desktop pointers only. On touch, holding a marker means "pan the map"
+       and tapping it means "what is this place"; both are worth more than a
+       third gesture competing for the same finger.
+     — MapLibre only. Under the Leaflet and static fallbacks the three
+       existing routes into the schedule (pool dot, pool drag, detail dialog)
+       are untouched and this one is simply absent — the same bargain the
+       rest of degraded mode makes. Leaflet serializes markers through
+       outerHTML, which drops listeners anyway; the engine guard is what
+       makes that silence deliberate instead of accidental. */
+  const MDRAG_SLOP = 5;    // below this a press is a click, not a drag
+  const MDRAG_EDGE = 28;   // auto-scroll band at the top and bottom of the day column
+
+  const mdrag = {
+    armed:false, act:false, cancelled:false, suppressClick:false,
+    el:null, id:null, x0:0, y0:0,
+    ghost:null, line:null, over:null, toDay:null, idx:0, raf:0, dir:0,
+  };
+
+  function wireMarkerDrag(el, p){
+    /* MapLibre's DragPanHandler listens for DOM `mousedown` on the canvas
+       container rather than for pointer events, and a marker sits inside
+       that container — without this the map pans underneath the very point
+       we are trying to drag. The cost is "you can no longer start a pan with
+       the cursor on top of a marker", which is a 22px target on a
+       full-window map; click still fires, because it is not synthesized from
+       the mousedown being swallowed here.
+       Gated on pointerdown having armed the drag first, and touch pointers
+       never arm it: touch produces compatibility mouse events too, and this
+       handler must stay out of their way so that a finger landing on a dot
+       still pushes the map around. pointerdown is specified to dispatch
+       before mousedown, which is what makes the gate reliable. */
+    el.addEventListener("mousedown", e => {
+      if(!mdrag.armed || mdrag.el !== el) return;
+      e.stopPropagation();
+      e.preventDefault();          // also kills the text-selection drag
+    });
+
+    el.addEventListener("pointerdown", e => {
+      if(st.engine !== "maplibre" || e.pointerType === "touch") return;
+      if(e.button !== 0 || !e.isPrimary) return;
+      mdrag.armed = true; mdrag.act = false; mdrag.cancelled = false;
+      mdrag.el = el; mdrag.id = p.id; mdrag.x0 = e.clientX; mdrag.y0 = e.clientY;
+      /* Capture so the gesture keeps reporting once the cursor leaves the
+         22px dot, which it does immediately — every drop target is in
+         another column. */
+      try{ el.setPointerCapture(e.pointerId); }catch(err){}
+      el.addEventListener("pointermove", mdragMove);
+      el.addEventListener("pointerup", mdragUp);
+      el.addEventListener("pointercancel", mdragUp);
+      window.addEventListener("keydown", mdragKey, true);
+      window.addEventListener("blur", mdragCancel);
+    });
+  }
+
+  /* No delay, no long-press: the threshold alone separates the two gestures.
+     A press that never travels 5px is a click and opens the detail dialog;
+     one that does was never going to be a click. */
+  function mdragMove(e){
+    if(mdrag.cancelled) return;
+    if(!mdrag.act){
+      if(Math.abs(e.clientX - mdrag.x0) < MDRAG_SLOP && Math.abs(e.clientY - mdrag.y0) < MDRAG_SLOP) return;
+      mdrag.act = true;
+      mdrag.suppressClick = true;
+      document.body.classList.add("mdragging");
+      mdrag.ghost = mdragGhost(mdrag.el);
+      document.body.appendChild(mdrag.ghost);
+    }
+    mdrag.ghost.style.left = e.clientX + "px";
+    mdrag.ghost.style.top  = e.clientY + "px";
+    mdragHit(e.clientX, e.clientY);
+    mdragEdge(e.clientY);
+  }
+
+  function mdragGhost(el){
+    const g = document.createElement("div");
+    g.className = "mk-drag-ghost";
+    /* The dot is a clone of the marker's own <i>. Everything styleDot
+       decided — day fill, choice ring, size, the conic-gradient for a point
+       on several days — is already inline on that element, and cloning is
+       the only way to carry it without a second copy of those rules that
+       would then have to be kept in step. Cloning reads the marker; it never
+       writes to it. */
+    const dot = el.querySelector("i");
+    if(dot) g.appendChild(dot.cloneNode(true));
+    const t = document.createElement("span");
+    t.className = "t";
+    t.textContent = el.dataset.nm || "";
+    g.appendChild(t);
+    return g;
+  }
+
+  function mdragHit(x, y){
+    /* elementFromPoint rather than pointerover: the pointer is captured by
+       the marker for the whole gesture, so nothing underneath it ever
+       receives an enter event. */
+    const node = document.elementFromPoint(x, y);
+    const list = node && node.closest && node.closest(".dlist");
+    const box  = list && list.closest(".dbox");
+    if(!list || !box){ mdragClear(); return; }
+    if(mdrag.over !== list){ mdragClear(); mdrag.over = list; list.classList.add("drag-over"); }
+    mdrag.toDay = +box.dataset.day;
+
+    // Entries are the only rows that count. Leg rows sit between them and
+    // .dempty stands in for having none at all, so neither may reach the
+    // index — hence ditemIndex, the same measure the pool column's drops use.
+    const items = [...list.querySelectorAll(":scope > .ditem")];
+    let before = null;
+    for(const it of items){
+      const r = it.getBoundingClientRect();
+      if(y < r.top + r.height / 2){ before = it; break; }
+    }
+    mdrag.idx = before ? ditemIndex(list, before) : items.length;
+
+    if(!mdrag.line){
+      mdrag.line = document.createElement("div");
+      mdrag.line.className = "mk-drop-line";
+    }
+    /* An entry that is arrived at owns the leg row above it, so "before this
+       entry" has to mean before its leg row as well — otherwise the line is
+       drawn through the middle of a journey it is about to split, promising
+       a position that reads as nonsense. */
+    let at = before;
+    if(at && at.previousElementSibling && at.previousElementSibling.classList.contains("dleg"))
+      at = at.previousElementSibling;
+    // An empty day has a .dempty hint and no entries; the line belongs above
+    // it, not below. With entries present and none to insert before, `at`
+    // stays null and insertBefore appends — which is the drop-at-the-end case.
+    if(!at) at = list.querySelector(":scope > .dempty");
+    list.insertBefore(mdrag.line, at);
+  }
+
+  function mdragClear(){
+    if(mdrag.over) mdrag.over.classList.remove("drag-over");
+    if(mdrag.line) mdrag.line.remove();
+    mdrag.over = null; mdrag.toDay = null;
+  }
+
+  /* Constant speed, no ramp. The schedule column is a few hundred pixels
+     tall, so the distance this ever has to cover is short enough that a
+     velocity curve would only register as hesitation at the start. */
+  function mdragEdge(y){
+    const col = document.querySelector("#day-col");
+    if(!col){ mdragStopScroll(); return; }
+    const r = col.getBoundingClientRect();
+    mdrag.dir = (y > r.top && y < r.top + MDRAG_EDGE) ? -1
+              : (y < r.bottom && y > r.bottom - MDRAG_EDGE) ? 1 : 0;
+    if(!mdrag.dir){ mdragStopScroll(); return; }
+    if(mdrag.raf) return;
+    const step = () => {
+      if(!mdrag.dir || !mdrag.act){ mdrag.raf = 0; return; }
+      col.scrollTop += mdrag.dir * 8;
+      mdrag.raf = requestAnimationFrame(step);
+    };
+    mdrag.raf = requestAnimationFrame(step);
+  }
+
+  function mdragStopScroll(){
+    if(mdrag.raf) cancelAnimationFrame(mdrag.raf);
+    mdrag.raf = 0; mdrag.dir = 0;
+  }
+
+  function mdragUp(e){
+    // pointercancel arrives here too and must never drop.
+    const drop = mdrag.act && !mdrag.cancelled && e.type === "pointerup" && mdrag.toDay != null
+      ? { toDay: mdrag.toDay, newIndex: mdrag.idx, id: mdrag.id } : null;
+    const wasAct = mdrag.act;
+    /* Tear down first, mutate second. commit() rebuilds the schedule
+       column's innerHTML, and the indicator line and .drag-over class live
+       inside what it rebuilds — so by the time applyDrop runs, this code
+       holds no node that is about to die. The pool column's Sortable defers
+       its applyDrop by a tick for the mirror-image reason: there it is the
+       *library* still holding nodes after the callback returns, and it has
+       to be allowed to finish first. Nothing here outlives the call, so
+       nothing here has to be deferred. */
+    mdragEnd(e);
+    if(drop) applyDrop({ fromDay:null, toDay:drop.toDay, oldIndex:null, newIndex:drop.newIndex, id:drop.id });
+    // The click for this gesture has not been dispatched yet; let it pass
+    // and land on a guard that is still raised.
+    if(wasAct) setTimeout(() => { mdrag.suppressClick = false; }, 0);
+  }
+
+  function mdragEnd(e){
+    const el = mdrag.el;
+    if(el){
+      el.removeEventListener("pointermove", mdragMove);
+      el.removeEventListener("pointerup", mdragUp);
+      el.removeEventListener("pointercancel", mdragUp);
+      if(e && e.pointerId != null){ try{ el.releasePointerCapture(e.pointerId); }catch(err){} }
+    }
+    window.removeEventListener("keydown", mdragKey, true);
+    window.removeEventListener("blur", mdragCancel);
+    mdragVisualsOff();
+    mdrag.armed = false; mdrag.act = false; mdrag.el = null; mdrag.id = null;
+  }
+
+  function mdragVisualsOff(){
+    mdragStopScroll();
+    mdragClear();
+    if(mdrag.ghost){ mdrag.ghost.remove(); mdrag.ghost = null; }
+    document.body.classList.remove("mdragging");
+  }
+
+  /* Escape and losing the window both mean "forget it". The visuals go at
+     once, and the pointerup that eventually arrives only cleans up: dropping
+     after a cancel would be the worst kind of surprise, since by then the
+     line that promised a position is gone and the drop would land somewhere
+     the user was never shown. */
+  function mdragKey(e){ if(e.key === "Escape") mdragCancel(); }
+
+  function mdragCancel(){
+    if(!mdrag.el) return;
+    mdrag.cancelled = true;
+    mdragVisualsOff();
+  }
+
   /* ---------- Sidebar ---------- */
   /* "No" sorts last rather than next to "maybe": this grouping exists for
      gap-checking (did every yes make it into the schedule?), and things
@@ -8691,6 +8945,11 @@ const MAP = (() => {
       el.className = "mk cand";
       el.setAttribute("aria-hidden", "true");   // purely visual drop marker; the information lives in the candidate card
       el.innerHTML = "<i></i>";
+      // No wireMarkerDrag here, on purpose: a candidate has no id in PLACES
+      // yet, and an id is precisely what applyDrop stores. The card below it
+      // carries the two explicit buttons that do the adding, and once "add to
+      // list" has run the point becomes an ordinary marker with the drag
+      // gesture already attached.
       if(st.engine === "maplibre"){
         candMk = new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(st.map);
         const to = { center: [lon, lat], zoom: Math.max(st.map.getZoom(), 14) };
