@@ -1063,6 +1063,15 @@ main.tight{padding-bottom:var(--ab-h,64px)}
 /* User-added stub not yet researched by the AI. The dashed border echoes the
    same mark on its map marker */
 .t-stub{background:transparent;color:var(--ink-3);border:1px dashed var(--line-2);font-weight:600}
+/* The two hosts outside the card header, where the .hd-r line box isn't there
+   to do the centring. In .dlg-h the badge is a flex item of a container set to
+   align-items:flex-start (so the ✕ stays on the title's first line when the
+   name wraps), which would top-align a 19.5px pill against a 27.3px heading
+   line: it gets that line as an explicit box and centres inside it, same trick
+   as .hd-r. In .dk-name it is a true inline, where vertical padding paints
+   outside the line box and hangs the pill below the baseline. */
+.dlg-h .tier{display:inline-flex;align-items:center;height:calc(21px * 1.3)}
+.dk-name .tier{display:inline-block;vertical-align:middle;margin-left:7px}
 
 /* Three lines, not two: the median pitch here is 83 characters, which at this
    width is ~3.2 lines — two lines would cut half the places mid-sentence.
@@ -4686,6 +4695,16 @@ function pickHTML(p){
   </div>`;
 }
 
+/* One badge for every name line that carries one — the list card, the detail
+   dialog, the deck card. Both branches can be absent: lodging has no tier at
+   all (validate.py exempts it) and reaches the dialog straight from its map
+   marker, so a place that is neither a stub nor tiered must render nothing
+   rather than an empty t-undefined pill. */
+function tierBadge(p){
+  if(isStubP(p)) return `<span class="tier t-stub">${T.stubTier}</span>`;
+  return p.tier ? `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>` : "";
+}
+
 /* The card is a vertical stack, not the old photo-beside-text row: a 3-column
    grid of photo-topped cards is scannable in a way 47 stacked rows never were.
    Everything sits inside the card's own padding — nothing bleeds to the edge —
@@ -4724,10 +4743,7 @@ function cardHTML(p, children){
       <div class="nmw">
         <div class="nm-box"><button class="bare nm" type="button" data-detail="${esc(p.id)}">${esc(p.name)}</button></div>${loc}
       </div>
-      <div class="hd-r">
-        ${stub ? `<span class="tier t-stub">${T.stubTier}</span>`
-               : `<span class="tier t-${esc(p.tier)}">${esc(p.tier)}</span>`}
-      </div>
+      <div class="hd-r">${tierBadge(p)}</div>
     </div>
     ${p.pitch ? `<p class="pitch">${rich(p.pitch)}</p>` : ""}
     ${fl.length ? `<div class="flags">${fl.map(f=>`<span class="flag ${f.cls}">${esc(f.txt)}</span>`).join("")}</div>` : ""}
@@ -5153,6 +5169,7 @@ function openDetail(id, from){
   $("#dlg-inner").innerHTML = `
     <div class="dlg-h">
       <h3 tabindex="-1" autofocus>${esc(p.name)}${p.name_local && p.name_local!==p.name ? ` <span class="loc"${langAttr}>${esc(p.name_local)}</span>` : ""}</h3>
+      ${tierBadge(p)}
       <button class="x" data-close aria-label="${esc(T.close)}">${xmark()}</button>
     </div>
     <div class="dlg-b">
@@ -10396,7 +10413,7 @@ const DECK = (() => {
       <div class="dk-scroll">
         ${dkMedia(p)}
         <div class="dk-body">
-          <div class="dk-name">${esc(p.name)}${loc}</div>
+          <div class="dk-name">${esc(p.name)}${tierBadge(p)}${loc}</div>
           <div class="dk-facts">${facts}</div>
         </div>
         ${depth === 0 ? galleryHTML(p) : ""}
