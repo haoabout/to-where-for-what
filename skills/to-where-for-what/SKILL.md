@@ -86,6 +86,30 @@ prose — same content (don't assume the tool exists — check). Ask at most 1�
 critical things at a time; when a gap doesn't block starting, assume and
 say so.
 
+### Plain words everywhere, not only in questions
+
+Beat 2 governs **every line the user sees** — progress updates, background-task
+reports, delivery notes — not just the four beats. Describe consequences and
+next steps, never internal grade names. Left column stays internal; say the
+right column, translated into the user's language.
+
+| Internal term | What to say |
+|---|---|
+| P0 | "N issues that must be fixed before the page can be delivered" — at zero, just "data check passed" |
+| P1 | "N things worth double-checking", naming each one concretely |
+| stage A / B / C / D | "step 1 / 2 / 3 / 4 (of 4)" |
+| validate / validator | "checking the data for errors" |
+| enrich | "auto-filling coordinates and images" |
+| build / rebuild | "regenerating the page" |
+| `choice` / `itinerary` | "the picks you marked" / "the days you arranged" |
+| stub | "the place you added on the map, details pending" |
+| tier | "recommendation level" |
+| Nominatim / Overpass / Wikimedia / bbox | don't name them — "the map service" / "the photo library" |
+
+So "validate finished — 0 P0, 2 P1" is said as: "Data check passed, the page is
+ready. Two things worth double-checking: Kiyomizu-dera's closing time, and the
+Gion → station walk I estimated rather than looked up."
+
 ---
 
 ## Preferences file
@@ -317,7 +341,9 @@ wrong value); the manual work splits:
   it carries timing, the `--apply-image-review` merge, and the no-subagent
   fallback. Prefer a vision-capable model.
 
-**Delivery requires zero P0.** Read each P1 and decide to fix or ignore.
+**Delivery requires zero P0.** Read each P1 and decide to fix or ignore — and
+when reporting either to the user, translate per the glossary in "Talking to
+the user".
 
 **Prefer `--serve`**: under `file://` the OSM basemap returns "Access blocked"
 tiles (HTTP 200 — only eyes catch it). With an embedded preview pane, use
