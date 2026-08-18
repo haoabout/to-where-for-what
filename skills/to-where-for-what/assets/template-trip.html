@@ -8329,6 +8329,21 @@ const MAP = (() => {
     el.addEventListener("pointerdown", e => {
       if(st.engine !== "maplibre" || e.pointerType === "touch") return;
       if(e.button !== 0 || !e.isPrimary) return;
+      /* Finish any gesture still standing before starting another. Two ways
+         a pointerdown arrives on top of a live one, both hit in practice: a
+         trackpad force-click (or a flicker in contact) sends a second down
+         with no up in between, and a pointerup released outside the window
+         can simply go missing — pointercancel covers the cases the browser
+         knows it broke, not this one. Re-arming without clearing overwrote
+         mdrag.ghost a few lines into the next pointermove, and the previous
+         ghost, now referenced by nobody, stayed on the page until reload —
+         the small card users found frozen beside the schedule header.
+         suppressClick is dropped here rather than a tick later (as after a
+         normal drop) because the click it was holding back belongs to a
+         gesture whose pointerup is never coming; left raised it would eat
+         the next real click on a marker and the detail dialog would stop
+         opening. */
+      if(mdrag.armed || mdrag.act){ mdragEnd(null); mdrag.suppressClick = false; }
       mdrag.armed = true; mdrag.act = false; mdrag.cancelled = false;
       mdrag.el = el; mdrag.id = p.id; mdrag.x0 = e.clientX; mdrag.y0 = e.clientY;
       /* Capture so the gesture keeps reporting once the cursor leaves the
@@ -8340,6 +8355,27 @@ const MAP = (() => {
       el.addEventListener("pointercancel", mdragUp);
       window.addEventListener("keydown", mdragKey, true);
       window.addEventListener("blur", mdragCancel);
+    });
+
+    /* The second half of the same defence the card deck's attachDrag runs:
+       pointercancel is the browser saying "I took this gesture away", but
+       capture can also be lost quietly — a released capture, a node removed
+       under the pointer — and then no up ever arrives to clean up after.
+       Bound once for the life of the element rather than per gesture,
+       precisely because the gesture it has to rescue is one whose own
+       teardown never ran. Never drops: mdragUp only commits on a real
+       pointerup.
+       This also fires after every ordinary pointerup, so it lands on a
+       finished gesture as a matter of course — the guard below is what makes
+       that a no-op, and mdragUp is idempotent besides (with mdrag.el nulled
+       and act false there is no listener left to remove, no ghost to take
+       down and nothing to commit). Checking the element too keeps a capture
+       transfer between two markers from tearing down the gesture that just
+       won it. */
+    el.addEventListener("lostpointercapture", e => {
+      if(mdrag.el !== el) return;
+      if(!mdrag.armed && !mdrag.act) return;
+      mdragUp(e);
     });
   }
 
@@ -8451,7 +8487,8 @@ const MAP = (() => {
   }
 
   function mdragUp(e){
-    // pointercancel arrives here too and must never drop.
+    // pointercancel and lostpointercapture both come through here and must
+    // never drop — hence the explicit type test rather than "we got called".
     const drop = mdrag.act && !mdrag.cancelled && e.type === "pointerup" && mdrag.toDay != null
       ? { toDay: mdrag.toDay, newIndex: mdrag.idx, id: mdrag.id } : null;
     const wasAct = mdrag.act;
@@ -8470,6 +8507,16 @@ const MAP = (() => {
     if(wasAct) setTimeout(() => { mdrag.suppressClick = false; }, 0);
   }
 
+  /* `e` is optional: a teardown forced by the next pointerdown has no event
+     to hand over, and that path deliberately leaves the capture alone. It
+     would have to release the old pointer only to have setPointerCapture
+     take the same one back two lines later, and the release queues a
+     lostpointercapture that would arrive after the new gesture was already
+     armed — killing the drag the user is in the middle of starting. Letting
+     the re-capture supersede it is both simpler and quieter; where the new
+     press is on a different marker, capture transfers on its own and the
+     lostpointercapture that follows is rejected by that handler's element
+     check. */
   function mdragEnd(e){
     const el = mdrag.el;
     if(el){
