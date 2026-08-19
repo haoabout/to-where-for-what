@@ -7,7 +7,7 @@ needs, and the public routing service its transport feature calls. None of this
 is part of the skill itself; `npx skills add` does not install them.
 
 **Acceptance rule — this is not optional.** Any change under
-`skills/to-where-for-what/scripts/` or to `assets/template-trip.html` must have
+`skills/medium-roam/scripts/` or to `assets/template-trip.html` must have
 all three suites run and green *before* it is committed. They reach no outside
 network and take seconds; a suite that fails is either a regression to fix or an
 assertion whose contract the change deliberately replaced — say which, in the
@@ -105,7 +105,7 @@ still wouldn't catch the Firefox/Safari users who genuinely need the fallback.
 
 The protocol affects **something else entirely**: `file://` sends no
 `Referer`, so the official OSM raster tiles are unavailable (see the map
-sections under `skills/to-where-for-what/references/`). The two dimensions must
+sections under `skills/medium-roam/references/`). The two dimensions must
 be judged separately.
 
 ## osrm-probe.html

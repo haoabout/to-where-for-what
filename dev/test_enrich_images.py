@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/to-where-for-what/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/medium-roam/scripts"))
 import enrich  # noqa: E402
 
 PASS, FAIL = "\033[92m✓\033[0m", "\033[91m✗\033[0m"

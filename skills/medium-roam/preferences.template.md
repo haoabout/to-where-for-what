@@ -1,6 +1,6 @@
 # Travel preferences
 
-> This file lives at `~/.to-where-for-what/preferences.md` and is **reused across
+> This file lives at `~/.medium-roam/preferences.md` and is **reused across
 > trips and across projects**.
 > It is deliberately kept outside the skill directory — updating or
 > reinstalling the skill never touches it.

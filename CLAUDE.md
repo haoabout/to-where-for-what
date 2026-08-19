@@ -1,8 +1,8 @@
-旅行规划 skill 仓库:skill 本体在 `skills/to-where-for-what/`,`dev/` 是仓库层的回归测试(不随 skill 分发)。
+旅行规划 skill 仓库:skill 本体在 `skills/medium-roam/`,`dev/` 是仓库层的回归测试(不随 skill 分发)。
 
 ## 验收标准
 
-改动 `skills/to-where-for-what/scripts/` 或 `assets/template-trip.html` 后,提交前必须跑全套 dev/ 测试并保持全绿:
+改动 `skills/medium-roam/scripts/` 或 `assets/template-trip.html` 后,提交前必须跑全套 dev/ 测试并保持全绿:
 
 ```bash
 python3 dev/test_enrich_images.py   # 图片候选管线,全程无网络

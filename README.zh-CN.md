@@ -1,4 +1,4 @@
-# to-where-for-what
+# Medium Roam · 五分熟旅行
 
 [English](README.md) · **简体中文**
 
@@ -14,12 +14,12 @@ A 搜索景点 →(AI)→ ┌ ① 景点清单 ⇄ ② 地图（筛选 + 排程�
 ## 安装
 
 ```bash
-npx skills add haoabout/to-where-for-what
+npx skills add haoabout/medium-roam
 ```
 
 支持 Claude Code、Codex、Cursor、OpenCode 等 70+ 工具（基于 [Vercel skills CLI](https://github.com/vercel-labs/skills)）。安装后，提出行程规划请求——如「帮我规划去大阪的行程」——即可触发。
 
-手动安装：将 `skills/to-where-for-what/` 拷入 `~/.claude/skills/`（或所用工具对应的 skills 目录）。
+手动安装：将 `skills/medium-roam/` 拷入 `~/.claude/skills/`（或所用工具对应的 skills 目录）。
 
 **依赖**：Python 3.9+，仅标准库，无需 pip install。地图与天气需要网络连接。
 
@@ -53,15 +53,15 @@ npx skills add haoabout/to-where-for-what
 
 ## 长期偏好
 
-存于 `~/.to-where-for-what/preferences.md`，跨行程复用：交通习惯、体力、兴趣权重、忌口、预算档、攻略详略。
+存于 `~/.medium-roam/preferences.md`，跨行程复用：交通习惯、体力、兴趣权重、忌口、预算档、攻略详略。
 
 **刻意置于 skill 目录之外**——更新或重装 skill（git pull、下载 zip、删除重装）均不触及此文件。skill 目录内仅包含模板。
 
 ## 更新
 
-任何更新方式都不会影响个人数据：`~/.to-where-for-what/preferences.md` 与行程目录均在 skill 目录之外，重装亦不受影响。
+任何更新方式都不会影响个人数据：`~/.medium-roam/preferences.md` 与行程目录均在 skill 目录之外，重装亦不受影响。
 
-已安装版本记录在 `skills/to-where-for-what/SKILL.md` frontmatter 的 `version:` 字段；同目录的 `CHANGELOG.md` 记录版本间的差异，并明确标注行为变化，建议更新前查阅。
+已安装版本记录在 `skills/medium-roam/SKILL.md` frontmatter 的 `version:` 字段；同目录的 `CHANGELOG.md` 记录版本间的差异，并明确标注行为变化，建议更新前查阅。
 
 **修改过 skill 文件的用户**（SKILL.md 规则、`build.py`、模板等），建议以 git 方式安装，并将修改提交为本地 commit；此后 `git pull --rebase` 即为带冲突标记的三方合并。这是本地修改在更新后得以保留的唯一可靠方式——zip 覆盖会将其静默丢弃。轻量的个人偏好和规则建议写入 `preferences.md`，该文件不受任何更新影响。
 
@@ -89,14 +89,14 @@ npx skills add haoabout/to-where-for-what
 
 ## 开发
 
-改动 `skills/to-where-for-what/scripts/` 或 `assets/template-trip.html` 后，提交前必须跑全套三份测试并保持全绿。三者全程不联网，秒级完成。
+改动 `skills/medium-roam/scripts/` 或 `assets/template-trip.html` 后，提交前必须跑全套三份测试并保持全绿。三者全程不联网，秒级完成。
 
 ```bash
 python3 dev/test_enrich_images.py   # 图片候选管线
 python3 dev/test_validate.py        # 数据契约校验器
 python3 dev/test_server.py          # build.py --serve 本地保存服务
 
-python3 skills/to-where-for-what/scripts/build.py <行程目录> --serve
+python3 skills/medium-roam/scripts/build.py <行程目录> --serve
 ```
 
 `dev/` 为开发期内容（回归测试、能力探针），不参与安装，详见 [dev/README.md](dev/README.md)。
@@ -104,11 +104,11 @@ python3 skills/to-where-for-what/scripts/build.py <行程目录> --serve
 本机开发建议使用软链接，修改即时生效：
 
 ```bash
-ln -s "$PWD/skills/to-where-for-what" ~/.claude/skills/to-where-for-what
+ln -s "$PWD/skills/medium-roam" ~/.claude/skills/medium-roam
 ```
 
 ## 许可
 
-[MIT](LICENSE)。内联的 [SortableJS](https://github.com/SortableJS/Sortable) 1.15.7 同为 MIT，见 [`assets/vendor/README.md`](skills/to-where-for-what/assets/vendor/README.md)。
+[MIT](LICENSE)。内联的 [SortableJS](https://github.com/SortableJS/Sortable) 1.15.7 同为 MIT，见 [`assets/vendor/README.md`](skills/medium-roam/assets/vendor/README.md)。
 
 地图数据 © [OpenStreetMap](https://www.openstreetmap.org/copyright) 贡献者。

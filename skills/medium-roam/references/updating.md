@@ -20,6 +20,6 @@ the order matters, because the first thing on the user's mind is usually
 
 Rationale and the power-user recommendation (git install, local commits): the
 "Updating" section of the source repo's README —
-https://github.com/haoabout/to-where-for-what#updating — the README does not
+https://github.com/haoabout/medium-roam#updating — the README does not
 ship with a skill-only install, so follow the link rather than looking for a
 local copy.

@@ -42,7 +42,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-UA = "to-where-for-what-enrich/1.0 (https://github.com/; trip planning skill)"
+UA = "medium-roam-enrich/1.0 (https://github.com/; trip planning skill)"
 NOMINATIM_QPS = 1.1          # policy demands ≤1 req/s; leave a little headroom
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 

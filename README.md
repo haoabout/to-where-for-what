@@ -1,4 +1,4 @@
-# to-where-for-what
+# Medium Roam
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -16,14 +16,14 @@ A search places →(AI)→ ┌ ① shortlist ⇄ ② map (filter + schedule) ┐
 ## Install
 
 ```bash
-npx skills add haoabout/to-where-for-what
+npx skills add haoabout/medium-roam
 ```
 
 Works with Claude Code, Codex, Cursor, OpenCode and 70+ other tools (via the
 [Vercel skills CLI](https://github.com/vercel-labs/skills)). Once installed,
 just say "help me plan a trip to Osaka" and it triggers.
 
-Manual install: copy `skills/to-where-for-what/` into `~/.claude/skills/` (or
+Manual install: copy `skills/medium-roam/` into `~/.claude/skills/` (or
 your tool's equivalent skills directory).
 
 **Requirements**: Python 3.9+, standard library only — no pip install. The map
@@ -93,7 +93,7 @@ via `Intl`.
 
 ## Long-term preferences
 
-Stored at `~/.to-where-for-what/preferences.md` and reused across trips:
+Stored at `~/.medium-roam/preferences.md` and reused across trips:
 transport habits, stamina, interest weights, dietary restrictions, budget
 tier, guide verbosity.
 
@@ -104,11 +104,11 @@ touches it. The skill directory ships only the template.
 ## Updating
 
 Your personal state is never touched by an update, whichever path you take:
-`~/.to-where-for-what/preferences.md` and everything under your trips
+`~/.medium-roam/preferences.md` and everything under your trips
 directory live outside the skill and survive reinstalls.
 
 The installed version is the `version:` field in
-`skills/to-where-for-what/SKILL.md` frontmatter; `CHANGELOG.md` next to it
+`skills/medium-roam/SKILL.md` frontmatter; `CHANGELOG.md` next to it
 says what changed between versions — read it before updating, it flags
 behavior changes you'd otherwise meet by surprise.
 
@@ -156,7 +156,7 @@ choice; it's asked once on first use and recorded in the preferences file.
 
 ## Development
 
-Changing anything under `skills/to-where-for-what/scripts/` or
+Changing anything under `skills/medium-roam/scripts/` or
 `assets/template-trip.html` means running all three suites, green, before you
 commit. They reach no network and take seconds.
 
@@ -165,7 +165,7 @@ python3 dev/test_enrich_images.py   # image candidate pipeline
 python3 dev/test_validate.py        # data-contract validator
 python3 dev/test_server.py          # build.py --serve local save server
 
-python3 skills/to-where-for-what/scripts/build.py <trip-dir> --serve
+python3 skills/medium-roam/scripts/build.py <trip-dir> --serve
 ```
 
 `dev/` holds development-time material (regression tests, capability probes)
@@ -174,14 +174,14 @@ and isn't part of the install; see [dev/README.md](dev/README.md).
 For local development a symlink is convenient — edits take effect immediately:
 
 ```bash
-ln -s "$PWD/skills/to-where-for-what" ~/.claude/skills/to-where-for-what
+ln -s "$PWD/skills/medium-roam" ~/.claude/skills/medium-roam
 ```
 
 ## License
 
 [MIT](LICENSE). The inlined [SortableJS](https://github.com/SortableJS/Sortable)
 1.15.7 is MIT too — see
-[`assets/vendor/README.md`](skills/to-where-for-what/assets/vendor/README.md).
+[`assets/vendor/README.md`](skills/medium-roam/assets/vendor/README.md).
 
 Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright)
 contributors.

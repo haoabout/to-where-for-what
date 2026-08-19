@@ -26,7 +26,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BUILD_PY = Path(__file__).resolve().parent.parent / "skills" / "to-where-for-what" / "scripts" / "build.py"
+BUILD_PY = Path(__file__).resolve().parent.parent / "skills" / "medium-roam" / "scripts" / "build.py"
 
 results = []
 
@@ -105,7 +105,7 @@ def get_status(base, path):
 
 
 def main() -> int:
-    trip_dir = Path(tempfile.mkdtemp(prefix="twfw-server-test-"))
+    trip_dir = Path(tempfile.mkdtemp(prefix="medium-roam-server-test-"))
     try:
         fixture(trip_dir)
         port = start_server(trip_dir)
