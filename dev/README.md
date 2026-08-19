@@ -23,7 +23,10 @@ python3 dev/test_server.py
 
 Regression tests for `enrich.py`'s image candidate pipeline — identity grading,
 family order and the candidate cap, the glance/full tiering, the run cache and
-dedupe, 429 backoff, and `--apply-image-review`'s atomic merge. No network: all
+dedupe, 429 backoff, candidate byte saving into `image-review/` (extensions,
+byte-dedupe, the 2MB ceiling, incremental carry-over) with the cap-aware cache
+that keeps a 64KB check body from being served as the full image, and
+`--apply-image-review`'s atomic merge and cleanup. No network: all
 HTTP is stubbed at `enrich.http_get`, and the retry/method cases one level
 deeper at `urllib.request.urlopen`. Run after any change to the image pipeline
 or to the audit contract the visual review pass reads.

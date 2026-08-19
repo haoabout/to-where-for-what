@@ -28,9 +28,11 @@ Lessons already encoded here:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
+import shutil
 import sys
 import threading
 import time
@@ -220,10 +222,24 @@ def fill_coords(doc: dict, dry: bool) -> int:
 # that already sits in places.json ("existing" candidates) — waits for the
 # visual review pass (image-agent-briefing.md), whose verdicts come back via
 # --apply-image-review. Every candidate and every failure is recorded in
-# image-audit.json next to places.json: metadata and URLs only, never bytes.
+# image-audit.json next to places.json — metadata and URLs — while the bytes
+# of the kept candidates land in image-review/ for the review pass to read
+# (see _save_candidate_files), and are deleted once its verdicts are merged.
 
 MAX_CANDIDATES = 2
 AUDIT_NAME = "image-audit.json"
+
+# The bytes themselves are saved for the review pass, into `image-review/`
+# next to places.json. Measured on the Osaka run: the review agent spent 12.3
+# of its 31.4 minutes re-downloading, one serial curl at a time, exactly the
+# candidates this pipeline had just fetched. Collection GETs them anyway to
+# verify them, so a second full GET of only the *kept* ones is the whole cost
+# — 155s of checking vs 410s of downloading everything, and only the ~60
+# survivors pay it. 2MB is the ceiling per file: a truncated image is worse
+# than no image (the agent would judge half a photo), so anything that hits
+# the cap is left unsaved and the agent falls back to the URL for that one.
+FULL_IMAGE_CAP = 2_097_152
+REVIEW_DIR = "image-review"
 
 # --- network layer: one choke point for the whole image pipeline.
 # Per-domain throttling replaces the scattered time.sleep(0.35) calls; a
@@ -279,17 +295,27 @@ def _domain(url: str) -> dict:
         return st
 
 
-def _claim(url: str) -> tuple[dict | None, bool]:
+def _claim(url: str, cap: int) -> tuple[dict | None, bool]:
     """(cached result, do I own the fetch). The cache only helps when a URL
     is asked for twice in sequence; with several places in flight the same
     Commons thumbnail is routinely asked for twice at once, so the second
     caller waits on the first's result instead of putting an identical
     request on the wire. A fetch that ends without publishing anything (an
-    exception escaping http_get) hands ownership to whoever waits."""
+    exception escaping http_get) hands ownership to whoever waits.
+
+    The cache is cap-aware, and has to be: the pipeline now asks for the same
+    URL twice on purpose — 64KB to verify it is an image, then in full to save
+    it — and a plain URL-keyed cache would hand the second caller the 64KB
+    stump. A hit is valid only when the cached body cannot be a truncation
+    (it ended before its own cap) or was fetched under a cap at least as
+    large as this one. Otherwise it is a miss: the caller refetches and
+    _publish overwrites. Errors and non-2xx carry an empty body, so they are
+    complete at every cap and stay cached — a dead URL is never re-tried."""
     while True:
         with _CACHE_LOCK:
             hit = _HTTP_CACHE.get(url)
-            if hit is not None:
+            if hit is not None and (len(hit["body"]) < hit["cap"]
+                                    or hit["cap"] >= cap):
                 return hit, False
             ev = _INFLIGHT.get(url)
             if ev is None:
@@ -298,9 +324,10 @@ def _claim(url: str) -> tuple[dict | None, bool]:
         ev.wait()
 
 
-def _publish(url: str, res: dict | None) -> None:
+def _publish(url: str, res: dict | None, cap: int) -> None:
     with _CACHE_LOCK:
         if res is not None:
+            res["cap"] = cap
             _HTTP_CACHE[url] = res
         ev = _INFLIGHT.pop(url, None)
     if ev is not None:
@@ -333,14 +360,15 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
              timeout: int = 12) -> dict:
     """Streaming GET, first `cap` bytes only. Never HEAD — several official
     sites (measured) 404 on HEAD while the GET serves the image fine.
-    Returns {"status", "body", "ctype", "error"}; "error" is set on network
-    failure after retries, "status" on any HTTP response including 4xx. A
+    Returns {"status", "body", "ctype", "error", "cap"}; "error" is set on
+    network failure after retries, "status" on any HTTP response including
+    4xx, and "cap" records what the body was read under (see _claim). A
     request to a host the breaker has condemned comes back immediately as
     error "host-dead:<the error that first broke it>"."""
     # Encoding happens before _claim so the cache / in-flight key is the
     # same string that goes on the wire.
     url = _ascii_url(url)
-    cached, mine = _claim(url)
+    cached, mine = _claim(url, cap)
     if not mine:
         return cached
     res = None
@@ -348,7 +376,7 @@ def http_get(url: str, accept: str = "*/*", cap: int = 800_000,
         res = _fetch(url, accept, cap, timeout)
         return res
     finally:
-        _publish(url, res)
+        _publish(url, res, cap)
 
 
 def _fetch(url: str, accept: str, cap: int, timeout: int) -> dict:
@@ -469,7 +497,20 @@ def check_image_url(url: str) -> dict:
 # Filename features that mark a URL as site furniture rather than a photo of
 # the place. Checked on the URL path only — never a reason to stop scanning a
 # page, just to skip that one URL.
-NEG_IMG_RE = re.compile(r"(logo|icon|share|ogp|sprite|avatar|favicon|placeholder)", re.I)
+#
+# The second row was added from measurement, not imagination: cross-tabbing
+# the Osaka run's 90 candidates against their last path segment, the original
+# row caught nothing at all while 13 URLs were plainly furniture —
+# btn_nav_{ec,menu,shop}.svg and btn_access.png (551horai), header_facebook /
+# header_instagram.svg (sumiyoshitaisha), clearspacer.gif (city.osaka.lg.jp),
+# ico-{minus,plus,search}.svg and ico_{rbi,red,spe}.svg. Short tokens are
+# anchored to the start of the segment and must be followed by a separator,
+# because unanchored `ico` would eat any photo of a place whose name contains
+# it; `spacer` is distinctive enough to stand on its own (the measured
+# instance is *clear*spacer.gif).
+NEG_IMG_RE = re.compile(
+    r"(logo|icon|share|ogp|sprite|avatar|favicon|placeholder"
+    r"|spacer|^btn[-_]|^ico[-_]|^header_(facebook|instagram))", re.I)
 
 
 def looks_negative(url: str) -> bool:
@@ -1125,6 +1166,11 @@ def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
+def _pid(p: dict) -> str:
+    """The audit key for a place — id when it has one, else its name."""
+    return p.get("id") or p.get("name") or "?"
+
+
 def load_audit(trip_dir: Path) -> dict:
     path = trip_dir / AUDIT_NAME
     if path.exists():
@@ -1161,8 +1207,66 @@ IMAGE_WORKERS = 5
 _PRINT_LOCK = threading.Lock()
 
 
+def _save_candidate_files(trip_dir: Path, pid: str, cands: list[dict]) -> None:
+    """Save the kept candidates' full bytes under `image-review/`, and record
+    the path on each candidate as `file` (relative to the trip directory).
+
+    Only candidates that passed the check are fetched again — the 64KB
+    verification already told us the rest are not images. The saved bytes are
+    the URL's own content, undecoded and unscaled: a Commons thumburl is
+    already 960px wide, and the review agent reads these files directly.
+
+    `file` is present exactly when the bytes are on disk. It is absent for a
+    failed check, a duplicate, an image at or over FULL_IMAGE_CAP, a second
+    GET that failed, and for dry runs — the agent falls back to the URL for
+    those. Duplicates are demoted rather than deleted: two families serving
+    byte-identical images is one photo, and the audit says which copy won.
+
+    The place's own stale files are removed first, so a --recheck replaces
+    them instead of leaving last run's numbering to pile up alongside."""
+    safe_pid = re.sub(r"[^A-Za-z0-9_-]", "_", pid or "place")
+    out_dir = trip_dir / REVIEW_DIR
+    for stale in out_dir.glob(f"{safe_pid}_*"):
+        try:
+            stale.unlink()
+        except OSError:
+            pass
+    by_digest: dict[str, str] = {}
+    n = 0
+    for c in cands:
+        if not (c.get("check") or {}).get("ok"):
+            continue
+        n += 1
+        r = http_get(c["url"], accept="image/*", cap=FULL_IMAGE_CAP)
+        if r.get("error") or not 200 <= (r.get("status") or 0) < 300:
+            continue
+        body = r.get("body") or b""
+        fmt = sniff_image(body)
+        # At the cap the body is almost certainly cut short — urllib returned
+        # exactly as much as it was allowed to read, not as much as there was.
+        if not fmt or len(body) >= FULL_IMAGE_CAP:
+            continue
+        digest = hashlib.sha256(body).hexdigest()
+        twin = by_digest.get(digest)
+        if twin is not None:
+            c["check"] = {"ok": False, "reason": f"duplicate-bytes:{twin}"}
+            continue
+        name = f"{safe_pid}_{n}.{'jpg' if fmt == 'jpeg' else fmt}"
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / name).write_bytes(body)
+        except OSError as e:  # noqa: BLE001  a full disk must not kill the run
+            with _PRINT_LOCK:
+                print(f"      (could not save {name}: {e})",
+                      file=sys.stderr, flush=True)
+            continue
+        by_digest[digest] = c["url"]
+        c["file"] = f"{REVIEW_DIR}/{name}"
+
+
 def _images_for_place(p: dict, trip: dict, bbox, langs: list[str],
-                      dry: bool, recheck: bool) -> tuple[dict, str | None, bool]:
+                      dry: bool, recheck: bool, trip_dir: Path,
+                      pid: str) -> tuple[dict, str | None, bool]:
     """One place's whole image pass, run on a worker thread: verify what's
     on the page, collect if needed, and (when it had nothing) adopt a
     verified `high` candidate. Returns its audit record, the URL written if
@@ -1199,6 +1303,11 @@ def _images_for_place(p: dict, trip: dict, bbox, langs: list[str],
     with _PRINT_LOCK:
         print(f"  → {p.get('name')} …", flush=True)
     cands, review = collect_candidates(p, trip, bbox, langs, existing)
+    # Before anything reads the candidate list: saving may demote a
+    # byte-duplicate to a failed check, and the counts printed below (and the
+    # auto-write choice) must see the list as the audit will record it.
+    if not dry:
+        _save_candidate_files(trip_dir, pid, cands)
     written = None
     if not existing and not dry:
         best = next((c for c in cands
@@ -1267,7 +1376,8 @@ def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
         # record is left in place rather than overwritten with an empty one —
         # yesterday's candidates are worth more than a blank entry.
         try:
-            return _images_for_place(p, trip, bbox, langs, dry, recheck)
+            return _images_for_place(p, trip, bbox, langs, dry, recheck,
+                                     trip_dir, _pid(p))
         except Exception as exc:  # noqa: BLE001
             with _PRINT_LOCK:
                 print(f"  ✗ {p.get('name')}: {type(exc).__name__}: {exc}"
@@ -1282,13 +1392,30 @@ def fill_images(doc: dict, path: str, dry: bool, recheck: bool = False) -> int:
     # Merged in places.json order, after every worker is done: the audit's
     # key order and its one-shot write are what the visual review agent and
     # --apply-image-review read.
+    _prev_files = {(pid, c.get("url")): c["file"]
+                   for pid, prec in audit.get("places", {}).items()
+                   for c in (prec.get("candidates") or [])
+                   if isinstance(c, dict) and c.get("file")}
     wrote = 0
     flagged = 0
     glance = 0
     for p, (rec, written, flag_change) in zip(doc["places"], results):
         if rec is None:
             continue
-        audit["places"][p.get("id") or p.get("name") or "?"] = rec
+        pid = _pid(p)
+        # A record is written whole, which would drop the `file` of a place
+        # that was skipped as healthy this run — it never re-collected, so it
+        # never re-saved. Carry the previous run's paths over by URL, but only
+        # while the bytes are actually still there: a merged review deletes
+        # the whole directory, and a path to a file that is gone would send
+        # the agent looking for it.
+        for c in rec.get("candidates", []):
+            if c.get("file"):
+                continue
+            prev = _prev_files.get((pid, c.get("url")))
+            if prev and (trip_dir / prev).exists():
+                c["file"] = prev
+        audit["places"][pid] = rec
         if rec.get("review") == "glance":
             glance += 1
         if written:
@@ -1404,6 +1531,11 @@ def apply_image_review(path: str, patch_path: str) -> int:
 
     _atomic_write_json(Path(path), doc)
     save_audit(trip_dir, audit)
+    # The verdicts are in; the saved candidate bytes have done their job and
+    # would otherwise sit in the trip directory for good. Only on the success
+    # path — a rejected patch leaves the material intact so the review agent
+    # can be sent back in without a re-collection.
+    shutil.rmtree(trip_dir / REVIEW_DIR, ignore_errors=True)
     print(f"✓ applied {len(patches)} patch(es), {len(reviews)} review record(s); "
           f"audit updated → {trip_dir / AUDIT_NAME}")
     return 0
