@@ -2741,8 +2741,18 @@ body.mdragging .mk{cursor:grabbing}
 #dk-main{flex:1; width:100%; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px}
 #dk-row{width:100%; flex:1; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center}
 /* The wing owns the left 1fr cell: two piles stacked, centred on the card.
-   The wide gap keeps the two piles reading as two destinations, not one. */
-.dk-wing{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:96px; min-width:0}
+   The gap is load-bearing, not decoration: throwDir splits the left side on
+   the horizontal, so the gap is what lifts the no pile above that line and
+   drops the maybe pile below it. At the old 96px the two sat only ±14.4° off
+   the boundary — close enough that neither throw felt aimed. ~190px puts them
+   at ~±20°. It cannot grow much further: the wing is 246px of pile plus the
+   gap, and past ~230px it outgrows the deck row and starts scrolling the
+   page on a 800px-tall window. Widening the angle beyond that means moving
+   the piles IN (smaller dx), not further apart. */
+.dk-wing{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:clamp(150px,24vh,230px); min-width:0;
+}
 /* A definite height, derived from the measured viewport slot rather than a
    percentage: the deck sits in an auto grid track, and height:100% against
    an auto track resolves to 0 — the cards (absolute-positioned) then paint
@@ -2762,7 +2772,7 @@ body.mdragging .mk{cursor:grabbing}
   /* pan-y, not none: vertical touch gestures belong to the browser (they
      scroll .dk-scroll and cancel our drag via pointercancel); horizontal
      ones still reach the swipe. Mouse drags are unaffected — desktop keeps
-     all four directions, and the wheel scrolls. */
+     all three verdicts, and the wheel scrolls. */
   cursor:grab; will-change:transform; touch-action:pan-y;
 }
 /* The card's own scroll container. The stamps live outside it, absolute on
@@ -2842,10 +2852,22 @@ body.mdragging .mk{cursor:grabbing}
   position:absolute; left:50%; top:50%; font-size:48px; font-weight:900; letter-spacing:.1em;
   padding:10px 26px; border:7px solid; border-radius:16px; opacity:0;
   background:transparent; pointer-events:none; z-index:2; white-space:nowrap;
+  transition:scale .12s ease;
 }
 .dk-stamp.yes{color:var(--ok); border-color:var(--ok); transform:translate(-50%,-50%) rotate(12deg)}
 .dk-stamp.no{color:var(--danger); border-color:var(--danger); transform:translate(-50%,-50%) rotate(-12deg)}
 .dk-stamp.maybe{color:var(--warn); border-color:var(--warn); transform:translate(-50%,-50%) rotate(-6deg)}
+/* Crossing the throw threshold is the moment the gesture becomes a decision,
+   and it used to be invisible (see throwDir's neighbourhood). The stamp jumps
+   from half to solid and pops; `scale`, not `transform`, because the tilt
+   above already owns transform. */
+.dk-stamp.dk-armed{scale:1.08}
+/* And the card itself, in the pile's own colour — visible wherever the eye
+   happens to be. Instant, not eased: .dk-dragging kills transitions, which is
+   what makes this read as a click rather than a fade. */
+.dk-card[data-armed="yes"]{border-color:var(--ok)}
+.dk-card[data-armed="no"]{border-color:var(--danger)}
+.dk-card[data-armed="maybe"]{border-color:var(--warn)}
 
 /* ── Piles: loose scattered stacks; whole dock is one <button> (browse) ── */
 .dk-dock{
@@ -3076,7 +3098,7 @@ body.mdragging .mk{cursor:grabbing}
      its timers under REDUCED.matches, so cards snap straight onto their
      piles); pile counts and stamps still change state. */
   .dk-card.dk-settle,.dk-card.dk-windup,.dk-card.dk-fly,.dk-card.dk-flyback,
-  .dk-dock,.dk-act button{transition:none}
+  .dk-stamp,.dk-dock,.dk-act button{transition:none}
   .dk-mini.dk-pop,.dk-gcard.dk-deal,#dk-pileview.show{animation:none}
 }
 @media print{
@@ -10533,31 +10555,44 @@ const DECK = (() => {
   }
 
   /* ── drag: Pointer Events, one code path for mouse and touch ── */
-  /* Sector verdicts — you throw the card TOWARD its pile, and the sectors
-     match where the piles actually sit: yes right (±60° cone), maybe down
-     and down-left (steeper than 30° below the horizon), no everything else
-     on the left (left-up through level-left, plus a 30° downward slop —
-     rejecting is the highest-frequency throw and fast flicks sag). Straight
-     up is nobody's: the card springs back. One radial threshold instead of
-     the old per-axis pair, whose corner was dead ground (a 130px drag at
-     45° passed neither axis test).
-     The .5 constants are cos(60°) for the yes cone and sin(30°) for the
-     no/maybe boundary. */
+  /* Sector verdicts — you throw the card TOWARD its pile, so the sectors have
+     to agree with where the piles actually sit. Three of them, no dead
+     ground: the sign of x picks the side (right is yes), and on the left the
+     sign of y picks the pile, matching the two stacked in the left wing (no
+     above, maybe below).
+     The previous design gave yes a ±60° cone and handed maybe everything
+     steeper than 30° below the horizon, which put the left-hand boundary at
+     150°. Measured against the real layout at 1280×800, a throw aimed
+     straight at the maybe pile arrives at 165.6° — inside no's sector. So
+     every "put this one on the maybe pile" gesture rejected the place
+     instead, which is backwards: maybe is where most places belong. Halving
+     the left side puts the boundary on the horizontal, and the two piles
+     straddle it with ~20° to spare (see .dk-wing's gap, which buys that
+     margin).
+     There is no upward spring-back cone any more. Aborting is the radial
+     threshold — let go short of TH_R, or drag back inside it — and a
+     committed card is one Z away from coming back. */
   const TH_R = 120;
-  function throwDir(x, y){
-    const r = Math.hypot(x, y);
-    if(!r) return null;
-    if(x > r * .5) return "yes";
-    if(y > r * .5) return "maybe";
-    if(x < -r * .5) return "no";
-    return null;   // upward cone
+  function throwDir(x, y, vertical){
+    if(!x && !y) return null;
+    if(x > 0) return "yes";
+    // Touch has no vertical axis to read (it belongs to .dk-scroll), so a
+    // leftward swipe is always no — maybe stays on the keys and buttons.
+    return vertical && y > 0 ? "maybe" : "no";
   }
   function armDock(pile){
     $$(".dk-dock").forEach(d => d.classList.toggle("dk-arm", d.dataset.pile === pile));
   }
   function attachDrag(el){
     let sx = 0, sy = 0, dx = 0, dy = 0, active = false, moved = 0, vAllowed = true;
-    const clearStamps = () => el.querySelectorAll(".dk-stamp").forEach(s => s.style.opacity = 0);
+    /* Clears both halves of the verdict display: the stamp on the card and
+       the card's own armed border. */
+    const clearStamps = () => {
+      el.querySelectorAll(".dk-stamp").forEach(s => {
+        s.style.opacity = 0; s.classList.remove("dk-armed");
+      });
+      delete el.dataset.armed;
+    };
     /* One cleanup for every way a drag can end — including the OS stealing
        the gesture (pointercancel) or capture being lost. Without it a broken
        drag leaves a tilted card and an armed pile behind forever. On touch
@@ -10583,7 +10618,7 @@ const DECK = (() => {
       // otherwise be swallowed by the capture and read as a tiny throw.
       if(e.target.closest("a,.gal-t")) return;
       // The maybe-drag (downwards) is mouse-only: on touch that axis IS the
-      // scroll. Mouse wheels scroll, so the mouse keeps all four directions.
+      // scroll. Mouse wheels scroll, so the mouse keeps all three verdicts.
       vAllowed = e.pointerType === "mouse";
       active = true; moved = 0; sx = e.clientX; sy = e.clientY;
       el.setPointerCapture(e.pointerId);
@@ -10592,25 +10627,39 @@ const DECK = (() => {
     el.addEventListener("pointermove", e => {
       if(!active) return;
       dx = e.clientX - sx; dy = vAllowed ? e.clientY - sy : 0;
-      moved = Math.max(moved, Math.hypot(dx, dy));
+      const r = Math.hypot(dx, dy);
+      moved = Math.max(moved, r);
       // The card shrinks as it travels — a nod toward the mini card it is
       // about to become. Bottoms out at .72 (~220px out); the fly animation
       // then carries the scale the rest of the way down to the pile.
-      const shr = 1 - .28 * Math.min(1, Math.hypot(dx, dy) / 220);
+      const shr = 1 - .28 * Math.min(1, r / 220);
       el.style.transform = `translate(${dx}px,${dy}px) rotate(${dx / 18}deg) scale(${shr.toFixed(3)})`;
       // One verdict for stamps, dock arming and (at release) the commit —
       // the drag always announces what letting go would do.
-      const d = throwDir(dx, dy);
-      const k = Math.min(1, Math.hypot(dx, dy) / TH_R);
-      for(const s of el.querySelectorAll(".dk-stamp"))
-        s.style.opacity = d && s.classList.contains(d) ? k : 0;
-      armDock(k >= 1 ? d : null);
+      /* Two states, not one ramp. The stamp used to fade in linearly and hit
+         full opacity exactly at TH_R, so 110px out looked identical to 120px
+         out: the stamp read "done" while the release still sprang the card
+         back, and the one pixel that decided it was invisible. Under the
+         threshold the stamp only ever reaches half; crossing it snaps to
+         solid and pops. Armed therefore means one thing — let go and it
+         commits. */
+      const d = throwDir(dx, dy, vAllowed);
+      const armed = r >= TH_R;
+      for(const s of el.querySelectorAll(".dk-stamp")){
+        const on = !!d && s.classList.contains(d);
+        s.style.opacity = on ? (armed ? 1 : .5 * r / TH_R) : 0;
+        s.classList.toggle("dk-armed", on && armed);
+      }
+      // The border says it too: the stamp is centre-card, but the eye is
+      // often out at the pile it is aiming for.
+      if(armed && d) el.dataset.armed = d; else delete el.dataset.armed;
+      armDock(armed ? d : null);
     });
     el.addEventListener("pointerup", () => {
       if(!active) return;
       const cdx = dx, cdy = dy;
       reset(false);
-      const d = Math.hypot(cdx, cdy) >= TH_R ? throwDir(cdx, cdy) : null;
+      const d = Math.hypot(cdx, cdy) >= TH_R ? throwDir(cdx, cdy, vAllowed) : null;
       if(d) commit(d, true);
       else{
         // Includes the plain tap: the card already shows everything, so a
@@ -10660,8 +10709,14 @@ const DECK = (() => {
     }
     el.classList.add("dk-flying");
     el.removeAttribute("data-depth");
-    el.querySelectorAll(".dk-stamp").forEach(s => s.style.opacity = 0);
-    el.querySelector(".dk-stamp." + choice).style.opacity = 1;
+    /* The same armed look a drag would have reached, so a key or a button
+       press flies out wearing the verdict too. */
+    el.querySelectorAll(".dk-stamp").forEach(s => {
+      s.style.opacity = 0; s.classList.remove("dk-armed");
+    });
+    const st = el.querySelector(".dk-stamp." + choice);
+    st.style.opacity = 1; st.classList.add("dk-armed");
+    el.dataset.armed = choice;
     const fly = () => {
       const t = dockTarget(choice, id);
       el.classList.remove("dk-windup");
