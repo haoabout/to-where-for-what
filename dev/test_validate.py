@@ -7,6 +7,7 @@ assert the validator catches it.
 from __future__ import annotations
 
 import copy
+import re
 import sys
 from pathlib import Path
 
@@ -163,7 +164,84 @@ def case(name: str, mutate, level: str, needle: str) -> None:
         print(f"      actual   {level}: {got or '(none)'}")
 
 
+SKILL_MD = Path(__file__).resolve().parents[1] / "skills/medium-roam/SKILL.md"
+
+# Every plain (unquoted) YAML scalar in the SKILL.md frontmatter has to survive
+# a *strict* parser: `npx skills add ...` feeds the frontmatter to npm's `yaml`
+# package, which is far less forgiving than the loose readers we usually test
+# against. These are the three ways a hand-written plain scalar blows it up.
+FRONTMATTER_TRAPS = [
+    (r"\S: ",
+     "non-space + ': '",
+     "strict YAML reads it as a nested mapping and aborts with "
+     "\"Nested mappings are not allowed in compact mappings\" — "
+     "`npx skills add haoabout/medium-roam` fails to install. "
+     "Rewrite the colon as an em dash (`Note — if ...`) or quote the value."),
+    (r" #",
+     "space + '#'",
+     "in a plain scalar that starts a YAML comment, so everything after it is "
+     "silently dropped from the value."),
+]
+# A plain scalar may not *begin* with these: YAML gives them structural meaning
+# (anchors, aliases, tags, flow collections, block scalars, directives …).
+FRONTMATTER_LEAD_CHARS = "&*!|>%@`{}[],#?:-"
+
+
+def frontmatter_pairs(text: str) -> list[tuple[str, str]]:
+    """key/value pairs of the leading `---` block, plain scalars only."""
+    block = text.split("---")[1]
+    pairs = []
+    for line in block.splitlines():
+        key, sep, value = line.partition(":")
+        if not sep or not key or key != key.strip() or not key.strip():
+            continue  # continuation line, or not a `key: value` at all
+        value = value.strip()
+        if not value or value[0] in "\"'":
+            continue  # empty, or quoted — quoting already defuses everything
+        pairs.append((key.strip(), value))
+    return pairs
+
+
+def check_frontmatter() -> None:
+    """SKILL.md frontmatter must parse under a strict YAML reader.
+
+    Kept here rather than in a fourth test file: this is a data-contract check,
+    same as everything else validate.py guards — just for the contract with the
+    skills installer instead of the one with trip.json."""
+    print("\nSKILL.md frontmatter · plain scalars must survive strict YAML")
+    text = SKILL_MD.read_text(encoding="utf-8")
+    pairs = frontmatter_pairs(text)
+
+    found = bool(pairs) and any(k == "description" for k, _ in pairs)
+    results.append(found)
+    print(f"  {PASS if found else FAIL} frontmatter parsed, description present")
+    if not found:
+        print(f"      {SKILL_MD} has no `description:` plain scalar in its `---` block")
+        return
+
+    for pattern, human, why in FRONTMATTER_TRAPS:
+        hits = [(k, re.search(pattern, v)) for k, v in pairs]
+        hits = [(k, m) for k, m in hits if m]
+        ok = not hits
+        results.append(ok)
+        print(f"  {PASS if ok else FAIL} no {human} in any plain scalar")
+        for k, m in hits:
+            around = m.string[max(0, m.start() - 30):m.end() + 30]
+            print(f"      `{k}` contains {human} at …{around}…")
+            print(f"      {why}")
+
+    bad_lead = [(k, v) for k, v in pairs if v[0] in FRONTMATTER_LEAD_CHARS]
+    ok = not bad_lead
+    results.append(ok)
+    print(f"  {PASS if ok else FAIL} no plain scalar starts with a YAML indicator character")
+    for k, v in bad_lead:
+        print(f"      `{k}` starts with {v[0]!r} — YAML reads it as structure "
+              f"(anchor/alias/tag/flow/block/comment), not text. Quote the value.")
+
+
 def main() -> int:
+    check_frontmatter()
+
     print("\nBaseline document: zero P0, and the only P1 is the expected \"sample too small\" notice")
     rep = run(base_doc())
     p1s = [m for _, _, m in rep.of("P1")]
