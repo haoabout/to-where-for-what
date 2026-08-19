@@ -10584,7 +10584,7 @@ const DECK = (() => {
     $$(".dk-dock").forEach(d => d.classList.toggle("dk-arm", d.dataset.pile === pile));
   }
   function attachDrag(el){
-    let sx = 0, sy = 0, dx = 0, dy = 0, active = false, moved = 0, vAllowed = true;
+    let sx = 0, sy = 0, dx = 0, dy = 0, active = false, vAllowed = true;
     /* Clears both halves of the verdict display: the stamp on the card and
        the card's own armed border. */
     const clearStamps = () => {
@@ -10620,7 +10620,7 @@ const DECK = (() => {
       // The maybe-drag (downwards) is mouse-only: on touch that axis IS the
       // scroll. Mouse wheels scroll, so the mouse keeps all three verdicts.
       vAllowed = e.pointerType === "mouse";
-      active = true; moved = 0; sx = e.clientX; sy = e.clientY;
+      active = true; sx = e.clientX; sy = e.clientY;
       el.setPointerCapture(e.pointerId);
       el.classList.add("dk-dragging"); el.classList.remove("dk-settle");
     });
@@ -10628,7 +10628,6 @@ const DECK = (() => {
       if(!active) return;
       dx = e.clientX - sx; dy = vAllowed ? e.clientY - sy : 0;
       const r = Math.hypot(dx, dy);
-      moved = Math.max(moved, r);
       // The card shrinks as it travels — a nod toward the mini card it is
       // about to become. Bottoms out at .72 (~220px out); the fly animation
       // then carries the scale the rest of the way down to the pile.
