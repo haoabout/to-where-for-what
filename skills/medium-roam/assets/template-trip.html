@@ -6187,11 +6187,43 @@ const MAP = (() => {
     }catch(e){ return false; }
   }
 
+  const hasTransit = () => !!(TRANSIT && (TRANSIT.lines?.features || []).length);
+
+  /* The rail map is what makes a foreign city legible, so it starts on
+     wherever there is one to show — a switch you must find and press before
+     the map means anything is a switch most people never find. It starts
+     faint for the same reason it isn't the basemap: it is the backdrop the
+     trip's own markers and route lines are read against, and at full strength
+     a dense network out-shouts them.
+
+     Both halves persist, like st.mapDark and for the same reason — an opinion
+     about how the map should look is a standing one, not a per-visit whim.
+     Whoever disagrees with either default overrules it once. */
+  const TRANSIT_KEY = LS_KEY + ":transit";
+  const TRANSIT_OP_KEY = LS_KEY + ":transitop";
+  const TRANSIT_OP_DEF = 0.3;
+  function storedTransitOn(){
+    if(!hasTransit()) return false;   // nothing to show; the button and legend stay away entirely
+    try{
+      const v = localStorage.getItem(TRANSIT_KEY);
+      return v === null ? true : v === "1";
+    }catch(e){ return true; }
+  }
+  function storedTransitOpacity(){
+    let v = NaN;
+    try{ v = parseFloat(localStorage.getItem(TRANSIT_OP_KEY)); }catch(e){}
+    /* Absent, hand-edited, or written by a future slider with a different
+       range: anything unreadable lands on the default rather than on an
+       extreme, and anything merely out of range is pulled back in. */
+    if(!isFinite(v)) return TRANSIT_OP_DEF;
+    return Math.min(1, Math.max(0.15, v));
+  }
+
   const st = { ready:false, engine:null, map:null, markers:new Map(),
                base:"ofm", mapDark:storedMapDark(),
-               transit:false, focus:null, show:new Set(["yes","maybe","none","no"]),
+               transit:storedTransitOn(), focus:null, show:new Set(["yes","maybe","none","no"]),
                grp:"area",   // sidebar grouping: area | choice — tracked separately from the list view's ui.group
-               opacity:1,    // transit layer opacity 0.15–1; like st.transit, lives only for this session
+               opacity:storedTransitOpacity(),   // transit layer opacity 0.15–1
                curDay:null, flat:null, addOpen:false, legendOpen:false,
                // Which leg's mode menu is open, {day, i} | null — same
                // render-from-state pattern as addOpen: opened by the click
@@ -6449,8 +6481,8 @@ const MAP = (() => {
   };
   /* The lines' own baseline is 0.9 (see line-opacity in addTransit); the
      slider multiplies onto the baseline rather than assigning directly —
-     otherwise full-right would be more solid than the default and no longer
-     match "how it originally looks". */
+     otherwise full-right would print the lines more solid than the layer was
+     ever drawn to look. */
   const T_OPACITY_BASE = { "transit-line": 0.9 };
 
   function applyTransitOpacity(){
@@ -6461,8 +6493,6 @@ const MAP = (() => {
       for(const prop of T_OPACITY[id]) st.map.setPaintProperty(id, prop, v);
     }
   }
-
-  const hasTransit = () => !!(TRANSIT && (TRANSIT.lines?.features || []).length);
 
   /* Font names must come from the current style, never hardcoded.
      Measured: graybeard's glyph service accepts "noto_sans_bold" while
@@ -6537,6 +6567,7 @@ const MAP = (() => {
 
   function setTransitVisible(on){
     st.transit = !!on;
+    try{ localStorage.setItem(TRANSIT_KEY, st.transit ? "1" : "0"); }catch(e){}
     const btn = $("#transit-btn");
     if(btn) btn.setAttribute("aria-pressed", String(st.transit));
     $("#map-legend").hidden = !st.transit;
@@ -6589,11 +6620,13 @@ const MAP = (() => {
        every use becomes "expand → adjust → collapse". It must live outside
        .lg-toggle — a slider inside a button gets its drag swallowed as a
        click. */
-    /* Direction: left = more transparent, right = opaque, defaulting to full
-       right (identical to life before the slider). The floor is 0.15, not
-       0 — fully transparent is "turn the transit layer off", which the
-       Transit button already does; offering it again on the slider would
-       just look like a broken layer. */
+    /* Direction: left = more transparent, right = opaque. The thumb is drawn
+       from st.opacity rather than parked at a fixed spot, so it points at
+       where the layer actually is on the first paint — a slider sitting at
+       full right above a faint map would read as a broken control. The floor
+       is 0.15, not 0 — fully transparent is "turn the transit layer off",
+       which the Transit button already does; offering it again on the slider
+       would just look like a broken layer. */
     + `<div class="lg-op">`
     + `<span>${T.transitOpacity}</span>`
     + `<input type="range" min="0.15" max="1" step="0.05" value="${st.opacity}" `
@@ -9424,6 +9457,10 @@ const MAP = (() => {
     if(!sl) return;
     st.opacity = +sl.value;
     applyTransitOpacity();
+    /* Written on every step of the drag, not on release: a string of that
+       length costs nothing to store, and there is no "release" at all when
+       the slider is driven from the keyboard. */
+    try{ localStorage.setItem(TRANSIT_OP_KEY, String(st.opacity)); }catch(e){}
   });
 
   /* change, emphatically not input — the exact opposite of the slider above.
