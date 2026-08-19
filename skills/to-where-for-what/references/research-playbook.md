@@ -453,7 +453,7 @@ against the visual pass's verdicts, `medium` candidates were rejected 79% of
 the time — those places need every pair of eyes — while `high` candidates
 were still wrong about 10% of the time, in three coarse ways (the photo shows
 the neighbor, the holdings instead of the building, an interior instead of
-the landmark) that a contact-sheet glance catches without a per-image deep
+the landmark) that one glance at the image catches without a per-image deep
 dive. The tier split therefore appears in the delivery disclosure, not just
 in the audit.
 
@@ -467,10 +467,28 @@ flag rather than leaving a stale promise behind. Every failure (404, 429,
 non-image, decode, identity mismatch) lands in the audit instead of being
 silently swallowed.
 
+Collection also **saves the candidate bytes**, so the visual pass never has
+to download them again: the check already GETs every URL, so each surviving
+candidate is re-fetched in full once and written to `image-review/` next to
+`places.json`, and the audit records the path on that candidate as `file`
+(relative to the trip dir, always `image-review/<place id>_<n>.<ext>`, the
+URL's bytes verbatim — no resize; a Commons `iiurlwidth` thumb is already
+960px). A candidate has no `file` when there was nothing to save: the check
+failed, the bytes duplicated another candidate's (that one's `check.reason`
+becomes `duplicate-bytes:<surviving url>`), the body was ≥2MB, the second
+fetch failed, or the run was a dry run.
+
 The visual pass (the A3 image subagent, or you) reads `places.json` +
-`image-audit.json`, judges the candidates, and hands back
-`images-patch.json`; merge it with `--apply-image-review`, which validates,
-applies atomically, and writes verdicts back into the audit. When the whole
+`image-audit.json`, judges the candidates **from those saved files — opened
+with the Read tool, 10–15 in a single parallel batch, never downloaded
+again** — and hands back `images-patch.json`; merge it with
+`--apply-image-review`, which validates, applies atomically, writes verdicts
+back into the audit, and on success deletes `image-review/` (a rejected patch
+leaves it intact for the retry). Re-fetching a URL is an exception for one
+ambiguous or `file`-less full-tier candidate at a time, never a bulk pass;
+with no `image-review/` at all — an old trip dir, a dry run, an
+already-merged round — fall back to fetching URLs and say so at delivery.
+When the whole
 pipeline comes up empty, **fill `images` manually with a direct link from an
 official page**: the venue's own site or official social account (a
 press-kit photo, a post). Two conditions: the URL actually loads (fetch it,
@@ -499,13 +517,15 @@ https://commons.wikimedia.org/w/api.php?action=query&titles=File:<filename>
 Use the returned `thumburl` directly. `extmetadata` carries `Artist` and
 `LicenseShortName` — put them in `credit`.
 
-**Also look at every image yourself — you, the AI, not the user.** Fetch each
-image and check it actually shows that place; never delegate this to the user.
-Category-based fetching and keyword search (Openverse) mislabel easily — the
-first file in `Category:Osaka Castle` may be something entirely unrelated, and
-a Wikidata match can return the neighborhood's subway station instead of the
-neighborhood. After a batch fetch, tile them into one contact sheet and scan
-it; far faster than opening them one by one.
+**Also look at every image yourself — you, the AI, not the user.** Open each
+candidate (its saved `file`, or the URL for a hand-found one) and check it
+actually shows that place; never delegate this to the user. Category-based
+fetching and keyword search (Openverse) mislabel easily — the first file in
+`Category:Osaka Castle` may be something entirely unrelated, and a Wikidata
+match can return the neighborhood's subway station instead of the
+neighborhood. Read the saved files in large parallel batches, 10–15 per
+turn; far faster than opening them one by one, and measurably the difference
+between a five-minute pass and a half-hour one.
 
 #### No vision capability? Verify textually, and say so
 
