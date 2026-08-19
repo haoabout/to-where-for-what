@@ -23,6 +23,132 @@ Bump rules:
 
 ---
 
+## 1.10.0 — 2026-08-19
+
+Measured end to end on a 6-day Osaka run: **2h50m from "plan me a trip" to
+the user seeing a page.** The two quality passes were most of it and both sat
+in the critical path — the image agent 31.4 min (12.3 of them spent serially
+re-downloading the very candidate images `enrich.py` had fetched minutes
+earlier), the verify agent 38.4 min (20.4 of them a real browser loading slow
+Japanese official sites one page at a time). This release fetches the bytes
+once, judges them locally, and stops making the user wait for either pass.
+
+### Changed
+
+- **The page is delivered the moment it validates — new stage A3½.** At zero
+  P0 with `build.py --serve` up, the page goes to the user as v1 instead of
+  waiting behind the image and verify passes. v1 is validated, sourced data —
+  the never-guess rule is intact; what's still pending is the *visual* image
+  review and a fresh-eyes re-check, and neither is worth half an hour in front
+  of nothing. Both agents are then spawned **together, in one announcement,
+  and run in the background**: they touch disjoint data (the image agent
+  reaches `images` only through `--apply-image-review`; the verify agent
+  writes nothing and reports findings back), so neither can clobber the other,
+  and stages B + C proceed while they work. When they return — usually while
+  the user is still filtering — both are closed out in one pass: apply the
+  patch, adjudicate the findings, rebuild, and send **one message saying what
+  changed since v1**, or that nothing did. Not a running commentary on two
+  agents. On the measured run this moves the first user-visible page from
+  ~2h50m to ~35–40 min. The pre-delivery self-check no longer spawns anything;
+  it confirms both passes are closed out and re-verifies whatever stage-D work
+  invalidated (places added or re-timed while writing the guide were never
+  seen by either agent).
+- **The image agent judges saved files; downloading is banned.** The briefing
+  now says: a candidate carrying `file` is read from disk with the Read tool,
+  **no `curl`, no `wget`, and no refetching a URL that has a `file`** — send
+  10–15 Reads in parallel per turn instead. Only an ambiguous or file-less
+  `full`-tier candidate may go back to its URL, and the report has to say how
+  many did. Measured on 47 places: **4.8 min against the old pass's 31.4 min**,
+  with the local-file read catching one wrong image the earlier approach had
+  missed. Deliberately still a single agent — it no longer occupies the user's
+  wait, so splitting it would buy time nobody is waiting on, at the cost of
+  place-range coordination and patch-merge races.
+- **The verify agent is WebFetch-first, parallel, and capped.** Four hard
+  rules ahead of the numbered checks: WebFetch first, a real browser only for
+  pages that genuinely need rendering and the report must name them; fire
+  independent fetches in parallel in one turn; **start no local server** —
+  `preview_start`, `build.py --serve` and `http.server` are all out, opening
+  the built page is the main conversation's job (the old run burned 2.8 min
+  there); and a hard sampling ceiling — at most 5 places over the two
+  source-spot-check items, ≤2 pages each, ~12 fetches total, with the
+  pure-data checks staying offline and the staleness check touching only
+  genuinely expired entries. The old run had drifted to ~15 places and 34
+  navigations. Its fresh-eyes rationale, over-report bias and findings format
+  are unchanged.
+
+### Added
+
+- **`enrich.py --images` keeps the candidate images it collects.** The check
+  pass already GETs every candidate — it just discarded the bytes and left a
+  URL, which is why the review agent downloaded the same pictures again. Every
+  kept candidate whose check passed is now fetched once more in full and
+  written under `image-review/` next to `places.json`, and its audit record
+  gains an optional **`file`** — the path relative to the trip directory.
+  Two-phase on purpose, so only survivors pay the transfer: the 64 KB check
+  pass over the Osaka set ran 155 s and downloading everything in full ran
+  410 s, and the difference is spent on the ~60 candidates that live. Bytes
+  are the URL's own, unresized and undecoded. `existing` images and
+  single-candidate `glance` places are saved too — the agent deciding whether
+  to *replace* a photo has to be able to see it. Per place, identical bytes
+  arriving from two families are stored once; the loser stays in the audit as
+  `duplicate-bytes:<url of the copy that was kept>`, uncounted, in the same
+  spirit as the filename filter's negatives.
+
+### Fixed
+
+- **A 64 KB check body could be served as if it were the whole image.**
+  `_HTTP_CACHE` was keyed on URL alone, so the truncated body from the check
+  pass was handed straight to any later full-size request for the same URL —
+  harmless while nothing asked for full bytes, fatal the moment something did.
+  Entries now record the cap they were fetched under, and a hit counts only
+  when the body ended naturally before its own cap (so it is complete) or the
+  cap was at least as large as what's being asked for; otherwise the caller
+  refetches and overwrites. Errors and non-2xx have empty bodies and are
+  complete under any cap, so dead links still cost one request, not one per
+  caller.
+- **The image junk filter was catching nothing.** Cross-tabbed against the
+  last path segment of the Osaka run's 90 real candidates, the old
+  `logo|icon|share|ogp|sprite|avatar|favicon|placeholder` pattern matched
+  **0** of them while 13 URLs were plainly site furniture. The pattern gained
+  exactly the measured families — `btn_*`, `ico[-_]*`, `header_facebook` /
+  `header_instagram`, `spacer` — and catches all 13 with no false hits. Short
+  tokens are anchored to the start of the segment and need a separator, so a
+  photo whose name merely contains those letters is untouched.
+
+### Notes for updaters
+
+- **No schema change.** `places.json` validates byte-for-byte as before,
+  `SCHEMA_VERSION` is unchanged, and `image-audit.json` stays at
+  `schema_version: 1` — `file` is optional and additive, present exactly when
+  bytes are on disk. It is absent for a failed check, a byte-duplicate, an
+  image at or over 2 MB (a truncated photo is worse than none — the agent
+  refetches that one URL), a failed second fetch, a dry run, and a
+  health-skipped place with no file to inherit.
+- **`image-review/` is scratch, not data.** Created lazily, one place's files
+  replaced wholesale when that place is re-collected (`--recheck` refreshes
+  every place), inherited across incremental runs when the file is still on
+  disk, and **deleted outright once `--apply-image-review` merges a patch** —
+  a rejected patch leaves it intact so the agent can retry. Deleting it by
+  hand is safe: candidates without `file` simply send the agent back to the
+  URL. It holds full-size bytes now (≤2 MB each, at most 2 per place), so it
+  is the one directory in a trip worth not committing anywhere.
+- **The user now receives the page twice.** Once as v1, mid-pipeline, with the
+  pending passes stated in plain words (SKILL.md's glossary carries the
+  wording), and once at final delivery with a note on what the two passes
+  changed — that disclosure is now on checklist.md's must-state list. Without
+  subagent capability the fallbacks are unchanged: both passes are done in the
+  main conversation.
+- `dev/test_enrich_images.py` 27 → 39 checks (saving and magic bytes, byte
+  dedupe, the cap-aware cache at the `urlopen` level, incremental carry-over,
+  and the merge's directory cleanup). Two existing assertions were rewritten
+  against the new contract, with reasons: one URL now costs **two** GETs
+  (verify once, save once) rather than one — the run cache's guarantee was
+  always "not once per family", not "once ever" — and fixtures that shared a
+  canned JPEG had to be given distinct bytes, since byte-dedupe would
+  otherwise correctly call them the same photo.
+
+---
+
 ## 1.9.0 — 2026-08-16
 
 ### Added
