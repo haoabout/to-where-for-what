@@ -264,6 +264,14 @@ Destination is mandatory. Four more:
 Transport mode, budget tier, and interest weights are **not asked here** — they
 live in `preferences.md`.
 
+The answers come back in the user's own words; compress before writing.
+`trip.party` and `trip.pace` each take a **one-clause fact** — "适中，每天 3–4 个点"
+/ "moderate, 3–4 stops a day" — and render as two pills on one line, on a
+shared length budget
+([data-schema.md](references/data-schema.md#keeping-party-and-pace-in-the-pill)).
+Route-planning principles from the same answer go to `trip.note`; transport,
+budget and interest remarks go to `preferences.md`.
+
 #### Why ask down to the hour
 
 "How many days" alone misses the half-day shapes: a 3 pm landing is half a

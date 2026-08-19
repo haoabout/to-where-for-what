@@ -13,7 +13,8 @@ First time here, read the whole file — it is the contract. Returning for one
 thing, jump straight to it:
 
 - [Top-level structure](#top-level-structure) — incl. when `schema_version` bumps
-- [`trip`](#trip) — trip metadata · [Picking `theme_hue`](#picking-theme_hue)
+- [`trip`](#trip) — trip metadata · [Picking `theme_hue`](#picking-theme_hue) ·
+  [Keeping `party` and `pace` in the pill](#keeping-party-and-pace-in-the-pill)
 - [`categories`](#categories)
 - [`places[]`](#places) — the bulk of the contract:
   - [Identity and classification](#identity-and-classification) — incl.
@@ -75,8 +76,8 @@ resort, not a routine.
 | `local_language` | string | ✅ | Local language. `name_local` is only needed when it differs from `output_language` |
 | `dates` | `{start,end}` | | `YYYY-MM-DD`. Omit while dates are undecided; the weather and limited-run-event modules degrade gracefully |
 | `days` | int | ✅ | Number of days |
-| `party` | string | ✅ | Travel party, e.g. "couple, 2 people" |
-| `pace` | string | ✅ | Stamina, e.g. "moderate; up to 12 km walking per day is fine" |
+| `party` | string | ✅ | Travel party, a noun phrase, e.g. "couple, 2" / "情侣 2 人". See [Keeping `party` and `pace` in the pill](#keeping-party-and-pace-in-the-pill) |
+| `pace` | string | ✅ | Stamina, one checkable quantity, e.g. "moderate, 3–4 stops a day" / "适中，每天 3–4 个点". See [Keeping `party` and `pace` in the pill](#keeping-party-and-pace-in-the-pill) |
 | `bases` | array | | Home bases `[{name, coord, nights}]` |
 | `note` | string | | Trip-level note **for the AI, not the page** — nothing renders it. Half-day arrival/departure shapes (SKILL.md, "Why ask down to the hour") and the festival / public-holiday conclusion (research-playbook.md) live here; stage D reads it when checking hard constraints |
 | `generated_at` | string | ✅ | `YYYY-MM-DD`, when the data was generated |
@@ -111,6 +112,38 @@ material is deep blue keeps it, and `build.py` says nothing about it.
 One limitation worth knowing: because lightness is frozen high, the system
 expresses **hue only, never darkness**. "Deep, cold Hokkaido winter" comes out
 as pale ice-blue, not navy.
+
+### Keeping `party` and `pace` in the pill
+
+These two render as the second row of pills in the title band, each on one
+line, and they are the only fields on that band the page cannot reflow.
+**Budget: `party` + `pace` together ≤ 36 half-width units** — a CJK character
+counts 2, an ASCII character 1, the same unit `validate.py`'s
+`_display_width()` returns. `party` is the shorter of the two: it is a noun
+phrase — `2 adults`, `couple, 2`, `family of 4`, `情侣 2 人` — never a
+sentence. That leaves pace roughly 20–24.
+
+What makes the budget reachable is **one pill, one fact**. A `；`, `。` or `;`
+inside either string means a second thing was packed in. Pace is a checkable
+quantity with a degree word and nothing else: `适中，每天 3–4 个点` /
+`moderate, 3–4 stops a day`.
+
+The rest of what the user said about pace has a home, and none of it is lost:
+
+- **Route-planning principles** ("would rather cut a stop than rush") →
+  `trip.note`, the AI-only field stage D reads when checking hard constraints.
+- **Transport, budget and interest preferences** ("metro in town, taxi when it
+  rains") → `preferences.md`. SKILL.md A1 does not ask these in the
+  questionnaire at all.
+
+Measured at a 375px viewport: within budget the header band is 122px; past 36
+units the pills wrap and the band becomes 151px — a whole extra row of sticky
+header on a phone. A single pill wider than ~42 units is silently ellipsised,
+because the pill maxes out at 251px: a pace string needing 607px of natural
+width is 41% readable and the remainder disappears with no warning. Desktop
+degrades later but does degrade — at 1000px a pace over ~45 CJK characters
+folds the destination title onto two lines and grows the band from 75px to
+96px.
 
 ---
 
