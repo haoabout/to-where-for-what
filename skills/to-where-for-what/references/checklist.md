@@ -89,8 +89,12 @@ never silently under-deliver. **Never fabricate places to pad.**
 
 ### 1-2. No mislabeled images
 
-Batch image fetching mislabels easily. After fetching, **tile everything into
-one contact sheet and scan it** — far faster than opening each.
+Batch image fetching mislabels easily, so every kept candidate gets looked at.
+The image subagent normally does this. **Doing it in the main conversation
+instead: judge from the saved files, not the URLs** — each audit candidate
+whose bytes are on disk carries a `file` path relative to the trip directory,
+under `image-review/`. **Read them in batches of 10–15 per turn**; one Read per
+turn is what makes this pass feel expensive.
 
 ### 1-3. Image URLs came from the API, not hand-assembled
 
@@ -163,10 +167,17 @@ Without these, the user forms wrong expectations:
 - [ ] **If the model has no vision capability**: say that images passed text
   checks only, not visual review — a wrong-looking photo spotted while
   filtering is worth reporting; swapping is cheap
-- [ ] **How the images were reviewed** — the places whose photo a source
-  vouched for (`review: "glance"` in `image-audit.json`) got an identity
-  spot-check, not a per-image deep review; only the rest were audited one by
-  one. Give the split as a count, so a wrong-looking photo reads as
+- [ ] **What is provisional at v1, and what the two passes changed by the end**
+  — at the v1 handover: the photos are picked but not yet eyeballed, and a
+  separate pass is re-confirming hours and closing days against the sources. At
+  final delivery: what those two passes actually changed — which photos were
+  swapped, which facts moved — or plainly that neither changed anything. A
+  silent second delivery reads as "nothing happened", which is the one thing it
+  never means
+- [ ] **How the images were reviewed** (final delivery) — the places whose
+  photo a source vouched for (`review: "glance"` in `image-audit.json`) got an
+  identity spot-check, not a per-image deep review; only the rest were audited
+  one by one. Give the split as a count, so a wrong-looking photo reads as
   something to report rather than something already ruled out
 - [ ] **Which festivals fall in the window, and what the public holidays do**
   — or, explicitly, that none do. Without the explicit "none", the user can't

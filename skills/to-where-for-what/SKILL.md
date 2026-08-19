@@ -1,6 +1,6 @@
 ---
 name: to-where-for-what
-version: 1.9.0
+version: 1.10.0
 source: https://github.com/haoabout/to-where-for-what
 description: Plan a trip and produce an interactive itinerary page (attraction shortlist + map + guide in a single HTML file). Trigger on intent, in whatever language the user writes — "help me plan a trip to X", "how should I arrange N days in X", "make me a travel guide for X" («帮我规划去大阪的行程» «京都三日游怎么安排» «大阪旅行のプランを立てて»), or anything about exhaustively listing attractions, shortlisting them, sequencing a route, or writing a travel guide. Also for continuing an existing trip — re-filtering, adjusting the route, adding places. Note: if the user only asks what's worth seeing in X or what's fun nearby, without mentioning an itinerary or guide, do NOT start this pipeline — answer directly in conversation (verified, with source links), and offer the full planning flow only if they then ask to schedule it.
 ---
@@ -104,6 +104,7 @@ right column, translated into the user's language.
 | `choice` / `itinerary` | "the picks you marked" / "the days you arranged" |
 | stub | "the place you added on the map, details pending" |
 | tier | "recommendation level" |
+| v1 delivery / images pending / re-check pending | "the page works right now; the photos are still being double-checked in the background, and a separate pass is re-confirming opening hours and closing days — I'll tell you if anything changes" |
 | Nominatim / Overpass / Wikimedia / bbox | don't name them — "the map service" / "the photo library" |
 
 So "validate finished — 0 P0, 2 P1" is said as: "Data check passed, the page is
@@ -334,12 +335,10 @@ wrong value); the manual work splits:
 - **Coordinates — fix them yourself, in the main conversation.** Misses are
   few, and the judgment calls need trip context only you have (playbook,
   "Getting coordinates").
-- **Images — spawn one image subagent, always**, the moment
-  `--coords --images` finishes: it judges the candidates in `image-audit.json`
-  visually while you fix coordinates and run `--transit`. Prompt from
-  [image-agent-briefing.md](references/image-agent-briefing.md) —
-  it carries timing, the `--apply-image-review` merge, and the no-subagent
-  fallback. Prefer a vision-capable model.
+- **Images — one image subagent judges them visually, always** — but *after*
+  the page is in the user's hands, not before (next section).
+  `--coords --images` leaves the candidates in `image-audit.json` and their
+  bytes under `image-review/`; none of that blocks the build.
 
 **Delivery requires zero P0.** Read each P1 and decide to fix or ignore — and
 when reporting either to the user, translate per the glossary in "Talking to
@@ -349,6 +348,34 @@ the user".
 tiles (HTTP 200 — only eyes catch it). With an embedded preview pane, use
 `--serve --no-open` and open the printed URL there; you can then screenshot
 the page yourself for the pre-delivery check.
+
+### A3½. Deliver v1, then check it in the background
+
+The moment `validate.py` is at zero P0 and `build.py --serve` is up, **hand the
+page over — don't sit on it**. v1 is validated, sourced data (hard rule 3 is
+intact); what's still pending is the *visual* image review and a fresh-eyes
+re-check of the facts, and neither is worth making the user wait half an hour
+in front of nothing. Say so when you hand it over, in plain words — glossary
+row "v1 delivery / images pending / re-check pending".
+
+Then, **in one announcement, spawn both background agents together**. They run
+concurrently and touch disjoint data, so neither can clobber the other:
+
+| Agent | Prompt from | What it may touch |
+|---|---|---|
+| **Image** | [image-agent-briefing.md](references/image-agent-briefing.md) | `images`, and only via `enrich.py --apply-image-review`. Prefer a vision-capable model |
+| **Verify** | [verify-agent-briefing.md](references/verify-agent-briefing.md) | Nothing — it re-opens sources with fresh eyes and reports findings back to you |
+
+Neither one holds you up while it runs — hand off to stages B + C in the same
+breath, and pick up anything still open on your side (a stubborn coordinate, a
+`--transit` run that failed).
+
+When they come back — usually while the user is still filtering and scheduling
+— close both out in one pass: apply the image patch
+(`--apply-image-review`), adjudicate the verify findings (it over-reports by
+design; the briefing carries the rules), rebuild, then tell the user **in one
+message what changed since v1** — or that nothing did. One message, not a
+running commentary on two agents.
 
 ---
 
@@ -431,6 +458,8 @@ an AI; the built page is ~600KB of mostly template.
 ├── places.json       # ★ single source of truth; every view renders from it
 ├── transit.geojson   # metro lines & stations (enrich.py --transit)
 ├── image-audit.json  # image candidates + verdicts (enrich.py --images)
+├── image-review/     # candidate image bytes for the visual pass (enrich.py
+│                     # --images); merging the review deletes it
 ├── route.md          # guide body (you write this)
 └── trip.html         # build artifact — never hand-edit
 ```
@@ -467,16 +496,24 @@ automatically.
 
 ## Pre-delivery self-check
 
-Once `validate.py` is at zero P0, **spawn the verify subagent** — prompt from
-[verify-agent-briefing.md](references/verify-agent-briefing.md). It re-opens
-sources with fresh eyes (checking your own data repeats your own misreadings)
-while you do the one thing it can't: open the built page and look. The
-briefing carries the division of labor, adjudication rules (it over-reports by
-design), and the no-subagent fallback.
+Both background agents were spawned back at v1 (A3½) — **nothing gets spawned
+here**. First confirm they're closed out: the image patch applied via
+`--apply-image-review`, the verify findings adjudicated, the page rebuilt.
+Either one still out? Wait for it — a final delivery that quietly drops a pass
+is worse than one that arrives late.
+[verify-agent-briefing.md](references/verify-agent-briefing.md) carries the
+division of labor, the adjudication rules (it over-reports by design), and the
+no-subagent fallback — in which case the fresh-eyes re-check is yours to do,
+here.
+
+**Re-verify whatever stage-D work invalidated.** Both agents saw v1 data;
+places added, swapped, or re-timed while writing the guide were never checked
+by either — chase those sources yourself.
 
 Then run **[checklist.md](references/checklist.md)** end to end — the delivery
 gate, including everything that must be stated at delivery (staleness,
-estimates, the first-trip `preferences.md` offer).
+estimates, what the two background passes changed, the first-trip
+`preferences.md` offer).
 
 ---
 
@@ -505,8 +542,8 @@ directory as one unit).
 | [data-schema.md](references/data-schema.md) | Before writing `places.json` — required |
 | [research-playbook.md](references/research-playbook.md) | Before stage-A searching — required |
 | [subagent-briefing.md](references/subagent-briefing.md) | When spawning stage-A search subagents |
-| [image-agent-briefing.md](references/image-agent-briefing.md) | When spawning the A3 image subagent |
-| [verify-agent-briefing.md](references/verify-agent-briefing.md) | When spawning the pre-delivery verify subagent |
+| [image-agent-briefing.md](references/image-agent-briefing.md) | When spawning the image subagent — right after v1 delivery |
+| [verify-agent-briefing.md](references/verify-agent-briefing.md) | When spawning the verify subagent — same announcement, same moment |
 | [route-design.md](references/route-design.md) | Before stage-D routing — required |
 | [retro.md](references/retro.md) | When a finished trip awaits its retro |
 | [checklist.md](references/checklist.md) | Before delivery |
