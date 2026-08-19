@@ -10584,7 +10584,7 @@ const DECK = (() => {
     $$(".dk-dock").forEach(d => d.classList.toggle("dk-arm", d.dataset.pile === pile));
   }
   function attachDrag(el){
-    let sx = 0, sy = 0, dx = 0, dy = 0, active = false, vAllowed = true;
+    let sx = 0, sy = 0, dx = 0, dy = 0, active = false, vAllowed = true, pid = null;
     /* Clears both halves of the verdict display: the stamp on the card and
        the card's own armed border. */
     const clearStamps = () => {
@@ -10593,14 +10593,17 @@ const DECK = (() => {
       });
       delete el.dataset.armed;
     };
-    /* One cleanup for every way a drag can end — including the OS stealing
-       the gesture (pointercancel) or capture being lost. Without it a broken
-       drag leaves a tilted card and an armed pile behind forever. On touch
-       the cancel path is now routine, not exceptional: touch-action:pan-y
-       means a vertical pan is the browser scrolling the card body, and our
-       half-started drag gets cancelled under it — exactly right. */
+    /* One cleanup for every way a drag can end, and the only place the window
+       listeners come off again. Without it a broken drag leaves a tilted card
+       and an armed pile behind forever. On touch the cancel path is routine,
+       not exceptional: touch-action:pan-y means a vertical pan is the browser
+       scrolling the card body, and our half-started drag gets cancelled under
+       it — exactly right. */
     const reset = spring => {
-      active = false;
+      active = false; pid = null;
+      removeEventListener("pointermove", onMove);
+      removeEventListener("pointerup", onUp);
+      removeEventListener("pointercancel", onCancel);
       el.classList.remove("dk-dragging");
       armDock(null);
       if(spring){
@@ -10620,12 +10623,29 @@ const DECK = (() => {
       // The maybe-drag (downwards) is mouse-only: on touch that axis IS the
       // scroll. Mouse wheels scroll, so the mouse keeps all three verdicts.
       vAllowed = e.pointerType === "mouse";
-      active = true; sx = e.clientX; sy = e.clientY;
-      el.setPointerCapture(e.pointerId);
+      active = true; sx = e.clientX; sy = e.clientY; pid = e.pointerId;
+      /* Capture is an optimisation, not the gesture. It keeps the move
+         stream on the card even when the cursor is over the map or a pile,
+         and it is worth asking for — but it cannot be depended on, so the
+         listeners below live on the window and the drag survives without it. */
+      try{ el.setPointerCapture(e.pointerId); }catch(err){}
+      addEventListener("pointermove", onMove);
+      addEventListener("pointerup", onUp);
+      addEventListener("pointercancel", onCancel);
       el.classList.add("dk-dragging"); el.classList.remove("dk-settle");
     });
-    el.addEventListener("pointermove", e => {
-      if(!active) return;
+    /* On the window, not on the card, and no lostpointercapture handler.
+       The card used to carry these three and treat losing capture as the
+       user giving up — measured in the desktop app's embedded browser, that
+       threw away 12 of 18 throws: the browser dropped the capture on its own
+       0.6–2.1s into the drag (nothing in this page releases it, no cancel, no
+       blur, the card still in the DOM), the card sprang back fully armed, and
+       the real pointerup arrived to find the drag already dead. Off the card
+       these still fire — capture only retargets events, it does not create
+       them — so a dropped capture now costs nothing. Only a real
+       pointercancel aborts. */
+    function onMove(e){
+      if(!active || e.pointerId !== pid) return;
       dx = e.clientX - sx; dy = vAllowed ? e.clientY - sy : 0;
       const r = Math.hypot(dx, dy);
       // The card shrinks as it travels — a nod toward the mini card it is
@@ -10653,9 +10673,9 @@ const DECK = (() => {
       // often out at the pile it is aiming for.
       if(armed && d) el.dataset.armed = d; else delete el.dataset.armed;
       armDock(armed ? d : null);
-    });
-    el.addEventListener("pointerup", () => {
-      if(!active) return;
+    }
+    function onUp(e){
+      if(!active || e.pointerId !== pid) return;
       const cdx = dx, cdy = dy;
       reset(false);
       const d = Math.hypot(cdx, cdy) >= TH_R ? throwDir(cdx, cdy, vAllowed) : null;
@@ -10666,9 +10686,8 @@ const DECK = (() => {
         el.classList.add("dk-settle");
         el.style.transform = ""; clearStamps();
       }
-    });
-    el.addEventListener("pointercancel", () => { if(active) reset(true); });
-    el.addEventListener("lostpointercapture", () => { if(active) reset(true); });
+    }
+    function onCancel(e){ if(active && e.pointerId === pid) reset(true); }
   }
 
   /* ── the "all sorted" moment: a toast, nothing more. The deck stays put —
